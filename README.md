@@ -2,10 +2,10 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `0.9.0-beta.1`.
+Current version: `1.0.0`.
 
-This beta targets Claude Code and Claude Desktop first. It also prepares a small Codex foundation
-without coupling every client integration into one large module.
+This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
+integration into one large module.
 
 _[Lire en français](./README.fr.md)_
 
@@ -30,10 +30,9 @@ node index.js
 
 - Claude Code
 - Claude Desktop
+- Codex CLI
 - Auth
-- Strategies
 - Doctor
-- Codex
 
 ## Commands
 
@@ -53,6 +52,7 @@ node index.js claude-desktop apply-proxy --service routerlab --strategy claude-g
 node index.js claude-desktop proxy --service routerlab
 node index.js claude-desktop proxy --service llm
 node index.js codex template --service routerlab
+node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
 ```
 
@@ -145,9 +145,9 @@ price, and GLM. GPT special routes use `gpt-5.5-sp` and `gpt-5.4-mini-sp` displa
 The 1M context flag is applied per upstream model. Haiku, Kimi, GLM, GPT mini, and GPT special
 mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
-## Codex
+## Codex CLI
 
-The beta includes a Codex config template generator:
+The wrapper includes a Codex CLI config template generator:
 
 ```powershell
 node index.js codex template --service routerlab
@@ -157,11 +157,25 @@ It can also write `~/.codex/config.toml`:
 
 ```powershell
 node index.js codex apply --service routerlab --dry-run
+node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
 ```
 
+RouterLab Codex CLI models are offered in this order:
+
+```text
+gpt-5.5
+gpt-5.4
+gpt-5.3-codex
+gpt-5.4-mini
+minimax-m2.7
+glm-5.1
+```
+
 `codex apply` is dry-run by default. It writes `config.toml` atomically when `--yes` is passed
-and leaves `auth.json` untouched so existing Codex login state is preserved.
+and leaves `auth.json` untouched so existing Codex login state is preserved. When Codex has a
+local `models_cache.json`, the wrapper also writes `wrapper-scionos-model-catalog.json` and points
+`model_catalog_json` at it so Codex CLI can see the RouterLab model catalog after restart.
 
 ## Development
 
@@ -171,8 +185,3 @@ node index.js doctor
 ```
 
 See `docs/architecture-notes.md` for the current architecture notes.
-
-## Beta Status
-
-This version is intended for internal testing and early feedback. Commands and configuration
-formats may still change before the stable release.

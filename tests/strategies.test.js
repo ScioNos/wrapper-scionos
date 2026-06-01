@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
-import { applyCodexConfig, buildCodexThirdPartyConfig } from '../src/apps/codex.js';
+import { CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig } from '../src/apps/codex.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { parseOptions } from '../src/cli/args.js';
-import { CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
+import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, isClaudeDesktopSafeModelId, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 import { assessStrategyLaunch, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
@@ -189,12 +189,21 @@ test('token format validation catches obvious mistakes', () => {
 });
 
 test('Codex template uses provider-scoped model provider config', () => {
+  assert.deepEqual(CODEX_ROUTERLAB_MODELS, [
+    'gpt-5.5',
+    'gpt-5.4',
+    'gpt-5.3-codex',
+    'gpt-5.4-mini',
+    'minimax-m2.7',
+    'glm-5.1',
+  ]);
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.3-codex',
   });
   assert.match(config, /model_provider = "custom"/);
+  assert.match(config, /model = "gpt-5\.3-codex"/);
   assert.match(config, /\[model_providers\.custom\]/);
   assert.match(config, /wire_api = "responses"/);
   assert.match(config, /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
@@ -235,15 +244,62 @@ test('Codex apply writes config atomically without touching auth state', (t) => 
   assert.deepEqual(JSON.parse(fs.readFileSync(paths.authPath, 'utf8')), auth);
 });
 
+test('Codex apply writes model_catalog_json when Codex model cache is available', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-catalog-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const paths = {
+    configDir: tempDir,
+    authPath: path.join(tempDir, 'auth.json'),
+    configPath: path.join(tempDir, 'config.toml'),
+    modelsCachePath: path.join(tempDir, 'models_cache.json'),
+    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+  };
+  fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
+    models: [{
+      slug: 'gpt-5.5',
+      display_name: 'GPT 5.5',
+      model_messages: { instructions_template: 'template' },
+      base_instructions: 'base',
+      context_window: 272000,
+      additional_speed_tiers: ['fast'],
+      availability_nux: { message: 'launch' },
+    }],
+  }), 'utf8');
+
+  const catalog = buildCodexModelCatalogFromCache({ paths });
+  assert.equal(catalog.models[2].slug, 'gpt-5.3-codex');
+  assert.equal(catalog.models[2].display_name, 'GPT 5.3 Codex');
+  assert.deepEqual(catalog.models[2].additional_speed_tiers, []);
+  assert.equal(catalog.models[2].availability_nux, null);
+  assert.deepEqual(catalog.models[2].model_messages, { instructions_template: 'template' });
+
+  const applied = applyCodexConfig({
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.5',
+    paths,
+    dryRun: false,
+  });
+  assert.equal(applied.catalogWritten, true);
+  assert.match(fs.readFileSync(paths.configPath, 'utf8'), /model_catalog_json = /);
+  const written = JSON.parse(fs.readFileSync(paths.modelCatalogPath, 'utf8'));
+  assert.equal(written.models[2].slug, 'gpt-5.3-codex');
+});
+
 test('default menu exposes Claude Code and Claude Desktop', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
-  assert.deepEqual(labels.slice(0, 2), ['Claude Code', 'Claude Desktop']);
+  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'Auth', 'Doctor', 'Quit']);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '1').value, 'claude-code');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '3').value, 'codex');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'doctor');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop').value, 'claude-desktop');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Code/);
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
-  assert.match(formatBanner('ScioNos Wrapper', '0.9.0-beta.1'), /ScioNos Wrapper/);
-  assert.doesNotMatch(formatBanner('ScioNos Wrapper', '0.9.0-beta.1'), /ScioNos\s+✕\s+Claude Code/);
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
+  assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Codex CLI/);
+  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos Wrapper/);
+  assert.doesNotMatch(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos\s+✕\s+Claude Code/);
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',
     value: 'claude-code',
@@ -256,6 +312,7 @@ test('wrapper options without a command keep the user in the main menu', () => {
   assert.equal(shouldOpenInteractiveMenu(parseOptions([])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm'])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm', '--strategy', 'claude-gpt'])), true);
+  assert.equal(parseOptions(['codex', 'apply', '--model', 'gpt-5.3-codex']).model, 'gpt-5.3-codex');
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--', '-p', 'hello'])), false);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['-p', 'hello'])), false);
 });
@@ -275,8 +332,24 @@ test('Claude Desktop menu keeps only the simple customer actions', () => {
   });
 });
 
+test('Codex CLI menu exposes config and model actions', () => {
+  assert.deepEqual(CODEX_MENU_ITEMS.map((item) => item.value), [
+    'apply',
+    'model',
+    'template',
+    'status',
+    'back',
+  ]);
+  assert.deepEqual(formatSelectChoice(CODEX_MENU_ITEMS[1]), {
+    name: 'Choose Default Model',
+    value: 'model',
+    description: 'Select the default Codex CLI model.',
+    short: 'Choose Default Model',
+  });
+});
+
 test('Claude Code launch screens use wrapper-branded guided layout', () => {
-  const intro = formatClaudeCodeIntro('0.9.0-beta.1');
+  const intro = formatClaudeCodeIntro('1.0.0');
   assert.match(intro, /ScioNos Wrapper/);
   assert.match(intro, /Quick commands/);
   assert.doesNotMatch(intro, /ScioNos\s+✕\s+Claude Code/);

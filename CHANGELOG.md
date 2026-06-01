@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.0 - 2026-06-01
+
+### Added
+
+- Codex CLI interactive menu with Apply Config, Choose Default Model, Print Template, Status, and Back actions.
+- RouterLab Codex CLI model catalog ordered as `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`, `gpt-5.4-mini`, `minimax-m2.7`, and `glm-5.1`.
+- `--model` option for `codex apply`, allowing explicit Codex CLI default model selection.
+- Codex CLI `model_catalog_json` generation via `wrapper-scionos-model-catalog.json` when a local Codex `models_cache.json` is available.
+
+### Changed
+
+- Main menu entry renamed from `Codex` to `Codex CLI`.
+- Package version promoted from `0.9.0-beta.1` to `1.0.0`.
+
 ## 0.9.0-beta.1 - 2026-06-01
 
 ### Added

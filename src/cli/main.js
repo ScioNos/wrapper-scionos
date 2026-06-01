@@ -11,8 +11,8 @@ import { getStrategyChoices } from '../routerlab/strategies.js';
 import { launchClaudeCode, resolveToken } from '../apps/claude-code.js';
 import { DESKTOP_MAPPING_STRATEGIES, applyDirectClaudeDesktop, applyProxyClaudeDesktop, readClaudeDesktopStatus, restoreOfficialClaudeDesktop } from '../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../apps/claude-desktop-proxy.js';
-import { applyCodexConfig, buildCodexAuth, buildCodexThirdPartyConfig, getCodexPaths } from '../apps/codex.js';
-import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
+import { CODEX_ROUTERLAB_MODELS, DEFAULT_CODEX_MODEL, applyCodexConfig, buildCodexAuth, getCodexPaths, readCodexStatus } from '../apps/codex.js';
+import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
@@ -86,13 +86,15 @@ function showHelp() {
   wrapper-scionos claude-desktop apply    Dry-run Claude Desktop direct config
   wrapper-scionos claude-desktop apply-proxy  Write Desktop profile for local mapping
   wrapper-scionos claude-desktop proxy    Start Claude Desktop local mapping proxy
-  wrapper-scionos codex template          Print a Codex config template
+  wrapper-scionos codex template          Print a Codex CLI config template
   wrapper-scionos codex apply             Write Codex config.toml
+  wrapper-scionos codex status            Inspect Codex config status
 
 Common flags:
   --service <routerlab|llm>
   --strategy <value>
   --subagent-model <default|haiku|gpt-5.4-mini|claude-deepseek-v4-flash>
+  --model <value>
   --host <value>
   --port <value>
   --no-prompt
@@ -131,7 +133,7 @@ async function handleInteractiveMenu(options) {
     } else if (action === 'doctor') {
       await handleDoctor(options);
     } else if (action === 'codex') {
-      await handleCodex('template', options);
+      await handleCodexMenu(options);
     }
   }
 }
@@ -171,6 +173,34 @@ async function handleAuthMenu(options) {
     const authOptions = { ...options };
     authOptions.service = await askText('RouterLab service', options.service);
     await handleAuth(action, authOptions);
+  }
+}
+
+async function handleCodexMenu(options) {
+  const service = requireServiceConfig(options.service);
+  while (true) {
+    const action = await askMenu('Codex CLI', CODEX_MENU_ITEMS, {
+      interactiveSelect: true,
+      message: 'Select Codex CLI action:',
+    });
+    if (action === 'back') {
+      return;
+    }
+
+    const codexOptions = { ...options };
+    if (action === 'apply') {
+      codexOptions.yes = await askYesNo('Write Codex CLI config.toml now?', false);
+      await handleCodex('apply', codexOptions);
+    } else if (action === 'model') {
+      codexOptions.model = await askMenu('Codex CLI Model', codexModelMenuItems(service.value), {
+        interactiveSelect: true,
+        message: 'Select default Codex CLI model:',
+      });
+      codexOptions.yes = await askYesNo('Write Codex CLI config.toml now?', true);
+      await handleCodex('apply', codexOptions);
+    } else {
+      await handleCodex(action, codexOptions);
+    }
   }
 }
 
@@ -318,11 +348,15 @@ function resolveDesktopMappingStrategies(serviceValue) {
 }
 
 async function handleCodex(action, options) {
-  if (action !== 'template' && action !== 'apply') {
+  if (action !== 'template' && action !== 'apply' && action !== 'status') {
     throw new Error(`Unknown codex action "${action}".`);
   }
   const service = requireServiceConfig(options.service);
-  const model = service.value === 'llm' ? 'openai/gpt-5.5' : 'gpt-5.5';
+  const model = options.model ?? defaultCodexModelForService(service.value);
+  if (action === 'status') {
+    print(readCodexStatus(), options);
+    return;
+  }
   if (action === 'apply') {
     print(applyCodexConfig({
       providerName: service.value,
@@ -333,15 +367,34 @@ async function handleCodex(action, options) {
     return;
   }
 
+  const paths = getCodexPaths();
+  const preview = applyCodexConfig({
+    providerName: service.value,
+    baseUrl: `${service.baseUrl}/v1`,
+    model,
+    paths,
+  });
+
   print({
-    paths: getCodexPaths(),
+    paths,
     auth: buildCodexAuth(''),
-    config: buildCodexThirdPartyConfig({
-      providerName: service.value,
-      baseUrl: `${service.baseUrl}/v1`,
-      model,
-    }),
+    config: preview.config,
+    catalog: preview.catalog,
   }, options);
+}
+
+function defaultCodexModelForService(serviceValue) {
+  return serviceValue === 'llm' ? 'openai/gpt-5.5' : DEFAULT_CODEX_MODEL;
+}
+
+function codexModelMenuItems(serviceValue) {
+  const models = serviceValue === 'llm' ? [defaultCodexModelForService(serviceValue)] : CODEX_ROUTERLAB_MODELS;
+  return models.map((model, index) => ({
+    key: String(index + 1),
+    value: model,
+    label: model,
+    description: index === 0 ? 'Default Codex CLI model for the selected service.' : 'Codex CLI model for the selected service.',
+  }));
 }
 
 async function promptSecret(message) {

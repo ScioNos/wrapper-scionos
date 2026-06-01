@@ -1,12 +1,13 @@
 import { DEFAULT_SERVICE } from '../routerlab/services.js';
 
-const OPTION_WITH_VALUE = new Set(['--service', '--strategy', '--subagent-model', '--token', '--port', '--host']);
+const OPTION_WITH_VALUE = new Set(['--service', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host']);
 
 export function parseOptions(argv) {
   const options = {
     service: DEFAULT_SERVICE,
     strategy: null,
     subagentModel: 'default',
+    model: null,
     noPrompt: false,
     yes: false,
     dryRun: true,
@@ -43,6 +44,7 @@ export function parseOptions(argv) {
       if (key === '--service') options.service = value;
       if (key === '--strategy') options.strategy = value;
       if (key === '--subagent-model') options.subagentModel = value;
+      if (key === '--model') options.model = value;
       if (key === '--token') options.token = value;
       if (key === '--host') options.host = value;
       if (key === '--port') {

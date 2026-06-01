@@ -18,15 +18,15 @@ export const MAIN_MENU_ITEMS = [
   },
   {
     key: '3',
-    value: 'auth',
-    label: 'Auth',
-    description: 'Manage RouterLab tokens.',
+    value: 'codex',
+    label: 'Codex CLI',
+    description: 'Configure Codex CLI for RouterLab.',
   },
   {
     key: '4',
-    value: 'strategies',
-    label: 'Strategies',
-    description: 'List RouterLab model strategies.',
+    value: 'auth',
+    label: 'Auth',
+    description: 'Manage RouterLab tokens.',
   },
   {
     key: '5',
@@ -35,16 +35,43 @@ export const MAIN_MENU_ITEMS = [
     description: 'Diagnose local setup.',
   },
   {
-    key: '6',
-    value: 'codex',
-    label: 'Codex',
-    description: 'Print a Codex config template.',
-  },
-  {
     key: '0',
     value: 'quit',
     label: 'Quit',
     description: 'Exit without changing anything.',
+  },
+];
+
+export const CODEX_MENU_ITEMS = [
+  {
+    key: '1',
+    value: 'apply',
+    label: 'Apply Config',
+    description: 'Write the Codex CLI config for the selected service.',
+  },
+  {
+    key: '2',
+    value: 'model',
+    label: 'Choose Default Model',
+    description: 'Select the default Codex CLI model.',
+  },
+  {
+    key: '3',
+    value: 'template',
+    label: 'Print Template',
+    description: 'Show the Codex CLI config template.',
+  },
+  {
+    key: '4',
+    value: 'status',
+    label: 'Status',
+    description: 'Show Codex CLI configuration status.',
+  },
+  {
+    key: '0',
+    value: 'back',
+    label: 'Back',
+    description: 'Return to the main menu.',
   },
 ];
 

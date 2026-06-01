@@ -2,10 +2,10 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `0.9.0-beta.1`.
+Version actuelle : `1.0.0`.
 
-Cette bêta cible d’abord Claude Code et Claude Desktop. Le projet prépare aussi une base pour
-Codex, sans mélanger toutes les intégrations dans un seul gros module.
+Cette version cible Claude Code, Claude Desktop et Codex CLI, sans mélanger toutes les intégrations
+dans un seul gros module.
 
 ## Prérequis
 
@@ -28,10 +28,9 @@ node index.js
 
 - Claude Code
 - Claude Desktop
+- Codex CLI
 - Auth
-- Strategies
 - Doctor
-- Codex
 
 ## Commandes utiles
 
@@ -128,9 +127,9 @@ Le support 1M est appliqué par modèle :
 - Haiku, Kimi, GLM, GPT mini et GPT special mini : pas de variante 1M
 - GPT 5.4 et GPT 5.5 : variante 1M
 
-## Codex
+## Codex CLI
 
-La bêta inclut un générateur de template de configuration Codex :
+Le wrapper inclut un générateur de template de configuration Codex CLI :
 
 ```powershell
 node index.js codex template --service routerlab
@@ -140,11 +139,26 @@ Elle peut aussi écrire `~/.codex/config.toml` :
 
 ```powershell
 node index.js codex apply --service routerlab --dry-run
+node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
+```
+
+Les modèles Codex CLI RouterLab sont proposés dans cet ordre :
+
+```text
+gpt-5.5
+gpt-5.4
+gpt-5.3-codex
+gpt-5.4-mini
+minimax-m2.7
+glm-5.1
 ```
 
 `codex apply` est en dry-run par défaut. Avec `--yes`, la commande écrit `config.toml`
 atomiquement et ne modifie pas `auth.json`, afin de préserver l’état de connexion Codex existant.
+Quand Codex dispose d’un `models_cache.json` local, le wrapper écrit aussi
+`wrapper-scionos-model-catalog.json` et pointe `model_catalog_json` dessus pour que Codex CLI voie
+le catalogue RouterLab après redémarrage.
 
 ## Développement
 
@@ -152,8 +166,3 @@ atomiquement et ne modifie pas `auth.json`, afin de préserver l’état de conn
 npm test
 node index.js doctor
 ```
-
-## Statut bêta
-
-Cette version est destinée aux tests internes et aux premiers retours. Les commandes et formats de
-configuration peuvent encore évoluer avant la version stable.

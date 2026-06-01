@@ -5,13 +5,13 @@ import { createRequire } from 'node:module';
 import { parseOptions } from './args.js';
 import { detectOS, detectClaudeCode, checkGitBashOnWindows } from '../platform/detect.js';
 import { deleteStoredToken, getSecureStorageBackend, getStoredToken, getStoredTokenStatus, storeToken } from '../security/token-store.js';
-import { SERVICES, requireServiceConfig } from '../routerlab/services.js';
+import { requireServiceConfig } from '../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { getStrategyChoices } from '../routerlab/strategies.js';
 import { launchClaudeCode, resolveToken } from '../apps/claude-code.js';
-import { applyDirectClaudeDesktop, applyProxyClaudeDesktop, readClaudeDesktopStatus, restoreOfficialClaudeDesktop } from '../apps/claude-desktop.js';
+import { DESKTOP_MAPPING_STRATEGIES, applyDirectClaudeDesktop, applyProxyClaudeDesktop, readClaudeDesktopStatus, restoreOfficialClaudeDesktop } from '../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../apps/claude-desktop-proxy.js';
-import { buildCodexAuth, buildCodexThirdPartyConfig, getCodexPaths } from '../apps/codex.js';
+import { applyCodexConfig, buildCodexAuth, buildCodexThirdPartyConfig, getCodexPaths } from '../apps/codex.js';
 import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
 
 const require = createRequire(import.meta.url);
@@ -43,7 +43,7 @@ export async function main(argv) {
     return;
   }
 
-  if (!command && argv.length === 0) {
+  if (!command && shouldOpenInteractiveMenu(options)) {
     await handleInteractiveMenu(options);
     return;
   }
@@ -65,8 +65,13 @@ export async function main(argv) {
       subagentModel: options.subagentModel,
       noPrompt: options.noPrompt,
       claudeArgs: options.passthrough,
+      version: pkg.version,
     });
   }
+}
+
+export function shouldOpenInteractiveMenu(options) {
+  return options.passthrough.length === 0;
 }
 
 function showHelp() {
@@ -82,6 +87,7 @@ function showHelp() {
   wrapper-scionos claude-desktop apply-proxy  Write Desktop profile for local mapping
   wrapper-scionos claude-desktop proxy    Start Claude Desktop local mapping proxy
   wrapper-scionos codex template          Print a Codex config template
+  wrapper-scionos codex apply             Write Codex config.toml
 
 Common flags:
   --service <routerlab|llm>
@@ -96,7 +102,10 @@ Common flags:
 
 async function handleInteractiveMenu(options) {
   while (true) {
-    const action = await askMenu('ScioNos Wrapper', MAIN_MENU_ITEMS);
+    const action = await askMenu('ScioNos Wrapper', MAIN_MENU_ITEMS, {
+      interactiveSelect: true,
+      version: pkg.version,
+    });
     if (action === 'quit') {
       return;
     }
@@ -108,6 +117,7 @@ async function handleInteractiveMenu(options) {
         subagentModel: options.subagentModel,
         noPrompt: options.noPrompt,
         claudeArgs: [],
+        version: pkg.version,
       });
       return;
     }
@@ -128,23 +138,21 @@ async function handleInteractiveMenu(options) {
 
 async function handleClaudeDesktopMenu(options) {
   while (true) {
-    const action = await askMenu('Claude Desktop', CLAUDE_DESKTOP_MENU_ITEMS);
+    const action = await askMenu('Claude Desktop', CLAUDE_DESKTOP_MENU_ITEMS, {
+      interactiveSelect: true,
+      message: 'Select Claude Desktop action:',
+    });
     if (action === 'back') {
       return;
     }
 
     const desktopOptions = { ...options };
-    if (action === 'apply' || action === 'apply-proxy' || action === 'proxy') {
-      desktopOptions.service = await askText('RouterLab service', options.service);
-      desktopOptions.strategy = await askText(
-        'Strategy',
-        desktopOptions.service === 'llm' ? 'claude' : 'default',
-      );
-      if (action === 'apply') {
-        desktopOptions.yes = await askYesNo('Write Claude Desktop files now?', false);
-      } else if (action === 'apply-proxy') {
-        desktopOptions.yes = await askYesNo('Write Claude Desktop local mapping profile now?', false);
-      }
+    if (action === 'proxy') {
+      const service = requireServiceConfig(options.service);
+      desktopOptions.service = service.value;
+      desktopOptions.strategyValues = resolveDesktopMappingStrategies(service.value);
+      desktopOptions.setupLocalMapping = true;
+      desktopOptions.yes = true;
     } else if (action === 'restore-official') {
       desktopOptions.yes = await askYesNo('Restore Claude Desktop official mode now?', false);
     }
@@ -252,16 +260,30 @@ async function handleClaudeDesktop(action, options) {
     const service = requireServiceConfig(options.service);
     const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
     const strategyValue = options.strategy ?? (service.value === 'llm' ? 'claude' : 'default');
+    const strategyValues = options.strategyValues ?? null;
+    if (options.setupLocalMapping || options.yes) {
+      const profile = applyProxyClaudeDesktop({
+        serviceValue: service.value,
+        strategyValue,
+        strategyValues,
+        host: options.host,
+        port: options.port,
+        dryRun: false,
+      });
+      console.log(`Configured Claude Desktop local mapping profile at ${profile.paths.profilePath}`);
+    }
+
     const result = await startClaudeDesktopProxy({
       serviceValue: service.value,
       strategyValue,
+      strategyValues,
       routerlabToken: token,
       host: options.host,
       port: options.port,
     });
     console.log(`Claude Desktop local mapping proxy listening on ${result.baseUrl}`);
     console.log(`Service: ${service.value}`);
-    console.log(`Strategy: ${strategyValue}`);
+    console.log(`Strategies: ${(strategyValues ?? [strategyValue]).join(', ')}`);
     console.log('Routes:');
     for (const route of result.routes) {
       console.log(`  ${route.routeId} -> ${route.upstreamModel}`);
@@ -288,12 +310,29 @@ async function handleClaudeDesktop(action, options) {
   print(result, options);
 }
 
+function resolveDesktopMappingStrategies(serviceValue) {
+  const service = requireServiceConfig(serviceValue);
+  return DESKTOP_MAPPING_STRATEGIES[service.value] ?? [
+    service.value === 'llm' ? 'claude' : 'default',
+  ];
+}
+
 async function handleCodex(action, options) {
-  if (action !== 'template') {
+  if (action !== 'template' && action !== 'apply') {
     throw new Error(`Unknown codex action "${action}".`);
   }
   const service = requireServiceConfig(options.service);
   const model = service.value === 'llm' ? 'openai/gpt-5.5' : 'gpt-5.5';
+  if (action === 'apply') {
+    print(applyCodexConfig({
+      providerName: service.value,
+      baseUrl: `${service.baseUrl}/v1`,
+      model,
+      dryRun: !options.yes,
+    }), options);
+    return;
+  }
+
   print({
     paths: getCodexPaths(),
     auth: buildCodexAuth(''),

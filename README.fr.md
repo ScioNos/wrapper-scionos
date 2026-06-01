@@ -2,7 +2,7 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `0.9.0-beta.0`.
+Version actuelle : `0.9.0-beta.1`.
 
 Cette bêta cible d’abord Claude Code et Claude Desktop. Le projet prépare aussi une base pour
 Codex, sans mélanger toutes les intégrations dans un seul gros module.
@@ -20,6 +20,7 @@ Depuis le dossier du projet :
 
 ```powershell
 cd D:\Serveurs\Projet_ScioNos\Wrapper-ScioNos
+npm install
 node index.js
 ```
 
@@ -36,11 +37,14 @@ node index.js
 
 ```powershell
 node index.js --help
+node index.js --service llm
 node index.js doctor
 node index.js strategies --service routerlab
 node index.js auth login
 node index.js auth status
 node index.js auth test
+node index.js claude-desktop proxy --service routerlab
+node index.js claude-desktop proxy --service llm
 ```
 
 ## Services RouterLab
@@ -94,24 +98,35 @@ Pour les stratégies que Claude Desktop masque dans le menu, utilise le mode pro
 
 ```powershell
 node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
-node index.js claude-desktop proxy --service routerlab --strategy claude-gpt
+node index.js claude-desktop proxy --service routerlab
 ```
 
 Le terminal du proxy doit rester ouvert pendant l’utilisation de Claude Desktop.
 
-Pour `claude-gpt`, le profil Desktop expose des routes Anthropic valides avec des noms affichés GPT :
+Le proxy local expose des ids compatibles Claude Desktop, puis redirige vers les vrais modèles
+RouterLab. Le catalogue Desktop RouterLab par défaut est ordonné ainsi :
 
 ```text
-claude-haiku-4-5  -> claude-gpt-5.4-mini
-claude-sonnet-4-6 -> claude-gpt-5.4
-claude-opus-4-8   -> claude-gpt-5.5
+claude-opus-4-8
+claude-sonnet-4-6
+claude-haiku-4-5
+aws-claude-opus-4-8
+aws-claude-sonnet-4-6
+aws-claude-haiku-4-5
+gpt-5.5
+gpt-5.4
+gpt-5.4-mini
+Kimi K2.6
+glm-5.1
 ```
+
+Avec `--service llm`, le mapping Claude Desktop expose Claude, OpenAI GPT, OpenAI GPT special
+price et GLM. Les routes GPT special s’affichent comme `gpt-5.5-sp` et `gpt-5.4-mini-sp`.
 
 Le support 1M est appliqué par modèle :
 
-- `claude-gpt-5.4-mini` : pas de variante 1M
-- `claude-gpt-5.4` : variante 1M
-- `claude-gpt-5.5` : variante 1M
+- Haiku, Kimi, GLM, GPT mini et GPT special mini : pas de variante 1M
+- GPT 5.4 et GPT 5.5 : variante 1M
 
 ## Codex
 
@@ -121,7 +136,15 @@ La bêta inclut un générateur de template de configuration Codex :
 node index.js codex template --service routerlab
 ```
 
-L’écriture automatique de la configuration Codex est prévue pour une prochaine itération.
+Elle peut aussi écrire `~/.codex/config.toml` :
+
+```powershell
+node index.js codex apply --service routerlab --dry-run
+node index.js codex apply --service routerlab --yes
+```
+
+`codex apply` est en dry-run par défaut. Avec `--yes`, la commande écrit `config.toml`
+atomiquement et ne modifie pas `auth.json`, afin de préserver l’état de connexion Codex existant.
 
 ## Développement
 

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { getStrategyEnvironment } from '../routerlab/strategies.js';
+import { findStrategy, getStrategyEnvironment } from '../routerlab/strategies.js';
 
 export const CLAUDE_DESKTOP_PROFILE_ID = '00000000-0000-4000-8000-000000157210';
 export const CLAUDE_DESKTOP_PROFILE_NAME = 'ScioNos Wrapper';
@@ -20,10 +20,98 @@ const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
   sonnet: 'claude-sonnet-4-6',
   opus: 'claude-opus-4-8',
 };
+const DESKTOP_MODEL_OVERRIDES = {
+  'claude-haiku-4-5-20251001': {
+    routeId: 'claude-haiku-4-5',
+    labelOverride: 'claude-haiku-4-5',
+  },
+  'claude-sonnet-4-6': {
+    routeId: 'claude-sonnet-4-6',
+    labelOverride: 'claude-sonnet-4-6',
+  },
+  'claude-opus-4-7': {
+    routeId: 'claude-opus-4-8',
+    labelOverride: 'claude-opus-4-8',
+  },
+  'aws-claude-haiku-4-5-20251001': {
+    routeId: 'aws-claude-haiku-4-5',
+    labelOverride: 'aws-claude-haiku-4-5',
+  },
+  'aws-claude-sonnet-4-6': {
+    routeId: 'aws-claude-sonnet-4-6',
+    labelOverride: 'aws-claude-sonnet-4-6',
+  },
+  'aws-claude-opus-4-8': {
+    routeId: 'aws-claude-opus-4-8',
+    labelOverride: 'aws-claude-opus-4-8',
+  },
+  'claude-gpt-5.5': {
+    routeId: 'claude-5.5',
+    labelOverride: 'gpt-5.5',
+  },
+  'claude-gpt-5.4': {
+    routeId: 'claude-5.4',
+    labelOverride: 'gpt-5.4',
+  },
+  'claude-gpt-5.4-mini': {
+    routeId: 'claude-5.4-mini',
+    labelOverride: 'gpt-5.4-mini',
+  },
+  'claude-gpt-5.5-sp': {
+    routeId: 'claude-5.5-sp',
+    labelOverride: 'gpt-5.5-sp',
+  },
+  'claude-gpt-5.4-mini-sp': {
+    routeId: 'claude-5.4-mini-sp',
+    labelOverride: 'gpt-5.4-mini-sp',
+  },
+  'claude-kimi-k2.6': {
+    routeId: 'claude-kim2.6',
+    labelOverride: 'Kimi K2.6',
+  },
+  'claude-glm-5.1': {
+    routeId: 'claude-lm5.1',
+    labelOverride: 'glm-5.1',
+  },
+};
 const MODELS_WITHOUT_ONE_M_CONTEXT = new Set([
+  'claude-haiku-4-5-20251001',
+  'aws-claude-haiku-4-5-20251001',
   'claude-gpt-5.4-mini',
   'claude-gpt-5.4-mini-sp',
+  'claude-kimi-k2.6',
+  'claude-glm-5.1',
 ]);
+const DESKTOP_MODEL_ORDER = [
+  'claude-opus-4-8',
+  'claude-sonnet-4-6',
+  'claude-haiku-4-5',
+  'aws-claude-opus-4-8',
+  'aws-claude-sonnet-4-6',
+  'aws-claude-haiku-4-5',
+  'claude-5.5',
+  'claude-5.4',
+  'claude-5.4-mini',
+  'claude-5.5-sp',
+  'claude-5.4-mini-sp',
+  'claude-kim2.6',
+  'claude-lm5.1',
+];
+export const DESKTOP_MAPPING_STRATEGIES = {
+  routerlab: [
+    'default',
+    'aws',
+    'claude-gpt',
+    'claude-kimi-k2.6',
+    'glm-5.1',
+  ],
+  llm: [
+    'claude',
+    'claude-gpt',
+    'claude-gpt-special',
+    'glm-5.1',
+  ],
+};
 
 export function isClaudeDesktopSupportedPlatform(platform = process.platform) {
   return platform === 'win32' || platform === 'darwin';
@@ -125,9 +213,32 @@ export function modelRoutesForProxyStrategy(strategyValue, serviceValue) {
     role: entry.role,
     routeId: desktopRouteIdForStrategyModel(entry.role, entry.model),
     upstreamModel: entry.model,
-    labelOverride: entry.model,
+    labelOverride: desktopLabelForStrategyModel(entry.model),
     supports1m: supportsOneMillionContext(entry.model),
   }));
+}
+
+export function modelRoutesForDesktopMapping(serviceValue, strategyValues = null) {
+  const service = requireServiceConfig(serviceValue);
+  const values = strategyValues ?? DESKTOP_MAPPING_STRATEGIES[service.value] ?? [
+    service.value === 'llm' ? 'claude' : 'default',
+  ];
+
+  const routes = values.flatMap((strategyValue) => {
+    const strategy = findStrategy(strategyValue, service.value);
+    const strategyLabel = strategy?.selectionName ?? strategy?.name ?? strategyValue;
+    const suffix = desktopRouteSuffix(strategyValue);
+    return strategyModels(strategyValue, service.value).map((entry) => ({
+      role: entry.role,
+      strategyValue,
+      routeId: desktopRouteIdForStrategyModel(entry.role, entry.model, suffix),
+      upstreamModel: entry.model,
+      labelOverride: desktopLabelForDesktopMapping(strategyLabel, entry.model),
+      supports1m: supportsOneMillionContext(entry.model),
+    }));
+  });
+
+  return sortDesktopRoutes(routes);
 }
 
 export function supportsOneMillionContext(model) {
@@ -135,15 +246,40 @@ export function supportsOneMillionContext(model) {
   return !MODELS_WITHOUT_ONE_M_CONTEXT.has(normalized);
 }
 
-export function desktopRouteIdForStrategyModel(role, upstreamModel) {
+export function desktopRouteIdForStrategyModel(role, upstreamModel, suffix = null) {
+  const override = DESKTOP_MODEL_OVERRIDES[upstreamModel];
+  if (override) {
+    return override.routeId;
+  }
+
   const prefix = DESKTOP_ROUTE_PREFIX_BY_ROLE[role] ?? DESKTOP_ROUTE_PREFIX_BY_ROLE.sonnet;
-  return prefix;
+  return suffix ? `${prefix}-${suffix}` : prefix;
+}
+
+function desktopLabelForStrategyModel(upstreamModel) {
+  return DESKTOP_MODEL_OVERRIDES[upstreamModel]?.labelOverride ?? upstreamModel;
+}
+
+function desktopLabelForDesktopMapping(strategyLabel, upstreamModel) {
+  const override = DESKTOP_MODEL_OVERRIDES[upstreamModel];
+  if (override) {
+    return override.labelOverride;
+  }
+  return `${strategyLabel} - ${upstreamModel}`;
 }
 
 function strategyModels(strategyValue, serviceValue) {
   const env = getStrategyEnvironment(strategyValue, serviceValue);
   const seen = new Set();
   const models = [];
+
+  if (Object.keys(env).length === 0 && strategyValue === 'default') {
+    return [
+      { role: 'opus', model: 'claude-opus-4-7' },
+      { role: 'sonnet', model: 'claude-sonnet-4-6' },
+      { role: 'haiku', model: 'claude-haiku-4-5-20251001' },
+    ];
+  }
 
   for (const [role, key] of STRATEGY_MODEL_KEYS) {
     const model = env[key]?.trim();
@@ -154,6 +290,28 @@ function strategyModels(strategyValue, serviceValue) {
   }
 
   return models;
+}
+
+function sortDesktopRoutes(routes) {
+  const order = new Map(DESKTOP_MODEL_ORDER.map((routeId, index) => [routeId, index]));
+  return [...routes].sort((left, right) => (
+    (order.get(left.routeId) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(right.routeId) ?? Number.MAX_SAFE_INTEGER)
+  ));
+}
+
+function desktopRouteSuffix(strategyValue) {
+  if (strategyValue === 'default') {
+    return 'native';
+  }
+  if (strategyValue === 'claude-gpt') {
+    return 'gpt';
+  }
+  return strategyValue
+    .replace(/^claude-/, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
 }
 
 export function readClaudeDesktopStatus() {
@@ -198,6 +356,7 @@ export function applyDirectClaudeDesktop({ serviceValue, strategyValue = 'defaul
 export function applyProxyClaudeDesktop({
   serviceValue,
   strategyValue,
+  strategyValues = null,
   host = '127.0.0.1',
   port = 15721,
   gatewayToken = 'scionos-local',
@@ -205,7 +364,9 @@ export function applyProxyClaudeDesktop({
 }) {
   requireServiceConfig(serviceValue);
   const paths = getClaudeDesktopPaths();
-  const routes = modelRoutesForProxyStrategy(strategyValue, serviceValue);
+  const routes = strategyValues
+    ? modelRoutesForDesktopMapping(serviceValue, strategyValues)
+    : modelRoutesForProxyStrategy(strategyValue, serviceValue);
   const profile = buildGatewayProfile({
     baseUrl: `http://${host}:${port}`,
     apiKey: gatewayToken,

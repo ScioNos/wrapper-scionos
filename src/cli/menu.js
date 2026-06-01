@@ -1,5 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { select, Separator } from '@inquirer/prompts';
+import chalk from 'chalk';
 
 export const MAIN_MENU_ITEMS = [
   {
@@ -49,33 +51,21 @@ export const MAIN_MENU_ITEMS = [
 export const CLAUDE_DESKTOP_MENU_ITEMS = [
   {
     key: '1',
-    value: 'status',
-    label: 'Status',
-    description: 'Show Claude Desktop configuration status.',
+    value: 'proxy',
+    label: 'Start Local Mapping',
+    description: 'Configure the selected Desktop mapping and run the local proxy.',
   },
   {
     key: '2',
-    value: 'apply',
-    label: 'Configure Direct Mode',
-    description: 'Write a direct RouterLab Claude Desktop profile.',
-  },
-  {
-    key: '3',
-    value: 'apply-proxy',
-    label: 'Configure Local Mapping',
-    description: 'Write a Desktop profile that points to the local mapping proxy.',
-  },
-  {
-    key: '4',
-    value: 'proxy',
-    label: 'Start Local Mapping',
-    description: 'Run the local RouterLab mapping proxy.',
-  },
-  {
-    key: '5',
     value: 'restore-official',
     label: 'Restore Official Mode',
     description: 'Return Claude Desktop to official sign-in mode.',
+  },
+  {
+    key: '3',
+    value: 'status',
+    label: 'Status',
+    description: 'Show Claude Desktop configuration status.',
   },
   {
     key: '0',
@@ -118,14 +108,62 @@ export const AUTH_MENU_ITEMS = [
   },
 ];
 
-export function formatMenu(title, items) {
+const BANNER_WIDTH = 58;
+
+export function formatBanner(title, version = null) {
+  const centered = centerText(title, BANNER_WIDTH).replace(title, colorBannerTitle(title));
+  const border = chalk.gray;
+  const lines = [
+    '',
+    border(`   ┌${'─'.repeat(BANNER_WIDTH)}┐`),
+    border(`   │${' '.repeat(BANNER_WIDTH)}│`),
+    `${border('   │')}${centered}${border('│')}`,
+    border(`   │${' '.repeat(BANNER_WIDTH)}│`),
+    border(`   └${'─'.repeat(BANNER_WIDTH)}┘`),
+  ];
+
+  if (version) {
+    lines.push(chalk.gray(`${' '.repeat(51)}v${version}`));
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
+export function formatMenu(title, items, options = {}) {
   const width = Math.max(...items.map((item) => item.label.length));
-  const lines = [`\n${title}`, ''];
+  const lines = [
+    ...(options.banner ? [formatBanner(title, options.version)] : [`\n${title}`]),
+    '',
+  ];
   for (const item of items) {
     lines.push(`  ${item.key}. ${item.label.padEnd(width, ' ')}  ${item.description}`);
   }
   lines.push('');
   return lines.join('\n');
+}
+
+export function formatSelectChoice(item) {
+  return {
+    name: item.label,
+    value: item.value,
+    description: item.description,
+    short: item.label,
+  };
+}
+
+function centerText(text, width) {
+  const padding = Math.max(width - text.length, 0);
+  const left = Math.floor(padding / 2);
+  const right = padding - left;
+  return `${' '.repeat(left)}${text}${' '.repeat(right)}`;
+}
+
+function colorBannerTitle(title) {
+  if (title === 'ScioNos Wrapper') {
+    return `${chalk.bold(chalk.hex('#3b82f6')('Scio'))}${chalk.bold(chalk.hex('#a855f7')('Nos'))}${chalk.bold(chalk.hex('#D97757')(' Wrapper'))}`;
+  }
+  return chalk.bold(title);
 }
 
 export function resolveMenuChoice(items, answer) {
@@ -139,11 +177,16 @@ export function resolveMenuChoice(items, answer) {
   )) ?? null;
 }
 
-export async function askMenu(title, items) {
+export async function askMenu(title, items, options = {}) {
+  if (options.interactiveSelect) {
+    console.log(formatBanner(title, options.version));
+    return askSelect(options.message ?? 'Select an option:', items);
+  }
+
   const rl = createInterface({ input, output });
   try {
     while (true) {
-      console.log(formatMenu(title, items));
+      console.log(formatMenu(title, items, options));
       const answer = await rl.question('Select an option: ');
       const choice = resolveMenuChoice(items, answer);
       if (choice) {
@@ -154,6 +197,20 @@ export async function askMenu(title, items) {
   } finally {
     rl.close();
   }
+}
+
+export async function askSelect(message, items) {
+  return select({
+    message,
+    choices: withSeparators(items.map(formatSelectChoice)),
+    pageSize: items.length + Math.max(items.length - 1, 0),
+  });
+}
+
+function withSeparators(choices) {
+  return choices.flatMap((choice, index) => (
+    index === choices.length - 1 ? [choice] : [choice, new Separator(' ')]
+  ));
 }
 
 export async function askText(question, defaultValue = null) {

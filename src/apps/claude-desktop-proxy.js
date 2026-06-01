@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { Readable } from 'node:stream';
 import { DEFAULT_ANTHROPIC_VERSION, requireServiceConfig } from '../routerlab/services.js';
-import { modelRoutesForProxyStrategy } from './claude-desktop.js';
+import { modelRoutesForDesktopMapping, modelRoutesForProxyStrategy } from './claude-desktop.js';
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -19,11 +19,14 @@ const HOP_BY_HOP_HEADERS = new Set([
 export function createClaudeDesktopProxy({
   serviceValue,
   strategyValue,
+  strategyValues = null,
   routerlabToken,
   gatewayToken = 'scionos-local',
 }) {
   const service = requireServiceConfig(serviceValue);
-  const routes = modelRoutesForProxyStrategy(strategyValue, service.value);
+  const routes = strategyValues
+    ? modelRoutesForDesktopMapping(service.value, strategyValues)
+    : modelRoutesForProxyStrategy(strategyValue, service.value);
   const routeMap = new Map(routes.map((route) => [route.routeId, route.upstreamModel]));
 
   const server = http.createServer(async (req, res) => {

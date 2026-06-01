@@ -28,7 +28,7 @@ Current adapters:
 
 - `claude-code.js`: launches Claude Code with RouterLab environment variables
 - `claude-desktop.js`: writes a direct Claude Desktop 3P profile on Windows/macOS
-- `codex.js`: generates a provider-scoped Codex config template
+- `codex.js`: generates and applies provider-scoped Codex config
 
 Shared modules stay independent:
 
@@ -93,6 +93,5 @@ tests/
 
 1. Add local proxy/mapping mode for Claude Desktop routes such as `claude-gpt-*`,
    `claude-deepseek-*`, `claude-kimi-*`, and `claude-glm-*`.
-2. Add a Codex `apply` command that writes `~/.codex/config.toml` atomically.
-3. Add import helpers for existing ScioNos wrapper configurations.
-4. Add release packaging after the CLI surface stabilizes.
+2. Add import helpers for existing ScioNos wrapper configurations.
+3. Add release packaging after the CLI surface stabilizes.

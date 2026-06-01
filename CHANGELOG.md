@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+## 0.9.0-beta.1 - 2026-06-01
+
+### Added
+
+- `codex apply` command to write Codex `config.toml` atomically while preserving `auth.json`.
+- Main interactive menu banner branded as `ScioNos Wrapper`.
+- Claude Code guided launch screens now use the wrapper-branded layout for strategy and subagent choices.
+- Runtime dependencies on `@inquirer/prompts` and `chalk` for a richer interactive CLI.
+- Claude Code strategy picker now verifies model availability and shows the same green/red status dots and launcher labels as the existing guided flow.
+- Main menu now uses keyboard navigation, spaced options, and the same colored prompt style as the guided Claude Code flow.
+- Claude Desktop interactive menu simplified to Start Local Mapping, Restore Official Mode, Status, and Back; Start Local Mapping now configures the selected local profile before starting the proxy.
+- Desktop Start Local Mapping now uses the service selected at launch (`routerlab` by default or `--service llm`) instead of prompting again.
+- Removed the non-beta `deepseek-v4` strategy from interactive strategy lists.
+- Launching with wrapper-only options such as `--service llm` now opens the main menu instead of jumping directly into Claude Code.
+- Claude Desktop local mapping for the default RouterLab service now exposes a multi-model catalog instead of asking for one strategy: Claude Native, AWS, GPT, Kimi, and GLM.
+- Claude Desktop local mapping for RouterLab LLM now exposes a focused catalog: Claude, OpenAI GPT, OpenAI GPT special price, and GLM.
+- Claude Desktop model ids and labels are normalized for GPT, GPT special, Kimi, GLM, Claude Native, and AWS routes, with 1M context disabled for Haiku, Kimi, GLM, and GPT mini variants.
+
 ## 0.9.0-beta.0 - 2026-06-01
 
 ### Added

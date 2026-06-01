@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `0.9.0-beta.0`.
+Current version: `0.9.0-beta.1`.
 
 This beta targets Claude Code and Claude Desktop first. It also prepares a small Codex foundation
 without coupling every client integration into one large module.
@@ -22,6 +22,7 @@ From the project folder:
 
 ```powershell
 cd D:\Serveurs\Projet_ScioNos\Wrapper-ScioNos
+npm install
 node index.js
 ```
 
@@ -38,6 +39,7 @@ node index.js
 
 ```powershell
 node index.js
+node index.js --service llm
 node index.js claude-code --strategy aws -- -p "Summarize this repo"
 node index.js auth login
 node index.js auth status --service llm
@@ -48,8 +50,10 @@ node index.js claude-desktop status
 node index.js claude-desktop apply --service llm --strategy claude --dry-run
 node index.js claude-desktop apply --service llm --strategy claude --yes
 node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
-node index.js claude-desktop proxy --service routerlab --strategy claude-gpt
+node index.js claude-desktop proxy --service routerlab
+node index.js claude-desktop proxy --service llm
 node index.js codex template --service routerlab
+node index.js codex apply --service routerlab --yes
 ```
 
 When installed globally, use `wrapper-scionos` or `scionos` instead of `node index.js`.
@@ -105,7 +109,7 @@ For strategies that Claude Desktop hides from the model menu, use local proxy mo
 
 ```powershell
 node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
-node index.js claude-desktop proxy --service routerlab --strategy claude-gpt
+node index.js claude-desktop proxy --service routerlab
 ```
 
 The proxy terminal must stay open while Claude Desktop uses mapped models.
@@ -114,21 +118,32 @@ With `claude-desktop apply` and no strategy, Claude Desktop reads the model cata
 RouterLab directly. Some non-Claude-family model ids can be hidden by Claude Desktop even when
 RouterLab returns them.
 
-Local proxy mode exposes valid Desktop route ids, then forwards requests to the real RouterLab
-strategy models:
+Local proxy mode exposes Desktop-safe model ids, then forwards requests to the real RouterLab
+strategy models. The default RouterLab Desktop catalog is ordered as:
 
 ```text
-claude-haiku-4-5  -> claude-gpt-5.4-mini
-claude-sonnet-4-6 -> claude-gpt-5.4
-claude-opus-4-8   -> claude-gpt-5.5
+claude-opus-4-8
+claude-sonnet-4-6
+claude-haiku-4-5
+aws-claude-opus-4-8
+aws-claude-sonnet-4-6
+aws-claude-haiku-4-5
+gpt-5.5
+gpt-5.4
+gpt-5.4-mini
+Kimi K2.6
+glm-5.1
 ```
+
+For `--service llm`, the Desktop local mapping exposes Claude, OpenAI GPT, OpenAI GPT special
+price, and GLM. GPT special routes use `gpt-5.5-sp` and `gpt-5.4-mini-sp` display names.
 
 `claude-desktop apply` is dry-run by default. Pass `--yes` to write files.
 `claude-desktop apply-proxy` writes a profile pointing to `http://127.0.0.1:15721`.
 `claude-desktop proxy` must stay running while Claude Desktop uses mapped routes.
 
-The 1M context flag is applied per upstream model. For example, `claude-gpt-5.4-mini` does not
-get a 1M variant, while `claude-gpt-5.4` and `claude-gpt-5.5` do.
+The 1M context flag is applied per upstream model. Haiku, Kimi, GLM, GPT mini, and GPT special
+mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
 ## Codex
 
@@ -138,7 +153,15 @@ The beta includes a Codex config template generator:
 node index.js codex template --service routerlab
 ```
 
-Automatic Codex config writing is planned for a later iteration.
+It can also write `~/.codex/config.toml`:
+
+```powershell
+node index.js codex apply --service routerlab --dry-run
+node index.js codex apply --service routerlab --yes
+```
+
+`codex apply` is dry-run by default. It writes `config.toml` atomically when `--yes` is passed
+and leaves `auth.json` untouched so existing Codex login state is preserved.
 
 ## Development
 

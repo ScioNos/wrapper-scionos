@@ -63,13 +63,17 @@ export const STRATEGIES = [
   {
     value: 'default',
     name: 'Claude Native',
-    selectionDescription: 'Let Claude Code choose its native models.',
+    description: 'Uses Claude Code natively without forcing model environment variables.',
+    selectionName: 'Claude Native',
+    selectionDescription: 'Standard behavior. Claude decides which model to use.',
     requiredModels: DEFAULT_CLAUDE_MODELS,
   },
   {
     value: 'aws',
     name: 'Claude via AWS',
-    selectionDescription: 'Use RouterLab AWS-backed Claude variants.',
+    description: 'Sets Claude Code model environment variables to AWS-backed Claude variants.',
+    selectionName: '💸 Claude via AWS (-50%)',
+    selectionDescription: 'Use aws-claude-haiku, aws-claude-sonnet, aws-claude-opus.',
     requiredModels: AWS_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'aws-claude-opus-4-8',
@@ -81,7 +85,9 @@ export const STRATEGIES = [
   {
     value: 'claude',
     name: 'Claude',
-    selectionDescription: 'Use RouterLab LLM Claude-family models.',
+    description: 'Sets Claude Code model environment variables to standard Claude variants.',
+    selectionName: 'Claude',
+    selectionDescription: 'Use claude-haiku, claude-sonnet, claude-opus.',
     requiredModels: LLM_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-opus-4-7',
@@ -93,6 +99,7 @@ export const STRATEGIES = [
   {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
+    description: 'Opus => GPT 5.5, Sonnet => GPT 5.4, Haiku/subagents => GPT 5.4 mini.',
     selectionDescription: 'Opus => GPT 5.5, Sonnet => GPT 5.4, Haiku/subagents => GPT 5.4 mini.',
     aliases: ['claude-gpt-5.4'],
     requiredModels: OPENAI_GPT_MODELS,
@@ -106,6 +113,7 @@ export const STRATEGIES = [
   {
     value: 'claude-gpt-special',
     name: 'OpenAI GPT special price',
+    description: 'Use special-price GPT routes when available on RouterLab LLM.',
     selectionDescription: 'Use special-price GPT routes when available on RouterLab LLM.',
     aliases: ['gpt-5.5-sp'],
     requiredModels: ['claude-gpt-5.5-sp', 'claude-gpt-5.4-mini-sp'],
@@ -117,9 +125,11 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'deepseek-v4',
-    name: 'DeepSeek V4',
-    selectionDescription: 'Opus/Sonnet => DeepSeek V4 Pro, Haiku/subagents => DeepSeek V4 Flash.',
+    value: 'deepseek-v4-beta',
+    name: 'deepseek-v4 beta',
+    selectionName: 'deepseek-v4 beta',
+    description: 'Sets Claude Code model environment variables to the claude-deepseek-v4 family. Opus and Sonnet => claude-deepseek-v4-pro, Haiku => claude-deepseek-v4-flash.',
+    selectionDescription: 'Opus and Sonnet => claude-deepseek-v4-pro, Haiku => claude-deepseek-v4-flash.',
     requiredModels: DEEPSEEK_V4_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-deepseek-v4-pro',
@@ -130,22 +140,26 @@ export const STRATEGIES = [
   },
   {
     value: 'minimax-m2.7',
-    name: 'MiniMax M2.7',
-    selectionDescription: 'Use MiniMax M2.7 for all Claude Code model roles.',
+    name: 'minimax-m2.7',
+    selectionName: 'minimax-m2.7',
+    description: 'Sets all Claude Code model environment variables to claude-minimax-m2.7.',
+    selectionDescription: 'Uses claude-minimax-m2.7 for all model aliases.',
     requiredModels: ['claude-minimax-m2.7'],
     environment: createSingleModelEnvironment('claude-minimax-m2.7'),
   },
   {
     value: 'claude-kimi-k2.6',
     name: 'Kimi K2.6',
-    selectionDescription: 'Use Kimi K2.6 for all Claude Code model roles.',
+    description: 'Sets all Claude Code model environment variables to claude-kimi-k2.6.',
+    selectionDescription: 'Uses claude-kimi-k2.6 for all model aliases.',
     requiredModels: ['claude-kimi-k2.6'],
     environment: createSingleModelEnvironment('claude-kimi-k2.6'),
   },
   {
     value: 'glm-5.1',
-    name: 'GLM 5.1',
-    selectionDescription: 'Use GLM 5.1 for all Claude Code model roles.',
+    name: 'glm-5.1',
+    description: 'Sets all Claude Code model environment variables to claude-glm-5.1.',
+    selectionDescription: 'Uses claude-glm-5.1 for all model aliases.',
     requiredModels: ['claude-glm-5.1'],
     environment: createSingleModelEnvironment('claude-glm-5.1'),
   },
@@ -164,7 +178,17 @@ export function normalizeStrategyValue(strategyValue) {
 export function getServiceStrategies(serviceValue = DEFAULT_SERVICE) {
   const service = requireServiceConfig(serviceValue);
   return service.strategyValues
-    .map((value) => STRATEGIES.find((strategy) => strategy.value === value))
+    .map((value) => {
+      const strategy = STRATEGIES.find((entry) => entry.value === value);
+      if (service.value === 'llm' && strategy?.value === 'claude') {
+        return {
+          ...strategy,
+          selectionDescription: 'Standard behavior. Claude decides which model to use.',
+          requiredModels: LLM_CLAUDE_MODELS,
+        };
+      }
+      return strategy;
+    })
     .filter(Boolean);
 }
 
@@ -201,6 +225,26 @@ export function hasVerifiedModelIds(modelIds) {
   return Array.isArray(modelIds) && modelIds.length > 0;
 }
 
+function getRequiredModels(strategy) {
+  return strategy?.requiredModels ?? strategy?.verificationModels ?? strategy?.mappedModels ?? [];
+}
+
+export function hasExploitableModelIds(modelIds, serviceValue = DEFAULT_SERVICE) {
+  if (!hasVerifiedModelIds(modelIds)) {
+    return false;
+  }
+
+  const knownModelIds = new Set(
+    getServiceStrategies(serviceValue).flatMap((strategy) => getRequiredModels(strategy)),
+  );
+
+  if (knownModelIds.size === 0) {
+    return false;
+  }
+
+  return modelIds.some((modelId) => knownModelIds.has(modelId));
+}
+
 export function assessStrategy(strategyValue, modelIds = [], serviceValue = DEFAULT_SERVICE) {
   const service = requireServiceConfig(serviceValue);
   const strategy = findStrategy(strategyValue, service.value);
@@ -208,8 +252,12 @@ export function assessStrategy(strategyValue, modelIds = [], serviceValue = DEFA
     return { available: false, level: 'unavailable', note: 'Unknown strategy.', strategy: null };
   }
 
-  const requiredModels = strategy.requiredModels ?? [];
-  if (!requiredModels.length || !hasVerifiedModelIds(modelIds)) {
+  const requiredModels = getRequiredModels(strategy);
+  if (!requiredModels.length) {
+    return { available: true, level: 'ready', note: 'Always available.', strategy };
+  }
+
+  if (!hasExploitableModelIds(modelIds, service.value)) {
     return { available: true, level: 'unknown', note: 'Availability not verified.', strategy };
   }
 
@@ -224,11 +272,70 @@ export function assessStrategy(strategyValue, modelIds = [], serviceValue = DEFA
   return { available: false, level: 'unavailable', note: `Not reported by ${service.availabilityLabel}.`, strategy };
 }
 
+export function assessStrategyLaunch(strategyValue, modelIds = [], serviceValue = DEFAULT_SERVICE) {
+  const service = requireServiceConfig(serviceValue);
+  const availability = assessStrategy(strategyValue, modelIds, service.value);
+  const requiredModels = getRequiredModels(availability.strategy);
+
+  if (!availability.strategy) {
+    return {
+      ready: false,
+      note: 'Unknown strategy.',
+      missingModels: [],
+      requiredModels: [],
+      availability,
+    };
+  }
+
+  if (!requiredModels.length || !hasExploitableModelIds(modelIds, service.value)) {
+    return {
+      ready: availability.level !== 'unavailable',
+      note: availability.note,
+      missingModels: [],
+      requiredModels,
+      availability,
+    };
+  }
+
+  const missingModels = requiredModels.filter((model) => !modelIds.includes(model));
+  if (missingModels.length === 0) {
+    return {
+      ready: true,
+      note: `Default Claude Code launch verified on ${service.availabilityLabel}.`,
+      missingModels,
+      requiredModels,
+      availability,
+    };
+  }
+
+  const note = requiredModels.length === 1
+    ? `Default Claude Code launch requires ${requiredModels[0]}, which is not reported by ${service.availabilityLabel}.`
+    : `Default Claude Code launch requires all of: ${requiredModels.join(', ')}. Missing on ${service.availabilityLabel}: ${missingModels.join(', ')}.`;
+
+  return {
+    ready: false,
+    note,
+    missingModels,
+    requiredModels,
+    availability,
+  };
+}
+
+export function getFallbackStrategy(strategyValue, modelIds = [], serviceValue = DEFAULT_SERVICE) {
+  const normalized = normalizeStrategyValue(strategyValue);
+  if (hasExploitableModelIds(modelIds, serviceValue)) {
+    return assessStrategyLaunch(normalized, modelIds, serviceValue).ready ? normalized : null;
+  }
+
+  const availability = assessStrategy(normalized, modelIds, serviceValue);
+  return availability.level === 'unavailable' ? null : normalized;
+}
+
 export function getStrategyChoices(modelIds = [], serviceValue = DEFAULT_SERVICE) {
   return getServiceStrategies(normalizeServiceValue(serviceValue)).map((strategy) => ({
-    name: strategy.name,
+    name: strategy.selectionName ?? strategy.name ?? strategy.value,
     value: strategy.value,
-    description: strategy.selectionDescription,
+    description: strategy.selectionDescription ?? strategy.description,
     availability: assessStrategy(strategy.value, modelIds, serviceValue),
   }));
 }

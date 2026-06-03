@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
+import { chooseSubagentModel, formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
 import { CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig } from '../src/apps/codex.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
@@ -10,7 +10,7 @@ import { parseOptions } from '../src/cli/args.js';
 import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, isClaudeDesktopSafeModelId, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
-import { assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
+import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 
 test('RouterLab services expose the expected endpoints', () => {
@@ -49,7 +49,46 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-qwen3.7-max',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-qwen3.6-flash',
   });
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('claude-MiniMax-M3', 'llm', { subagentModel: 'haiku' }), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-MiniMax-M3',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-MiniMax-M3',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-MiniMax-M3',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-MiniMax-M3',
+  });
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('claude-qwen3.7-max', 'llm', { subagentModel: 'haiku' }), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-qwen3.7-max',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-qwen3.7-max',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-qwen3.7-max',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-qwen3.6-flash',
+  });
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('claude-gpt-special', 'llm', { subagentModel: 'haiku' }), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-gpt-5.5-sp',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-gpt-5.5-sp',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-gpt-5.4-mini-sp',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-gpt-5.4-mini-sp',
+  });
+  assert.equal(allowsSubagentModelOverride('claude-gpt-special', 'llm'), false);
+  assert.equal(allowsSubagentModelOverride('claude-MiniMax-M3', 'llm'), false);
+  assert.equal(allowsSubagentModelOverride('claude-qwen3.7-max', 'llm'), false);
   assert.throws(() => getStrategyEnvironment('minimax-m2.7', 'llm'), /Unknown strategy/);
+});
+
+test('fixed-subagent strategies do not prompt for subagent overrides', async () => {
+  assert.equal(await chooseSubagentModel({
+    serviceValue: 'llm',
+    strategyValue: 'claude-MiniMax-M3',
+    preferredSubagentModel: 'haiku',
+  }), 'strategy default');
+  assert.equal(await chooseSubagentModel({
+    serviceValue: 'llm',
+    strategyValue: 'claude-qwen3.7-max',
+    preferredSubagentModel: 'haiku',
+  }), 'strategy default');
+  assert.equal(await chooseSubagentModel({
+    serviceValue: 'llm',
+    strategyValue: 'claude-gpt-special',
+    preferredSubagentModel: 'haiku',
+  }), 'strategy default');
 });
 
 test('service strategy lists stay scoped', () => {

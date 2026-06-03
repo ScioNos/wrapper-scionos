@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { allowsSubagentModelOverride, assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, hasVerifiedModelIds } from '../routerlab/strategies.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 
@@ -126,7 +126,16 @@ export async function chooseStrategy({
   }).then(finalizeChoice);
 }
 
-export async function chooseSubagentModel({ noPrompt = false, preferredSubagentModel = 'default' } = {}) {
+export async function chooseSubagentModel({
+  serviceValue,
+  strategyValue,
+  noPrompt = false,
+  preferredSubagentModel = 'default',
+} = {}) {
+  if (strategyValue && serviceValue && !allowsSubagentModelOverride(strategyValue, serviceValue)) {
+    return 'strategy default';
+  }
+
   if (preferredSubagentModel && preferredSubagentModel !== 'default') {
     return preferredSubagentModel;
   }
@@ -167,6 +176,8 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     modelIds,
   });
   const selectedSubagentModel = await chooseSubagentModel({
+    serviceValue: service.value,
+    strategyValue: selectedStrategy,
     noPrompt,
     preferredSubagentModel: subagentModel,
   });

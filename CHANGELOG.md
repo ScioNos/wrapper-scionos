@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.1 - 2026-06-03
+
+### Fixed
+
+- Fixed subagent overrides for RouterLab LLM fixed-subagent strategies: `claude-gpt-special`, `claude-MiniMax-M3`, and `claude-qwen3.7-max` now keep their strategy-defined subagent model even when `--subagent-model` is provided.
+
+### Changed
+
+- Package version promoted from `1.1.0` to `1.1.1`.
+
 ## 1.1.0 - 2026-06-03
 
 ### Added

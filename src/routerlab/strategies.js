@@ -117,6 +117,7 @@ export const STRATEGIES = [
     selectionDescription: 'Use special-price GPT routes when available on RouterLab LLM.',
     aliases: ['gpt-5.5-sp'],
     requiredModels: ['claude-gpt-5.5-sp', 'claude-gpt-5.4-mini-sp'],
+    allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'claude-gpt-5.5-sp',
       sonnet: 'claude-gpt-5.5-sp',
@@ -145,6 +146,7 @@ export const STRATEGIES = [
     description: 'Sets all Claude Code model environment variables to claude-MiniMax-M3.',
     selectionDescription: 'Uses claude-MiniMax-M3 for all model aliases.',
     requiredModels: ['claude-MiniMax-M3'],
+    allowSubagentOverride: false,
     environment: createSingleModelEnvironment('claude-MiniMax-M3'),
   },
   {
@@ -154,6 +156,7 @@ export const STRATEGIES = [
     description: 'Sets Claude Code main model aliases to claude-qwen3.7-max and subagents to claude-qwen3.6-flash.',
     selectionDescription: 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.',
     requiredModels: ['claude-qwen3.7-max', 'claude-qwen3.6-flash'],
+    allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'claude-qwen3.7-max',
       sonnet: 'claude-qwen3.7-max',
@@ -229,7 +232,7 @@ export function getStrategyEnvironment(strategyValue, serviceValue = DEFAULT_SER
   }
 
   const env = { ...(strategy.environment ?? {}) };
-  return applySubagentModelOverride(env, options);
+  return applySubagentModelOverride(strategy, env, options);
 }
 
 export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = DEFAULT_SERVICE, options = {}) {
@@ -239,10 +242,22 @@ export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = D
   }
 
   const env = strategy.claudeCodeNative ? {} : { ...(strategy.environment ?? {}) };
-  return applySubagentModelOverride(env, options);
+  return applySubagentModelOverride(strategy, env, options);
 }
 
-function applySubagentModelOverride(env, options = {}) {
+export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAULT_SERVICE) {
+  const strategy = findStrategy(strategyValue, serviceValue);
+  if (!strategy) {
+    throw new Error(`Unknown strategy "${strategyValue}" for service "${serviceValue}".`);
+  }
+  return strategy.allowSubagentOverride !== false;
+}
+
+function applySubagentModelOverride(strategy, env, options = {}) {
+  if (strategy.allowSubagentOverride === false) {
+    return env;
+  }
+
   const subagentOverride = getSubagentModelOverride(options.subagentModel);
   if (subagentOverride) {
     env.CLAUDE_CODE_SUBAGENT_MODEL = subagentOverride;

@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.0 - 2026-06-03
+
+### Added
+
+- RouterLab LLM Claude Code strategy `claude-MiniMax-M3`, shown as `MiniMax-M3 beta`.
+- RouterLab LLM Claude Code strategy `claude-qwen3.7-max`, with `claude-qwen3.6-flash` for subagents.
+
+### Changed
+
+- RouterLab LLM Claude strategy now launches Claude Code in native mode without forcing default model environment variables.
+- RouterLab LLM MiniMax strategy now uses only `claude-MiniMax-M3`; the previous `minimax-m2.7` strategy name is no longer accepted.
+- Package version promoted from `1.0.0` to `1.1.0`.
+
 ## 1.0.0 - 2026-06-01
 
 ### Added

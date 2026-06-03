@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyEnvironment, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, hasVerifiedModelIds } from '../routerlab/strategies.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 
@@ -37,7 +37,7 @@ export function buildClaudeCodeEnvironment(token, service, strategyValue, option
     ANTHROPIC_BASE_URL: service.baseUrl,
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
-    ...getStrategyEnvironment(strategyValue, service.value, options),
+    ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, options),
   };
 }
 

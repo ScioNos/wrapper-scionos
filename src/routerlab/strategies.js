@@ -139,13 +139,27 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'minimax-m2.7',
-    name: 'minimax-m2.7',
-    selectionName: 'minimax-m2.7',
-    description: 'Sets all Claude Code model environment variables to claude-minimax-m2.7.',
-    selectionDescription: 'Uses claude-minimax-m2.7 for all model aliases.',
-    requiredModels: ['claude-minimax-m2.7'],
-    environment: createSingleModelEnvironment('claude-minimax-m2.7'),
+    value: 'claude-MiniMax-M3',
+    name: 'MiniMax-M3 beta',
+    selectionName: 'MiniMax-M3 beta',
+    description: 'Sets all Claude Code model environment variables to claude-MiniMax-M3.',
+    selectionDescription: 'Uses claude-MiniMax-M3 for all model aliases.',
+    requiredModels: ['claude-MiniMax-M3'],
+    environment: createSingleModelEnvironment('claude-MiniMax-M3'),
+  },
+  {
+    value: 'claude-qwen3.7-max',
+    name: 'claude-qwen3.7-max',
+    selectionName: 'claude-qwen3.7-max',
+    description: 'Sets Claude Code main model aliases to claude-qwen3.7-max and subagents to claude-qwen3.6-flash.',
+    selectionDescription: 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.',
+    requiredModels: ['claude-qwen3.7-max', 'claude-qwen3.6-flash'],
+    environment: createModelEnvironment({
+      opus: 'claude-qwen3.7-max',
+      sonnet: 'claude-qwen3.7-max',
+      haiku: 'claude-qwen3.7-max',
+      subagent: 'claude-qwen3.6-flash',
+    }),
   },
   {
     value: 'claude-kimi-k2.6',
@@ -184,7 +198,8 @@ export function getServiceStrategies(serviceValue = DEFAULT_SERVICE) {
         return {
           ...strategy,
           selectionDescription: 'Standard behavior. Claude decides which model to use.',
-          requiredModels: LLM_CLAUDE_MODELS,
+          requiredModels: [],
+          claudeCodeNative: true,
         };
       }
       return strategy;
@@ -214,6 +229,20 @@ export function getStrategyEnvironment(strategyValue, serviceValue = DEFAULT_SER
   }
 
   const env = { ...(strategy.environment ?? {}) };
+  return applySubagentModelOverride(env, options);
+}
+
+export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = DEFAULT_SERVICE, options = {}) {
+  const strategy = findStrategy(strategyValue, serviceValue);
+  if (!strategy) {
+    throw new Error(`Unknown strategy "${strategyValue}" for service "${serviceValue}".`);
+  }
+
+  const env = strategy.claudeCodeNative ? {} : { ...(strategy.environment ?? {}) };
+  return applySubagentModelOverride(env, options);
+}
+
+function applySubagentModelOverride(env, options = {}) {
   const subagentOverride = getSubagentModelOverride(options.subagentModel);
   if (subagentOverride) {
     env.CLAUDE_CODE_SUBAGENT_MODEL = subagentOverride;

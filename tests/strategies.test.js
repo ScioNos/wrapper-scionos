@@ -10,7 +10,7 @@ import { parseOptions } from '../src/cli/args.js';
 import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, isClaudeDesktopSafeModelId, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
-import { assessStrategyLaunch, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
+import { assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 
 test('RouterLab services expose the expected endpoints', () => {
@@ -32,6 +32,24 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-opus-4-6',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
   });
+
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('claude', 'llm'), {});
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
+  });
+  assert.deepEqual(getStrategyEnvironment('claude-MiniMax-M3', 'llm'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-MiniMax-M3',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-MiniMax-M3',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-MiniMax-M3',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-MiniMax-M3',
+  });
+  assert.deepEqual(getStrategyEnvironment('claude-qwen3.7-max', 'llm'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-qwen3.7-max',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-qwen3.7-max',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-qwen3.7-max',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-qwen3.6-flash',
+  });
+  assert.throws(() => getStrategyEnvironment('minimax-m2.7', 'llm'), /Unknown strategy/);
 });
 
 test('service strategy lists stay scoped', () => {
@@ -48,7 +66,8 @@ test('service strategy lists stay scoped', () => {
     'claude-gpt',
     'claude-gpt-special',
     'deepseek-v4-beta',
-    'minimax-m2.7',
+    'claude-MiniMax-M3',
+    'claude-qwen3.7-max',
     'glm-5.1',
   ]);
 });
@@ -62,6 +81,8 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'default').description, 'Standard behavior. Claude decides which model to use.');
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').name, 'OpenAI GPT');
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.5, Sonnet => GPT 5.4, Haiku/subagents => GPT 5.4 mini.');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-MiniMax-M3').name, 'MiniMax-M3 beta');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').description, 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.');
 
   assert.equal(assessStrategyLaunch('aws', [
     'aws-claude-haiku-4-5-20251001',
@@ -71,6 +92,12 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(assessStrategyLaunch('aws', [
     'aws-claude-sonnet-4-6',
   ], 'routerlab').ready, false);
+  assert.equal(assessStrategyLaunch('claude', [
+    'claude-sonnet-4-6',
+  ], 'llm').ready, true);
+  assert.deepEqual(assessStrategyLaunch('claude', [
+    'claude-sonnet-4-6',
+  ], 'llm').missingModels, []);
 });
 
 test('Claude Desktop helper identifies visible model ids and rejects hidden direct strategy ids', () => {

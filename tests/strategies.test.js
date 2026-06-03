@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { chooseSubagentModel, formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
+import { buildClaudeCodeEnvironment, chooseSubagentModel, formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
 import { CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig } from '../src/apps/codex.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
@@ -10,7 +10,7 @@ import { parseOptions } from '../src/cli/args.js';
 import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, isClaudeDesktopSafeModelId, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
-import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
+import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyDisplayName, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 
 test('RouterLab services expose the expected endpoints', () => {
@@ -121,6 +121,8 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').name, 'OpenAI GPT');
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.5, Sonnet => GPT 5.4, Haiku/subagents => GPT 5.4 mini.');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-MiniMax-M3').name, 'MiniMax-M3 beta');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').name, 'qwen3.7-max');
+  assert.equal(getStrategyDisplayName('claude-qwen3.7-max', 'llm'), 'qwen3.7-max');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').description, 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.');
 
   assert.equal(assessStrategyLaunch('aws', [
@@ -137,6 +139,22 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.deepEqual(assessStrategyLaunch('claude', [
     'claude-sonnet-4-6',
   ], 'llm').missingModels, []);
+});
+
+test('Claude Code launch environment disables experimental betas only for the child process', () => {
+  const original = process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
+  delete process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
+  try {
+    const env = buildClaudeCodeEnvironment('valid-token-with-enough-length', requireServiceConfig('llm'), 'claude');
+    assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
+    assert.equal(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, undefined);
+  } finally {
+    if (original === undefined) {
+      delete process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
+    } else {
+      process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = original;
+    }
+  }
 });
 
 test('Claude Desktop helper identifies visible model ids and rejects hidden direct strategy ids', () => {

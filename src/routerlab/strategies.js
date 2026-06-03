@@ -151,8 +151,8 @@ export const STRATEGIES = [
   },
   {
     value: 'claude-qwen3.7-max',
-    name: 'claude-qwen3.7-max',
-    selectionName: 'claude-qwen3.7-max',
+    name: 'qwen3.7-max',
+    selectionName: 'qwen3.7-max',
     description: 'Sets Claude Code main model aliases to claude-qwen3.7-max and subagents to claude-qwen3.6-flash.',
     selectionDescription: 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.',
     requiredModels: ['claude-qwen3.7-max', 'claude-qwen3.6-flash'],
@@ -215,6 +215,11 @@ export function findStrategy(strategyValue, serviceValue = DEFAULT_SERVICE) {
   return getServiceStrategies(serviceValue).find((strategy) => (
     strategy.value === normalized || strategy.aliases?.includes(strategyValue)
   )) ?? null;
+}
+
+export function getStrategyDisplayName(strategyValue, serviceValue = DEFAULT_SERVICE) {
+  const strategy = findStrategy(strategyValue, serviceValue);
+  return strategy?.selectionName ?? strategy?.name ?? strategy?.value ?? strategyValue;
 }
 
 export function getSubagentModelOverride(subagentModel = 'default') {

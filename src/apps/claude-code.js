@@ -4,9 +4,13 @@ import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { allowsSubagentModelOverride, assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { allowsSubagentModelOverride, assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
+
+export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
+  CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+};
 
 export const SUBAGENT_MODEL_CHOICES = [
   {
@@ -34,6 +38,7 @@ export const SUBAGENT_MODEL_CHOICES = [
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
   return {
     ...process.env,
+    ...CLAUDE_CODE_TEMPORARY_ENVIRONMENT,
     ANTHROPIC_BASE_URL: service.baseUrl,
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
@@ -184,15 +189,16 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
   const env = buildClaudeCodeEnvironment(token, service, selectedStrategy, {
     subagentModel: selectedSubagentModel,
   });
+  const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
 
   if (!noPrompt) {
     console.log(formatLaunchSummary({
       service,
-      strategy: selectedStrategy,
+      strategy: selectedStrategyName,
       subagentModel: selectedSubagentModel,
       endpoint: service.baseUrl,
     }));
-    console.log(chalk.green(`Launching Claude Code [${selectedStrategy}]...\n`));
+    console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
   }
 
   const child = spawn(claude.cliPath, claudeArgs, {

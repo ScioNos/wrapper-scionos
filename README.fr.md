@@ -2,7 +2,7 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `1.1.1`.
+Version actuelle : `1.1.2`.
 
 Cette version cible Claude Code, Claude Desktop et Codex CLI, sans mélanger toutes les intégrations
 dans un seul gros module.
@@ -77,9 +77,10 @@ node index.js claude-code --service llm --strategy claude-MiniMax-M3
 node index.js claude-code --service llm --strategy claude-qwen3.7-max
 ```
 
-`claude-MiniMax-M3` s’affiche comme `MiniMax-M3 beta` dans le menu guidé. La stratégie
-`claude-qwen3.7-max` utilise `claude-qwen3.7-max` pour Opus, Sonnet et Haiku, avec
-`claude-qwen3.6-flash` pour les sous-agents.
+`claude-MiniMax-M3` s’affiche comme `MiniMax-M3 beta` dans le menu guidé.
+`claude-qwen3.7-max` s’affiche comme `qwen3.7-max`. La stratégie utilise
+`claude-qwen3.7-max` pour Opus, Sonnet et Haiku, avec `claude-qwen3.6-flash`
+pour les sous-agents.
 
 Les stratégies avec sous-agent fixe ignorent `--subagent-model` : `claude-gpt-special`
 garde `claude-gpt-5.4-mini-sp`, `claude-MiniMax-M3` garde `claude-MiniMax-M3`, et
@@ -89,6 +90,11 @@ Le wrapper configure toujours :
 
 - `ANTHROPIC_BASE_URL`
 - `ANTHROPIC_AUTH_TOKEN`
+
+Les lancements Claude Code reçoivent aussi cet environnement temporaire, limité au
+processus enfant :
+
+- `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`
 
 Les mappings de stratégie peuvent aussi configurer :
 

@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.1.2 - 2026-06-03
+
+### Changed
+
+- RouterLab LLM Claude Code strategy `claude-qwen3.7-max` is now shown as `qwen3.7-max` in guided launch displays.
+- Claude Code launches now receive temporary child-process environment `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`.
+- Package version promoted from `1.1.1` to `1.1.2`.
+
 ## 1.1.1 - 2026-06-03
 
 ### Fixed

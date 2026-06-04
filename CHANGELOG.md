@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.0.0 - 2026-06-04
+
+### Added
+
+- Added Claude Desktop 3P profile support on Linux through the `claude-desktop-debian` config layout.
+- Added a main-menu compatibility line for Windows, macOS, and Linux via `aaddrick/claude-desktop-debian`.
+- Expanded Claude Desktop local mapping for RouterLab LLM to mirror the Claude Code LLM strategies: Claude, GPT, GPT special, DeepSeek, MiniMax, Qwen, and GLM.
+
+### Changed
+
+- `claude-desktop proxy --service llm` and `claude-desktop apply-proxy --service llm` now use the same full Desktop LLM mapping as the interactive Start Local Mapping flow when no explicit `--strategy` is provided.
+- Claude Desktop LLM model route ids now use Desktop-safe aliases with clean display labels, such as `gpt-5.5`, `deepseek-v4-pro`, `MiniMax-M3`, `qwen3.7-max`, and `glm-5.1`.
+- RouterLab LLM native Claude mapping now uses `claude-opus-4-8`, `claude-sonnet-4-6`, and `claude-haiku-4-5-20251001`.
+- 1M context variants are enabled for DeepSeek, MiniMax, and Qwen Desktop routes.
+- Package version promoted from `1.1.2` to `2.0.0`.
+
 ## 1.1.2 - 2026-06-03
 
 ### Changed

@@ -2,7 +2,7 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `1.1.2`.
+Version actuelle : `2.0.0`.
 
 Cette version cible Claude Code, Claude Desktop et Codex CLI, sans mélanger toutes les intégrations
 dans un seul gros module.
@@ -12,7 +12,7 @@ dans un seul gros module.
 - Node.js 22 ou plus récent
 - Claude Code installé si tu veux lancer Claude Code via le wrapper
 - Un token RouterLab
-- Windows ou macOS pour la configuration Claude Desktop 3P
+- Windows, macOS ou le port Linux `claude-desktop-debian` pour la configuration Claude Desktop 3P
 
 ## Démarrage
 
@@ -105,6 +105,12 @@ Les mappings de stratégie peuvent aussi configurer :
 
 ## Claude Desktop
 
+Le wrapper prend en charge :
+
+- Windows : `%LOCALAPPDATA%\Claude` et `%LOCALAPPDATA%\Claude-3p`
+- macOS : `~/Library/Application Support/Claude` et `~/Library/Application Support/Claude-3p`
+- Linux avec `claude-desktop-debian` : `${XDG_CONFIG_HOME:-~/.config}/Claude` et `${XDG_CONFIG_HOME:-~/.config}/Claude-3p`
+
 Retour au mode officiel :
 
 ```powershell
@@ -143,8 +149,10 @@ Kimi K2.6
 glm-5.1
 ```
 
-Avec `--service llm`, le mapping Claude Desktop expose Claude, OpenAI GPT, OpenAI GPT special
-price et GLM. Les routes GPT special s’affichent comme `gpt-5.5-sp` et `gpt-5.4-mini-sp`.
+Avec `--service llm`, le mapping Claude Desktop reprend les stratégies LLM de Claude Code :
+Claude, OpenAI GPT, OpenAI GPT special price, DeepSeek, MiniMax, Qwen et GLM. Les noms affichés
+retirent le préfixe de routage RouterLab `claude-` quand c’est utile, par exemple `gpt-5.5`,
+`deepseek-v4-pro`, `qwen3.7-max` et `glm-5.1`.
 
 Le support 1M est appliqué par modèle :
 

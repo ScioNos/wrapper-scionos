@@ -275,9 +275,12 @@ async function handleClaudeDesktop(action, options) {
 
   if (action === 'apply-proxy') {
     const service = requireServiceConfig(options.service);
+    const strategyValue = options.strategy ?? (service.value === 'llm' ? 'claude' : 'default');
+    const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
     const result = applyProxyClaudeDesktop({
       serviceValue: service.value,
-      strategyValue: options.strategy ?? (service.value === 'llm' ? 'claude' : 'default'),
+      strategyValue,
+      strategyValues,
       host: options.host,
       port: options.port,
       dryRun: !options.yes,
@@ -290,7 +293,7 @@ async function handleClaudeDesktop(action, options) {
     const service = requireServiceConfig(options.service);
     const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
     const strategyValue = options.strategy ?? (service.value === 'llm' ? 'claude' : 'default');
-    const strategyValues = options.strategyValues ?? null;
+    const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
     if (options.setupLocalMapping || options.yes) {
       const profile = applyProxyClaudeDesktop({
         serviceValue: service.value,
@@ -345,6 +348,13 @@ function resolveDesktopMappingStrategies(serviceValue) {
   return DESKTOP_MAPPING_STRATEGIES[service.value] ?? [
     service.value === 'llm' ? 'claude' : 'default',
   ];
+}
+
+function resolveDesktopProxyStrategyValues(serviceValue, options) {
+  if (options.strategyValues) {
+    return options.strategyValues;
+  }
+  return options.strategy ? null : resolveDesktopMappingStrategies(serviceValue);
 }
 
 async function handleCodex(action, options) {

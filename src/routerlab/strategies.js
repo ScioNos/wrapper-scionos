@@ -7,9 +7,9 @@ export const DEFAULT_CLAUDE_MODELS = [
 ];
 
 export const LLM_CLAUDE_MODELS = [
-  'claude-opus-4-7',
-  'claude-opus-4-6',
+  'claude-opus-4-8',
   'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001',
 ];
 
 export const AWS_CLAUDE_MODELS = [
@@ -90,9 +90,9 @@ export const STRATEGIES = [
     selectionDescription: 'Use claude-haiku, claude-sonnet, claude-opus.',
     requiredModels: LLM_CLAUDE_MODELS,
     environment: createModelEnvironment({
-      opus: 'claude-opus-4-7',
+      opus: 'claude-opus-4-8',
       sonnet: 'claude-sonnet-4-6',
-      haiku: 'claude-opus-4-6',
+      haiku: 'claude-haiku-4-5-20251001',
       subagent: 'claude-sonnet-4-6',
     }),
   },

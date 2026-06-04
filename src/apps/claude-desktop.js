@@ -14,6 +14,7 @@ const STRATEGY_MODEL_KEYS = [
   ['haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
   ['sonnet', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
   ['opus', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
+  ['subagent', 'CLAUDE_CODE_SUBAGENT_MODEL'],
 ];
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
   haiku: 'claude-haiku-4-5',
@@ -28,6 +29,10 @@ const DESKTOP_MODEL_OVERRIDES = {
   'claude-sonnet-4-6': {
     routeId: 'claude-sonnet-4-6',
     labelOverride: 'claude-sonnet-4-6',
+  },
+  'claude-opus-4-8': {
+    routeId: 'claude-opus-4-8',
+    labelOverride: 'claude-opus-4-8',
   },
   'claude-opus-4-7': {
     routeId: 'claude-opus-4-8',
@@ -65,6 +70,26 @@ const DESKTOP_MODEL_OVERRIDES = {
     routeId: 'claude-5.4-mini-sp',
     labelOverride: 'gpt-5.4-mini-sp',
   },
+  'claude-deepseek-v4-pro': {
+    routeId: 'claude-deev4-pro',
+    labelOverride: 'deepseek-v4-pro',
+  },
+  'claude-deepseek-v4-flash': {
+    routeId: 'claude-deev4-flash',
+    labelOverride: 'deepseek-v4-flash',
+  },
+  'claude-MiniMax-M3': {
+    routeId: 'claude-max-m3',
+    labelOverride: 'MiniMax-M3',
+  },
+  'claude-qwen3.7-max': {
+    routeId: 'claude-wen3.7-max',
+    labelOverride: 'qwen3.7-max',
+  },
+  'claude-qwen3.6-flash': {
+    routeId: 'claude-wen3.6-flash',
+    labelOverride: 'qwen3.6-flash',
+  },
   'claude-kimi-k2.6': {
     routeId: 'claude-kim2.6',
     labelOverride: 'Kimi K2.6',
@@ -94,6 +119,11 @@ const DESKTOP_MODEL_ORDER = [
   'claude-5.4-mini',
   'claude-5.5-sp',
   'claude-5.4-mini-sp',
+  'claude-deev4-pro',
+  'claude-deev4-flash',
+  'claude-max-m3',
+  'claude-wen3.7-max',
+  'claude-wen3.6-flash',
   'claude-kim2.6',
   'claude-lm5.1',
 ];
@@ -109,38 +139,56 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'claude',
     'claude-gpt',
     'claude-gpt-special',
+    'deepseek-v4-beta',
+    'claude-MiniMax-M3',
+    'claude-qwen3.7-max',
     'glm-5.1',
   ],
 };
 
 export function isClaudeDesktopSupportedPlatform(platform = process.platform) {
-  return platform === 'win32' || platform === 'darwin';
+  return platform === 'win32' || platform === 'darwin' || platform === 'linux';
 }
 
 export function getClaudeDesktopPaths(env = process.env, platform = process.platform) {
   if (platform === 'win32') {
     const localAppData = env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    return pathsFromBaseDirs(path.join(localAppData, 'Claude'), path.join(localAppData, 'Claude-3p'));
-  }
-
-  if (platform === 'darwin') {
     return pathsFromBaseDirs(
-      path.join(os.homedir(), 'Library', 'Application Support', 'Claude'),
-      path.join(os.homedir(), 'Library', 'Application Support', 'Claude-3p'),
+      path.win32.join(localAppData, 'Claude'),
+      path.win32.join(localAppData, 'Claude-3p'),
+      path.win32,
     );
   }
 
-  throw new Error('Claude Desktop 3P configuration is currently supported only on Windows and macOS.');
+  if (platform === 'darwin') {
+    const home = env.HOME || os.homedir();
+    return pathsFromBaseDirs(
+      path.posix.join(home, 'Library', 'Application Support', 'Claude'),
+      path.posix.join(home, 'Library', 'Application Support', 'Claude-3p'),
+      path.posix,
+    );
+  }
+
+  if (platform === 'linux') {
+    const configHome = env.XDG_CONFIG_HOME || path.posix.join(env.HOME || os.homedir(), '.config');
+    return pathsFromBaseDirs(
+      path.posix.join(configHome, 'Claude'),
+      path.posix.join(configHome, 'Claude-3p'),
+      path.posix,
+    );
+  }
+
+  throw new Error('Claude Desktop 3P configuration is currently supported only on Windows, macOS, and Linux.');
 }
 
-function pathsFromBaseDirs(normalDir, threepDir) {
-  const configLibraryPath = path.join(threepDir, CONFIG_LIBRARY_DIR);
+function pathsFromBaseDirs(normalDir, threepDir, pathImpl = path) {
+  const configLibraryPath = pathImpl.join(threepDir, CONFIG_LIBRARY_DIR);
   return {
-    normalConfigPath: path.join(normalDir, CONFIG_FILE),
-    threepConfigPath: path.join(threepDir, CONFIG_FILE),
+    normalConfigPath: pathImpl.join(normalDir, CONFIG_FILE),
+    threepConfigPath: pathImpl.join(threepDir, CONFIG_FILE),
     configLibraryPath,
-    profilePath: path.join(configLibraryPath, `${CLAUDE_DESKTOP_PROFILE_ID}.json`),
-    metaPath: path.join(configLibraryPath, '_meta.json'),
+    profilePath: pathImpl.join(configLibraryPath, `${CLAUDE_DESKTOP_PROFILE_ID}.json`),
+    metaPath: pathImpl.join(configLibraryPath, '_meta.json'),
   };
 }
 

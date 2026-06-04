@@ -27,7 +27,7 @@ Each supported client gets its own adapter under `src/apps`.
 Current adapters:
 
 - `claude-code.js`: launches Claude Code with RouterLab environment variables
-- `claude-desktop.js`: writes a direct Claude Desktop 3P profile on Windows/macOS
+- `claude-desktop.js`: writes a direct Claude Desktop 3P profile on Windows/macOS/Linux
 - `codex.js`: generates and applies provider-scoped Codex config
 
 Shared modules stay independent:
@@ -45,6 +45,7 @@ Claude Desktop 3P configuration lives under:
 
 - Windows: `%LOCALAPPDATA%\Claude` and `%LOCALAPPDATA%\Claude-3p`
 - macOS: `~/Library/Application Support/Claude` and `~/Library/Application Support/Claude-3p`
+- Linux (`claude-desktop-debian`): `${XDG_CONFIG_HOME:-~/.config}/Claude` and `${XDG_CONFIG_HOME:-~/.config}/Claude-3p`
 
 3P profiles use:
 

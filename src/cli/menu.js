@@ -136,6 +136,8 @@ export const AUTH_MENU_ITEMS = [
 ];
 
 const BANNER_WIDTH = 58;
+const LINUX_CLAUDE_DESKTOP_LABEL = 'aaddrick/claude-desktop-debian';
+const LINUX_CLAUDE_DESKTOP_URL = 'https://github.com/aaddrick/claude-desktop-debian';
 
 export function formatBanner(title, version = null) {
   const centered = centerText(title, BANNER_WIDTH).replace(title, colorBannerTitle(title));
@@ -151,6 +153,9 @@ export function formatBanner(title, version = null) {
 
   if (version) {
     lines.push(chalk.gray(`${' '.repeat(51)}v${version}`));
+  }
+  if (title === 'ScioNos Wrapper') {
+    lines.push(formatCompatibilityLine());
   }
 
   lines.push('');
@@ -191,6 +196,17 @@ function colorBannerTitle(title) {
     return `${chalk.bold(chalk.hex('#3b82f6')('Scio'))}${chalk.bold(chalk.hex('#a855f7')('Nos'))}${chalk.bold(chalk.hex('#D97757')(' Wrapper'))}`;
   }
   return chalk.bold(title);
+}
+
+function formatCompatibilityLine() {
+  return [
+    chalk.gray('   Compatible Windows, macOS, Linux via '),
+    terminalLink(chalk.cyan.underline(LINUX_CLAUDE_DESKTOP_LABEL), LINUX_CLAUDE_DESKTOP_URL),
+  ].join('');
+}
+
+function terminalLink(label, url) {
+  return `\u001B]8;;${url}\u0007${label}\u001B]8;;\u0007`;
 }
 
 export function resolveMenuChoice(items, answer) {

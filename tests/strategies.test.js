@@ -8,7 +8,7 @@ import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { parseOptions } from '../src/cli/args.js';
 import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
-import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, isClaudeDesktopSafeModelId, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
+import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, getClaudeDesktopPaths, isClaudeDesktopSafeModelId, isClaudeDesktopSupportedPlatform, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyDisplayName, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
@@ -27,9 +27,9 @@ test('Claude Code strategy mapping is service-aware', () => {
   });
 
   assert.deepEqual(getStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-7',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-opus-4-6',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
   });
 
@@ -166,6 +166,23 @@ test('Claude Desktop helper identifies visible model ids and rejects hidden dire
   assert.throws(() => modelSpecsForDirectStrategy('claude-gpt', 'routerlab'), /may hide/);
 });
 
+test('Claude Desktop helper supports claude-desktop-debian Linux config paths', () => {
+  assert.equal(isClaudeDesktopSupportedPlatform('linux'), true);
+
+  const paths = getClaudeDesktopPaths({
+    HOME: '/home/alice',
+    XDG_CONFIG_HOME: '/home/alice/.config',
+  }, 'linux');
+
+  assert.deepEqual(paths, {
+    normalConfigPath: '/home/alice/.config/Claude/claude_desktop_config.json',
+    threepConfigPath: '/home/alice/.config/Claude-3p/claude_desktop_config.json',
+    configLibraryPath: '/home/alice/.config/Claude-3p/configLibrary',
+    profilePath: '/home/alice/.config/Claude-3p/configLibrary/00000000-0000-4000-8000-000000157210.json',
+    metaPath: '/home/alice/.config/Claude-3p/configLibrary/_meta.json',
+  });
+});
+
 test('Claude Desktop proxy routes expose valid Anthropic route ids and map to RouterLab strategy models', () => {
   const routes = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
   assert.deepEqual(routes.map((route) => route.routeId), [
@@ -197,11 +214,20 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-4-5-20251001'), 'aws-claude-haiku-4-5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-kimi-k2.6'), 'claude-kim2.6');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-glm-5.1'), 'claude-lm5.1');
-  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-deepseek-v4-pro'), 'claude-sonnet-4-6');
+  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-deepseek-v4-pro'), 'claude-deev4-pro');
+  assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-deepseek-v4-flash'), 'claude-deev4-flash');
+  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-MiniMax-M3'), 'claude-max-m3');
+  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-qwen3.7-max'), 'claude-wen3.7-max');
+  assert.equal(desktopRouteIdForStrategyModel('subagent', 'claude-qwen3.6-flash'), 'claude-wen3.6-flash');
   assert.equal(supportsOneMillionContext('claude-haiku-4-5-20251001'), false);
   assert.equal(supportsOneMillionContext('aws-claude-haiku-4-5-20251001'), false);
   assert.equal(supportsOneMillionContext('claude-gpt-5.4-mini'), false);
   assert.equal(supportsOneMillionContext('claude-gpt-5.4'), true);
+  assert.equal(supportsOneMillionContext('claude-deepseek-v4-pro'), true);
+  assert.equal(supportsOneMillionContext('claude-deepseek-v4-flash'), true);
+  assert.equal(supportsOneMillionContext('claude-MiniMax-M3'), true);
+  assert.equal(supportsOneMillionContext('claude-qwen3.7-max'), true);
+  assert.equal(supportsOneMillionContext('claude-qwen3.6-flash'), true);
   assert.equal(supportsOneMillionContext('claude-kimi-k2.6'), false);
   assert.equal(supportsOneMillionContext('claude-glm-5.1'), false);
 });
@@ -218,6 +244,9 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude',
     'claude-gpt',
     'claude-gpt-special',
+    'deepseek-v4-beta',
+    'claude-MiniMax-M3',
+    'claude-qwen3.7-max',
     'glm-5.1',
   ]);
 
@@ -254,10 +283,47 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(new Set(routes.map((route) => route.routeId)).size, routes.length);
 
   const llmRoutes = modelRoutesForDesktopMapping('llm');
+  assert.deepEqual([...new Set(llmRoutes.map((route) => route.strategyValue))], [
+    'claude',
+    'claude-gpt',
+    'claude-gpt-special',
+    'deepseek-v4-beta',
+    'claude-MiniMax-M3',
+    'claude-qwen3.7-max',
+    'glm-5.1',
+  ]);
+  assert.deepEqual(llmRoutes.map((route) => route.routeId), [
+    'claude-opus-4-8',
+    'claude-sonnet-4-6',
+    'claude-haiku-4-5',
+    'claude-5.5',
+    'claude-5.4',
+    'claude-5.4-mini',
+    'claude-5.5-sp',
+    'claude-5.4-mini-sp',
+    'claude-deev4-pro',
+    'claude-deev4-flash',
+    'claude-max-m3',
+    'claude-wen3.7-max',
+    'claude-wen3.6-flash',
+    'claude-lm5.1',
+  ]);
+  assert.equal(llmRoutes.some((route) => (
+    route.routeId === 'claude-haiku-4-5'
+      && route.upstreamModel === 'claude-haiku-4-5-20251001'
+      && route.supports1m === false
+  )), true);
+  assert.equal(llmRoutes.some((route) => route.upstreamModel === 'claude-opus-4-6'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-haiku-4-5-gpt-special'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-sonnet-4-6-gpt-special'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp' && route.labelOverride === 'gpt-5.5-sp'), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp' && route.labelOverride === 'gpt-5.4-mini-sp' && route.supports1m === false), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro' && route.labelOverride === 'deepseek-v4-pro' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash' && route.labelOverride === 'deepseek-v4-flash' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.labelOverride === 'MiniMax-M3' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.7-max' && route.labelOverride === 'qwen3.7-max' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.6-flash' && route.labelOverride === 'qwen3.6-flash' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.1' && route.labelOverride === 'glm-5.1' && route.supports1m === false), true);
 });
 
 
@@ -383,6 +449,8 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Codex CLI/);
   assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos Wrapper/);
+  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /Compatible Windows, macOS, Linux/);
+  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /https:\/\/github\.com\/aaddrick\/claude-desktop-debian/);
   assert.doesNotMatch(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos\s+✕\s+Claude Code/);
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',

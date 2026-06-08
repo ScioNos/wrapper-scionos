@@ -3,7 +3,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { parseOptions } from './args.js';
-import { detectOS, detectClaudeCode, checkGitBashOnWindows } from '../platform/detect.js';
+import { detectOS, detectClaudeCode, detectCodexCli, checkGitBashOnWindows } from '../platform/detect.js';
 import { deleteStoredToken, getSecureStorageBackend, getStoredToken, getStoredTokenStatus, storeToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
@@ -11,7 +11,7 @@ import { getStrategyChoices } from '../routerlab/strategies.js';
 import { launchClaudeCode, resolveToken } from '../apps/claude-code.js';
 import { DESKTOP_MAPPING_STRATEGIES, applyDirectClaudeDesktop, applyProxyClaudeDesktop, readClaudeDesktopStatus, restoreOfficialClaudeDesktop } from '../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../apps/claude-desktop-proxy.js';
-import { CODEX_ROUTERLAB_MODELS, DEFAULT_CODEX_MODEL, applyCodexConfig, buildCodexAuth, getCodexPaths, readCodexStatus } from '../apps/codex.js';
+import { applyCodexConfig, buildCodexAuth, codexModelsForService, defaultCodexModelForService, getCodexPaths, launchCodex, readCodexStatus, restoreCodexConfig } from '../apps/codex.js';
 import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
 
 const require = createRequire(import.meta.url);
@@ -88,6 +88,7 @@ function showHelp() {
   wrapper-scionos claude-desktop proxy    Start Claude Desktop local mapping proxy
   wrapper-scionos codex template          Print a Codex CLI config template
   wrapper-scionos codex apply             Write Codex config.toml
+  wrapper-scionos codex restore           Restore official Codex config
   wrapper-scionos codex status            Inspect Codex config status
 
 Common flags:
@@ -177,7 +178,6 @@ async function handleAuthMenu(options) {
 }
 
 async function handleCodexMenu(options) {
-  const service = requireServiceConfig(options.service);
   while (true) {
     const action = await askMenu('Codex CLI', CODEX_MENU_ITEMS, {
       interactiveSelect: true,
@@ -191,13 +191,15 @@ async function handleCodexMenu(options) {
     if (action === 'apply') {
       codexOptions.yes = await askYesNo('Write Codex CLI config.toml now?', false);
       await handleCodex('apply', codexOptions);
-    } else if (action === 'model') {
-      codexOptions.model = await askMenu('Codex CLI Model', codexModelMenuItems(service.value), {
-        interactiveSelect: true,
-        message: 'Select default Codex CLI model:',
-      });
-      codexOptions.yes = await askYesNo('Write Codex CLI config.toml now?', true);
-      await handleCodex('apply', codexOptions);
+      if (codexOptions.yes && await askYesNo('Launch Codex CLI now?', false)) {
+        const service = requireServiceConfig(codexOptions.service);
+        const token = await resolveToken({ serviceValue: service.value, noPrompt: codexOptions.noPrompt });
+        await launchCodex({ apiKey: token });
+        return;
+      }
+    } else if (action === 'restore') {
+      codexOptions.yes = await askYesNo('Restore official Codex config now?', false);
+      await handleCodex('restore', codexOptions);
     } else {
       await handleCodex(action, codexOptions);
     }
@@ -241,6 +243,7 @@ async function handleDoctor(options) {
     os: detectOS(),
     node: process.version,
     claudeCode: detectClaudeCode(),
+    codexCli: detectCodexCli(),
     gitBash: checkGitBashOnWindows(),
     secureStorage: getSecureStorageBackend(),
     token: {
@@ -358,7 +361,7 @@ function resolveDesktopProxyStrategyValues(serviceValue, options) {
 }
 
 async function handleCodex(action, options) {
-  if (action !== 'template' && action !== 'apply' && action !== 'status') {
+  if (action !== 'template' && action !== 'apply' && action !== 'restore' && action !== 'status') {
     throw new Error(`Unknown codex action "${action}".`);
   }
   const service = requireServiceConfig(options.service);
@@ -367,12 +370,17 @@ async function handleCodex(action, options) {
     print(readCodexStatus(), options);
     return;
   }
+  if (action === 'restore') {
+    print(restoreCodexConfig({ dryRun: !options.yes }), options);
+    return;
+  }
   if (action === 'apply') {
     print(applyCodexConfig({
       providerName: service.value,
       baseUrl: `${service.baseUrl}/v1`,
       model,
       dryRun: !options.yes,
+      modelCatalogModels: codexModelsForService(service.value),
     }), options);
     return;
   }
@@ -383,6 +391,7 @@ async function handleCodex(action, options) {
     baseUrl: `${service.baseUrl}/v1`,
     model,
     paths,
+    modelCatalogModels: codexModelsForService(service.value),
   });
 
   print({
@@ -391,20 +400,6 @@ async function handleCodex(action, options) {
     config: preview.config,
     catalog: preview.catalog,
   }, options);
-}
-
-function defaultCodexModelForService(serviceValue) {
-  return serviceValue === 'llm' ? 'openai/gpt-5.5' : DEFAULT_CODEX_MODEL;
-}
-
-function codexModelMenuItems(serviceValue) {
-  const models = serviceValue === 'llm' ? [defaultCodexModelForService(serviceValue)] : CODEX_ROUTERLAB_MODELS;
-  return models.map((model, index) => ({
-    key: String(index + 1),
-    value: model,
-    label: model,
-    description: index === 0 ? 'Default Codex CLI model for the selected service.' : 'Codex CLI model for the selected service.',
-  }));
 }
 
 async function promptSecret(message) {

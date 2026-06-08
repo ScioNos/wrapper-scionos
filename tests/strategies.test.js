@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildClaudeCodeEnvironment, chooseSubagentModel, formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
-import { CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig } from '../src/apps/codex.js';
+import { CODEX_LLM_MODELS, CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig, codexModelsForService, defaultCodexModelForService, restoreCodexConfig } from '../src/apps/codex.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { parseOptions } from '../src/cli/args.js';
@@ -347,6 +347,19 @@ test('Codex template uses provider-scoped model provider config', () => {
     'minimax-m2.7',
     'glm-5.1',
   ]);
+  assert.deepEqual(CODEX_LLM_MODELS, [
+    'MiniMax-M3',
+    'deepseek-v4-pro',
+    'gpt-5.4',
+    'gpt-5.4-mini',
+    'gpt-5.5',
+    'qwen3.7-max',
+    'glm-5.1',
+  ]);
+  assert.deepEqual(codexModelsForService('routerlab'), CODEX_ROUTERLAB_MODELS);
+  assert.deepEqual(codexModelsForService('llm'), CODEX_LLM_MODELS);
+  assert.equal(defaultCodexModelForService('routerlab'), 'gpt-5.5');
+  assert.equal(defaultCodexModelForService('llm'), 'gpt-5.5');
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
@@ -356,6 +369,8 @@ test('Codex template uses provider-scoped model provider config', () => {
   assert.match(config, /model = "gpt-5\.3-codex"/);
   assert.match(config, /\[model_providers\.custom\]/);
   assert.match(config, /wire_api = "responses"/);
+  assert.match(config, /env_key = "OPENAI_API_KEY"/);
+  assert.doesNotMatch(config, /requires_openai_auth/);
   assert.match(config, /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
 });
 
@@ -390,8 +405,53 @@ test('Codex apply writes config atomically without touching auth state', (t) => 
   });
   assert.equal(applied.dryRun, false);
   assert.equal(applied.authPreserved, true);
+  assert.equal(applied.backupCreated, false);
   assert.match(fs.readFileSync(paths.configPath, 'utf8'), /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
   assert.deepEqual(JSON.parse(fs.readFileSync(paths.authPath, 'utf8')), auth);
+});
+
+test('Codex restore brings back the previous config and removes wrapper catalog', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-restore-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const paths = {
+    configDir: tempDir,
+    authPath: path.join(tempDir, 'auth.json'),
+    configPath: path.join(tempDir, 'config.toml'),
+    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+  };
+  const originalConfig = 'model_provider = "openai"\nmodel = "gpt-5"\n';
+  fs.writeFileSync(paths.configPath, originalConfig, 'utf8');
+  fs.writeFileSync(paths.authPath, JSON.stringify({ OPENAI_API_KEY: 'existing-key' }), 'utf8');
+
+  const applied = applyCodexConfig({
+    providerName: 'llm',
+    baseUrl: 'https://llm-api.routerlab.ch/v1',
+    model: 'openai/gpt-5.5',
+    paths,
+    dryRun: false,
+  });
+  assert.equal(applied.backupCreated, true);
+  assert.match(fs.readFileSync(paths.configPath, 'utf8'), /llm-api\.routerlab\.ch/);
+
+  const restored = restoreCodexConfig({ paths, dryRun: false });
+  assert.equal(restored.restoredFromBackup, true);
+  assert.equal(fs.existsSync(restored.paths.backupPath), false);
+  assert.equal(fs.readFileSync(paths.configPath, 'utf8'), originalConfig);
+  assert.equal(fs.existsSync(paths.authPath), true);
+});
+
+test('Codex restore refuses to remove non-wrapper config without backup', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-restore-refuse-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const paths = {
+    configDir: tempDir,
+    configPath: path.join(tempDir, 'config.toml'),
+  };
+  fs.writeFileSync(paths.configPath, 'model_provider = "openai"\n', 'utf8');
+
+  assert.throws(() => restoreCodexConfig({ paths, dryRun: false }), /Refusing to remove/);
 });
 
 test('Codex apply writes model_catalog_json when Codex model cache is available', (t) => {
@@ -435,6 +495,41 @@ test('Codex apply writes model_catalog_json when Codex model cache is available'
   assert.match(fs.readFileSync(paths.configPath, 'utf8'), /model_catalog_json = /);
   const written = JSON.parse(fs.readFileSync(paths.modelCatalogPath, 'utf8'));
   assert.equal(written.models[2].slug, 'gpt-5.3-codex');
+});
+
+test('Codex apply writes LLM-specific model catalog for llm service', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-llm-catalog-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const paths = {
+    configDir: tempDir,
+    configPath: path.join(tempDir, 'config.toml'),
+    modelsCachePath: path.join(tempDir, 'models_cache.json'),
+    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+  };
+  fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
+    models: [{
+      slug: 'gpt-5.5',
+      display_name: 'GPT 5.5',
+      context_window: 272000,
+    }],
+  }), 'utf8');
+
+  const applied = applyCodexConfig({
+    providerName: 'llm',
+    baseUrl: 'https://llm-api.routerlab.ch/v1',
+    model: defaultCodexModelForService('llm'),
+    modelCatalogModels: codexModelsForService('llm'),
+    paths,
+    dryRun: false,
+  });
+  assert.equal(applied.catalogWritten, true);
+  assert.match(fs.readFileSync(paths.configPath, 'utf8'), /model = "gpt-5\.5"/);
+  const written = JSON.parse(fs.readFileSync(paths.modelCatalogPath, 'utf8'));
+  assert.deepEqual(written.models.map((entry) => entry.slug), CODEX_LLM_MODELS);
+  assert.equal(written.models[0].display_name, 'MiniMax M3');
+  assert.equal(written.models[1].display_name, 'DeepSeek V4 Pro');
+  assert.equal(written.models[5].display_name, 'Qwen 3.7 Max');
 });
 
 test('default menu exposes Claude Code and Claude Desktop', () => {
@@ -484,19 +579,19 @@ test('Claude Desktop menu keeps only the simple customer actions', () => {
   });
 });
 
-test('Codex CLI menu exposes config and model actions', () => {
+test('Codex CLI menu exposes config lifecycle actions', () => {
   assert.deepEqual(CODEX_MENU_ITEMS.map((item) => item.value), [
     'apply',
-    'model',
+    'restore',
     'template',
     'status',
     'back',
   ]);
   assert.deepEqual(formatSelectChoice(CODEX_MENU_ITEMS[1]), {
-    name: 'Choose Default Model',
-    value: 'model',
-    description: 'Select the default Codex CLI model.',
-    short: 'Choose Default Model',
+    name: 'Restore Official Config',
+    value: 'restore',
+    description: 'Restore the previous Codex CLI config or remove the wrapper config.',
+    short: 'Restore Official Config',
   });
 });
 

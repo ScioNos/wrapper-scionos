@@ -51,9 +51,9 @@ export const CODEX_MENU_ITEMS = [
   },
   {
     key: '2',
-    value: 'model',
-    label: 'Choose Default Model',
-    description: 'Select the default Codex CLI model.',
+    value: 'restore',
+    label: 'Restore Official Config',
+    description: 'Restore the previous Codex CLI config or remove the wrapper config.',
   },
   {
     key: '3',

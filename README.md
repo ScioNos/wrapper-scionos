@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `2.0.0`.
+Current version: `2.1.0`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -54,6 +54,8 @@ node index.js claude-desktop proxy --service llm
 node index.js codex template --service routerlab
 node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
+node index.js codex apply --service llm --yes
+node index.js codex restore --yes
 ```
 
 When installed globally, use `wrapper-scionos` or `scionos` instead of `node index.js`.
@@ -190,6 +192,8 @@ It can also write `~/.codex/config.toml`:
 node index.js codex apply --service routerlab --dry-run
 node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
+node index.js codex apply --service llm --yes
+node index.js codex restore --yes
 ```
 
 RouterLab Codex CLI models are offered in this order:
@@ -203,10 +207,28 @@ minimax-m2.7
 glm-5.1
 ```
 
+RouterLab LLM Codex CLI models are offered in this order:
+
+```text
+MiniMax-M3
+deepseek-v4-pro
+gpt-5.4
+gpt-5.4-mini
+gpt-5.5
+qwen3.7-max
+glm-5.1
+```
+
 `codex apply` is dry-run by default. It writes `config.toml` atomically when `--yes` is passed
-and leaves `auth.json` untouched so existing Codex login state is preserved. When Codex has a
-local `models_cache.json`, the wrapper also writes `wrapper-scionos-model-catalog.json` and points
-`model_catalog_json` at it so Codex CLI can see the RouterLab model catalog after restart.
+and leaves `auth.json` untouched so existing Codex login state is preserved. The generated custom
+provider reads `OPENAI_API_KEY`; when the interactive menu launches the official `codex` CLI after
+applying config, the wrapper passes the selected RouterLab service token through that environment
+variable instead of using Codex's ChatGPT OAuth token. Before replacing an existing Codex config,
+the wrapper saves it as `config.toml.wrapper-scionos-backup` when no backup already exists. `codex
+restore --yes` restores that backup; if no backup exists, it only removes a config that clearly
+looks like a wrapper-generated RouterLab config. When Codex has a local `models_cache.json`, the
+wrapper also writes `wrapper-scionos-model-catalog.json` and points `model_catalog_json` at it so
+Codex CLI can see the RouterLab model catalog after restart.
 
 ## Development
 

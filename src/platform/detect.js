@@ -35,8 +35,41 @@ export function findExecutable(command, candidates = []) {
   if (result.status !== 0) {
     return null;
   }
-  const first = result.stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
-  return first && fs.existsSync(first) ? first : null;
+  return result.stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line && fs.existsSync(line)) ?? null;
+}
+
+export function findWindowsExecutable(command, candidates = []) {
+  if (process.platform !== 'win32') {
+    return findExecutable(command, candidates);
+  }
+
+  const expandedCandidates = candidates.flatMap((candidate) => expandWindowsExecutableCandidate(candidate));
+  const fromCandidates = expandedCandidates.find((candidate) => fs.existsSync(candidate));
+  if (fromCandidates) {
+    return fromCandidates;
+  }
+
+  const result = spawnSync('where', [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  if (result.status !== 0) {
+    return null;
+  }
+
+  const matches = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && fs.existsSync(line));
+  return matches.find(isWindowsExecutableShim) ?? matches[0] ?? null;
+}
+
+function expandWindowsExecutableCandidate(candidate) {
+  if (!candidate) {
+    return [];
+  }
+  if (path.extname(candidate)) {
+    return [candidate];
+  }
+  return ['.cmd', '.bat', '.exe', ''].map((extension) => `${candidate}${extension}`);
+}
+
+function isWindowsExecutableShim(filePath) {
+  return /\.(cmd|bat|exe)$/i.test(filePath);
 }
 
 export function detectClaudeCode() {
@@ -67,6 +100,35 @@ export function detectClaudeCode() {
     cliPath,
     version,
     configPath: fs.existsSync(configPath) ? configPath : null,
+  };
+}
+
+export function detectCodexCli() {
+  const home = os.homedir();
+  const candidates = process.platform === 'win32'
+    ? [
+        path.join(home, '.local', 'bin', 'codex.exe'),
+        path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'codex.exe'),
+      ]
+    : [
+        path.join(home, '.local', 'bin', 'codex'),
+        '/opt/homebrew/bin/codex',
+        '/usr/local/bin/codex',
+      ];
+
+  const cliPath = findWindowsExecutable('codex', candidates);
+  let version = null;
+  if (cliPath) {
+    const result = spawnSync(cliPath, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    if (result.status === 0) {
+      version = result.stdout.trim();
+    }
+  }
+
+  return {
+    installed: Boolean(cliPath),
+    cliPath,
+    version,
   };
 }
 

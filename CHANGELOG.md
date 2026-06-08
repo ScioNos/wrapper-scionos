@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 2.1.0 - 2026-06-08
+
+### Added
+
+- Added Codex CLI config restore flow with safe `config.toml.wrapper-scionos-backup` rollback.
+- Added optional launch of the official `codex` CLI after applying wrapper config from the interactive menu.
+- Added Codex CLI detection to `doctor` output.
+- Added RouterLab LLM-specific Codex model catalog: `MiniMax-M3`, `deepseek-v4-pro`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.5`, `qwen3.7-max`, and `glm-5.1`.
+
+### Changed
+
+- Simplified the Codex CLI interactive menu by removing `Choose Default Model`.
+- Codex custom provider config now uses `env_key = "OPENAI_API_KEY"` instead of Codex OpenAI/ChatGPT auth, while preserving `auth.json`.
+- Codex launches from the wrapper now pass the selected RouterLab service token as `OPENAI_API_KEY` to the child process.
+- Windows Codex CLI detection now prefers launchable `.cmd`, `.bat`, and `.exe` shims.
+- Package version promoted from `2.0.0` to `2.1.0`.
+
+### Fixed
+
+- Fixed Codex launch on Windows when `where codex` returns the non-launchable npm shim before `codex.cmd`.
+- Fixed Codex RouterLab LLM requests using the wrong ChatGPT OAuth token and model catalog.
+
 ## 2.0.0 - 2026-06-04
 
 ### Added

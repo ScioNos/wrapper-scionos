@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-## 2.1.1 - 2026-06-09
+## 2.2.0 - 2026-06-09
 
 ### Added
 
@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 - Made the interactive Codex CLI menu default to safe launch, with persistent `Apply Config` moved under Advanced.
 - Codex runtime launch now uses `workspace-write` sandboxing and `on-request` approvals for the child process.
 - Removed blank separator rows from interactive select menus.
-- Package version promoted from `2.1.0` to `2.1.1`.
+- Package version promoted from `2.1.0` to `2.2.0`.
 
 ## 2.1.0 - 2026-06-08
 

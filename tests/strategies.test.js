@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildClaudeCodeEnvironment, chooseSubagentModel, formatClaudeCodeChoiceMenu, formatClaudeCodeIntro } from '../src/apps/claude-code.js';
-import { CODEX_LLM_MODELS, CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexThirdPartyConfig, codexModelsForService, defaultCodexModelForService, restoreCodexConfig } from '../src/apps/codex.js';
+import { CODEX_LLM_MODELS, CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexModelCatalogFromCache, buildCodexRuntimeArgs, buildCodexThirdPartyConfig, codexModelsForService, defaultCodexModelForService, restoreCodexConfig } from '../src/apps/codex.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { parseOptions } from '../src/cli/args.js';
-import { CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
+import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_ADVANCED_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 import { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, getClaudeDesktopPaths, isClaudeDesktopSafeModelId, isClaudeDesktopSupportedPlatform, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyDisplayName, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
@@ -374,6 +374,42 @@ test('Codex template uses provider-scoped model provider config', () => {
   assert.match(config, /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
 });
 
+test('Codex runtime launch args configure provider without writing config', () => {
+  const args = buildCodexRuntimeArgs({
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.5',
+    modelCatalogPath: '/tmp/wrapper-scionos-model-catalog.json',
+  });
+
+  assert.deepEqual(args.filter((arg) => arg === '-c'), ['-c', '-c', '-c', '-c', '-c', '-c', '-c', '-c']);
+  assert.ok(args.includes('model_provider="custom"'));
+  assert.ok(args.includes('model="gpt-5.5"'));
+  assert.ok(args.includes('model_reasoning_effort="high"'));
+  assert.ok(args.includes('disable_response_storage=true'));
+  assert.ok(args.includes('sandbox_mode="workspace-write"'));
+  assert.ok(args.includes('approval_policy="on-request"'));
+  assert.ok(args.includes('model_catalog_json="/tmp/wrapper-scionos-model-catalog.json"'));
+  assert.ok(args.includes('model_providers.custom={ name = "routerlab", base_url = "https://api.routerlab.ch/v1", wire_api = "responses", env_key = "OPENAI_API_KEY" }'));
+});
+
+test('Codex launch args do not touch existing config files', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-launch-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const configPath = path.join(tempDir, 'config.toml');
+  const originalConfig = 'model_provider = "openai"\n';
+  fs.writeFileSync(configPath, originalConfig, 'utf8');
+
+  buildCodexRuntimeArgs({
+    providerName: 'llm',
+    baseUrl: 'https://llm-api.routerlab.ch/v1',
+    model: 'gpt-5.5',
+  });
+
+  assert.equal(fs.readFileSync(configPath, 'utf8'), originalConfig);
+});
+
 test('Codex apply writes config atomically without touching auth state', (t) => {
   const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-'));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
@@ -579,19 +615,42 @@ test('Claude Desktop menu keeps only the simple customer actions', () => {
   });
 });
 
-test('Codex CLI menu exposes config lifecycle actions', () => {
+test('interactive select menus stay compact without separator rows', () => {
+  for (const items of [MAIN_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, CODEX_ADVANCED_MENU_ITEMS, AUTH_MENU_ITEMS]) {
+    assert.equal(items.some((item) => !item.label || !item.value), false);
+  }
+});
+
+test('Codex CLI menu separates non-destructive launch from advanced persistent config actions', () => {
   assert.deepEqual(CODEX_MENU_ITEMS.map((item) => item.value), [
+    'launch',
+    'status',
+    'advanced',
+    'back',
+  ]);
+  assert.deepEqual(formatSelectChoice(CODEX_MENU_ITEMS[0]), {
+    name: 'Launch Codex CLI',
+    value: 'launch',
+    description: 'Launch Codex CLI for this session without rewriting config.toml.',
+    short: 'Launch Codex CLI',
+  });
+  assert.deepEqual(formatSelectChoice(CODEX_MENU_ITEMS[2]), {
+    name: 'Advanced',
+    value: 'advanced',
+    description: 'Persistent config, restore, and template actions.',
+    short: 'Advanced',
+  });
+  assert.deepEqual(CODEX_ADVANCED_MENU_ITEMS.map((item) => item.value), [
     'apply',
     'restore',
     'template',
-    'status',
     'back',
   ]);
-  assert.deepEqual(formatSelectChoice(CODEX_MENU_ITEMS[1]), {
-    name: 'Restore Official Config',
-    value: 'restore',
-    description: 'Restore the previous Codex CLI config or remove the wrapper config.',
-    short: 'Restore Official Config',
+  assert.deepEqual(formatSelectChoice(CODEX_ADVANCED_MENU_ITEMS[0]), {
+    name: 'Apply Persistent Config',
+    value: 'apply',
+    description: 'Persistently write Codex CLI config.toml for the selected service.',
+    short: 'Apply Persistent Config',
   });
 });
 

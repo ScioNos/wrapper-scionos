@@ -63,6 +63,27 @@ export function buildCodexThirdPartyConfig({
   ].join('\n');
 }
 
+export function buildCodexRuntimeArgs({
+  providerName = 'routerlab',
+  baseUrl,
+  model = DEFAULT_CODEX_MODEL,
+  modelCatalogPath = null,
+} = {}) {
+  const q = (value) => JSON.stringify(value);
+  const overrides = [
+    `model_provider=${q('custom')}`,
+    `model=${q(model)}`,
+    `model_reasoning_effort=${q('high')}`,
+    'disable_response_storage=true',
+    `sandbox_mode=${q('workspace-write')}`,
+    `approval_policy=${q('on-request')}`,
+    ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
+    `model_providers.custom={ name = ${q(providerName)}, base_url = ${q(baseUrl)}, wire_api = ${q('responses')}, env_key = ${q('OPENAI_API_KEY')} }`,
+  ];
+
+  return overrides.flatMap((override) => ['-c', override]);
+}
+
 export function codexModelsForService(serviceValue = 'routerlab') {
   return serviceValue === 'llm' ? CODEX_LLM_MODELS : CODEX_ROUTERLAB_MODELS;
 }

@@ -62,10 +62,14 @@ Desktop menu.
 
 ## Codex Rules
 
-Codex support should preserve user login material.
+Codex CLI support should preserve user login material.
 
-Provider switching should edit `~/.codex/config.toml` atomically and avoid overwriting ChatGPT
-OAuth state stored in `~/.codex/auth.json`.
+The default Codex CLI launch path should be non-destructive: pass runtime `-c` overrides and the
+selected RouterLab token through the child process environment instead of rewriting
+`~/.codex/config.toml`.
+
+Explicit persistent provider switching may edit `~/.codex/config.toml` atomically, but must avoid
+overwriting ChatGPT OAuth state stored in `~/.codex/auth.json` and keep restore semantics clear.
 
 ## Initial Structure
 

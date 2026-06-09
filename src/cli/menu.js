@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { select, Separator } from '@inquirer/prompts';
+import { select } from '@inquirer/prompts';
 import chalk from 'chalk';
 
 export const MAIN_MENU_ITEMS = [
@@ -45,9 +45,36 @@ export const MAIN_MENU_ITEMS = [
 export const CODEX_MENU_ITEMS = [
   {
     key: '1',
+    value: 'launch',
+    label: 'Launch Codex CLI',
+    description: 'Launch Codex CLI for this session without rewriting config.toml.',
+  },
+  {
+    key: '2',
+    value: 'status',
+    label: 'Status',
+    description: 'Show Codex CLI configuration status.',
+  },
+  {
+    key: '3',
+    value: 'advanced',
+    label: 'Advanced',
+    description: 'Persistent config, restore, and template actions.',
+  },
+  {
+    key: '0',
+    value: 'back',
+    label: 'Back',
+    description: 'Return to the main menu.',
+  },
+];
+
+export const CODEX_ADVANCED_MENU_ITEMS = [
+  {
+    key: '1',
     value: 'apply',
-    label: 'Apply Config',
-    description: 'Write the Codex CLI config for the selected service.',
+    label: 'Apply Persistent Config',
+    description: 'Persistently write Codex CLI config.toml for the selected service.',
   },
   {
     key: '2',
@@ -62,16 +89,10 @@ export const CODEX_MENU_ITEMS = [
     description: 'Show the Codex CLI config template.',
   },
   {
-    key: '4',
-    value: 'status',
-    label: 'Status',
-    description: 'Show Codex CLI configuration status.',
-  },
-  {
     key: '0',
     value: 'back',
     label: 'Back',
-    description: 'Return to the main menu.',
+    description: 'Return to the Codex CLI menu.',
   },
 ];
 
@@ -245,15 +266,9 @@ export async function askMenu(title, items, options = {}) {
 export async function askSelect(message, items) {
   return select({
     message,
-    choices: withSeparators(items.map(formatSelectChoice)),
-    pageSize: items.length + Math.max(items.length - 1, 0),
+    choices: items.map(formatSelectChoice),
+    pageSize: items.length,
   });
-}
-
-function withSeparators(choices) {
-  return choices.flatMap((choice, index) => (
-    index === choices.length - 1 ? [choice] : [choice, new Separator(' ')]
-  ));
 }
 
 export async function askText(question, defaultValue = null) {

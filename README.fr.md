@@ -2,7 +2,7 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `2.1.0`.
+Version actuelle : `2.1.1`.
 
 Cette version cible Claude Code, Claude Desktop et Codex CLI, sans mélanger toutes les intégrations
 dans un seul gros module.
@@ -161,13 +161,21 @@ Le support 1M est appliqué par modèle :
 
 ## Codex CLI
 
-Le wrapper inclut un générateur de template de configuration Codex CLI :
+Lance le CLI officiel Codex via RouterLab pour la session courante sans réécrire
+`~/.codex/config.toml` :
+
+```powershell
+node index.js codex launch --service routerlab
+node index.js codex launch --service llm
+```
+
+Le wrapper inclut aussi un générateur de template de configuration Codex CLI :
 
 ```powershell
 node index.js codex template --service routerlab
 ```
 
-Elle peut aussi écrire `~/.codex/config.toml` :
+Elle peut aussi écrire `~/.codex/config.toml` de façon persistante quand l'action `apply` est explicitement choisie :
 
 ```powershell
 node index.js codex template --service routerlab
@@ -201,11 +209,13 @@ qwen3.7-max
 glm-5.1
 ```
 
+`codex launch` est non destructif par défaut : il démarre le binaire officiel `codex` avec des
+overrides runtime `-c` et transmet le token RouterLab du service choisi via `OPENAI_API_KEY`
+uniquement au process enfant. Il ne réécrit pas `config.toml` et ne touche pas à `auth.json`.
+
 `codex apply` est en dry-run par défaut. Avec `--yes`, la commande écrit `config.toml`
 atomiquement et ne modifie pas `auth.json`, afin de préserver l’état de connexion Codex existant.
-Le provider custom généré lit `OPENAI_API_KEY` ; quand le menu interactif lance le CLI officiel
-`codex` après application de la config, le wrapper transmet le token RouterLab du service choisi via
-cette variable d’environnement au lieu d’utiliser le token OAuth ChatGPT de Codex. Avant de remplacer
+Le provider custom généré lit `OPENAI_API_KEY`. Avant de remplacer
 une configuration Codex existante, le wrapper la sauvegarde sous `config.toml.wrapper-scionos-backup`
 si aucune sauvegarde n’existe déjà. `codex restore --yes` restaure cette sauvegarde ; sans sauvegarde,
 il ne supprime qu’une configuration qui ressemble clairement à une config RouterLab générée par le

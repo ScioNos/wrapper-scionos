@@ -11,8 +11,8 @@ import { getStrategyChoices } from '../routerlab/strategies.js';
 import { launchClaudeCode, resolveToken } from '../apps/claude-code.js';
 import { DESKTOP_MAPPING_STRATEGIES, applyDirectClaudeDesktop, applyProxyClaudeDesktop, readClaudeDesktopStatus, restoreOfficialClaudeDesktop } from '../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../apps/claude-desktop-proxy.js';
-import { applyCodexConfig, buildCodexAuth, codexModelsForService, defaultCodexModelForService, getCodexPaths, launchCodex, readCodexStatus, restoreCodexConfig } from '../apps/codex.js';
-import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
+import { applyCodexConfig, buildCodexAuth, buildCodexRuntimeArgs, codexModelsForService, defaultCodexModelForService, getCodexPaths, launchCodex, readCodexStatus, restoreCodexConfig } from '../apps/codex.js';
+import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, CODEX_ADVANCED_MENU_ITEMS, CODEX_MENU_ITEMS, MAIN_MENU_ITEMS, askMenu, askText, askYesNo } from './menu.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
@@ -86,8 +86,9 @@ function showHelp() {
   wrapper-scionos claude-desktop apply    Dry-run Claude Desktop direct config
   wrapper-scionos claude-desktop apply-proxy  Write Desktop profile for local mapping
   wrapper-scionos claude-desktop proxy    Start Claude Desktop local mapping proxy
+  wrapper-scionos codex launch            Launch Codex CLI without rewriting config.toml
   wrapper-scionos codex template          Print a Codex CLI config template
-  wrapper-scionos codex apply             Write Codex config.toml
+  wrapper-scionos codex apply             Persistently write Codex config.toml
   wrapper-scionos codex restore           Restore official Codex config
   wrapper-scionos codex status            Inspect Codex config status
 
@@ -164,6 +165,18 @@ async function handleClaudeDesktopMenu(options) {
   }
 }
 
+async function launchCodexForService(options) {
+  const service = requireServiceConfig(options.service);
+  const model = options.model ?? defaultCodexModelForService(service.value);
+  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const codexArgs = buildCodexRuntimeArgs({
+    providerName: service.value,
+    baseUrl: `${service.baseUrl}/v1`,
+    model,
+  });
+  await launchCodex({ apiKey: token, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
+}
+
 async function handleAuthMenu(options) {
   while (true) {
     const action = await askMenu('Auth', AUTH_MENU_ITEMS);
@@ -188,13 +201,38 @@ async function handleCodexMenu(options) {
     }
 
     const codexOptions = { ...options };
+    if (action === 'launch') {
+      await launchCodexForService(codexOptions);
+      return;
+    }
+
+    if (action === 'status') {
+      await handleCodex('status', codexOptions);
+      continue;
+    }
+
+    if (action === 'advanced') {
+      await handleCodexAdvancedMenu(codexOptions);
+    }
+  }
+}
+
+async function handleCodexAdvancedMenu(options) {
+  while (true) {
+    const action = await askMenu('Advanced Codex CLI', CODEX_ADVANCED_MENU_ITEMS, {
+      interactiveSelect: true,
+      message: 'Select advanced Codex CLI action:',
+    });
+    if (action === 'back') {
+      return;
+    }
+
+    const codexOptions = { ...options };
     if (action === 'apply') {
-      codexOptions.yes = await askYesNo('Write Codex CLI config.toml now?', false);
+      codexOptions.yes = await askYesNo('Persistently write Codex CLI config.toml now?', false);
       await handleCodex('apply', codexOptions);
-      if (codexOptions.yes && await askYesNo('Launch Codex CLI now?', false)) {
-        const service = requireServiceConfig(codexOptions.service);
-        const token = await resolveToken({ serviceValue: service.value, noPrompt: codexOptions.noPrompt });
-        await launchCodex({ apiKey: token });
+      if (codexOptions.yes && await askYesNo('Launch Codex CLI for this session without rewriting config.toml?', false)) {
+        await launchCodexForService(codexOptions);
         return;
       }
     } else if (action === 'restore') {
@@ -361,13 +399,17 @@ function resolveDesktopProxyStrategyValues(serviceValue, options) {
 }
 
 async function handleCodex(action, options) {
-  if (action !== 'template' && action !== 'apply' && action !== 'restore' && action !== 'status') {
+  if (action !== 'launch' && action !== 'template' && action !== 'apply' && action !== 'restore' && action !== 'status') {
     throw new Error(`Unknown codex action "${action}".`);
   }
   const service = requireServiceConfig(options.service);
   const model = options.model ?? defaultCodexModelForService(service.value);
   if (action === 'status') {
     print(readCodexStatus(), options);
+    return;
+  }
+  if (action === 'launch') {
+    await launchCodexForService(options);
     return;
   }
   if (action === 'restore') {

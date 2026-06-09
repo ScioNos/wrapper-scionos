@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `2.1.0`.
+Current version: `2.1.1`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -51,6 +51,8 @@ node index.js claude-desktop apply --service llm --strategy claude --yes
 node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
 node index.js claude-desktop proxy --service routerlab
 node index.js claude-desktop proxy --service llm
+node index.js codex launch --service routerlab
+node index.js codex launch --service llm
 node index.js codex template --service routerlab
 node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
 node index.js codex apply --service routerlab --yes
@@ -180,13 +182,21 @@ mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
 ## Codex CLI
 
-The wrapper includes a Codex CLI config template generator:
+Launch the official Codex CLI through RouterLab for the current session without rewriting
+`~/.codex/config.toml`:
+
+```powershell
+node index.js codex launch --service routerlab
+node index.js codex launch --service llm
+```
+
+The wrapper also includes a Codex CLI config template generator:
 
 ```powershell
 node index.js codex template --service routerlab
 ```
 
-It can also write `~/.codex/config.toml`:
+It can also persistently write `~/.codex/config.toml` when you explicitly choose apply:
 
 ```powershell
 node index.js codex apply --service routerlab --dry-run
@@ -219,11 +229,14 @@ qwen3.7-max
 glm-5.1
 ```
 
+`codex launch` is non-destructive by default: it starts the official `codex` binary with
+runtime `-c` overrides and passes the selected RouterLab service token through
+`OPENAI_API_KEY` only to the child process. It does not rewrite `config.toml` and does not
+touch `auth.json`.
+
 `codex apply` is dry-run by default. It writes `config.toml` atomically when `--yes` is passed
 and leaves `auth.json` untouched so existing Codex login state is preserved. The generated custom
-provider reads `OPENAI_API_KEY`; when the interactive menu launches the official `codex` CLI after
-applying config, the wrapper passes the selected RouterLab service token through that environment
-variable instead of using Codex's ChatGPT OAuth token. Before replacing an existing Codex config,
+provider reads `OPENAI_API_KEY`. Before replacing an existing Codex config,
 the wrapper saves it as `config.toml.wrapper-scionos-backup` when no backup already exists. `codex
 restore --yes` restores that backup; if no backup exists, it only removes a config that clearly
 looks like a wrapper-generated RouterLab config. When Codex has a local `models_cache.json`, the

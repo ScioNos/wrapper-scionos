@@ -3,148 +3,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { findStrategy, getStrategyEnvironment } from '../routerlab/strategies.js';
+import { findStrategy } from '../routerlab/strategies.js';
+import {
+  DESKTOP_MAPPING_STRATEGIES,
+  desktopLabelForDesktopMapping,
+  desktopLabelForStrategyModel,
+  desktopRouteIdForStrategyModel,
+  getStrategyModels,
+  sortDesktopRoutes,
+  supportsOneMillionContext,
+} from '../routerlab/strategy-models.js';
+
+export { DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, supportsOneMillionContext };
 
 export const CLAUDE_DESKTOP_PROFILE_ID = '00000000-0000-4000-8000-000000157210';
 export const CLAUDE_DESKTOP_PROFILE_NAME = 'ScioNos Wrapper';
 
 const CONFIG_FILE = 'claude_desktop_config.json';
 const CONFIG_LIBRARY_DIR = 'configLibrary';
-const STRATEGY_MODEL_KEYS = [
-  ['haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
-  ['sonnet', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
-  ['opus', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
-  ['subagent', 'CLAUDE_CODE_SUBAGENT_MODEL'],
-];
-const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
-  haiku: 'claude-haiku-4-5',
-  sonnet: 'claude-sonnet-4-6',
-  opus: 'claude-opus-4-8',
-};
-const DESKTOP_MODEL_OVERRIDES = {
-  'claude-haiku-4-5-20251001': {
-    routeId: 'claude-haiku-4-5',
-    labelOverride: 'claude-haiku-4-5',
-  },
-  'claude-sonnet-4-6': {
-    routeId: 'claude-sonnet-4-6',
-    labelOverride: 'claude-sonnet-4-6',
-  },
-  'claude-opus-4-8': {
-    routeId: 'claude-opus-4-8',
-    labelOverride: 'claude-opus-4-8',
-  },
-  'claude-opus-4-7': {
-    routeId: 'claude-opus-4-8',
-    labelOverride: 'claude-opus-4-8',
-  },
-  'aws-claude-haiku-4-5-20251001': {
-    routeId: 'aws-claude-haiku-4-5',
-    labelOverride: 'aws-claude-haiku-4-5',
-  },
-  'aws-claude-sonnet-4-6': {
-    routeId: 'aws-claude-sonnet-4-6',
-    labelOverride: 'aws-claude-sonnet-4-6',
-  },
-  'aws-claude-opus-4-8': {
-    routeId: 'aws-claude-opus-4-8',
-    labelOverride: 'aws-claude-opus-4-8',
-  },
-  'claude-gpt-5.5': {
-    routeId: 'claude-5.5',
-    labelOverride: 'gpt-5.5',
-  },
-  'claude-gpt-5.4': {
-    routeId: 'claude-5.4',
-    labelOverride: 'gpt-5.4',
-  },
-  'claude-gpt-5.4-mini': {
-    routeId: 'claude-5.4-mini',
-    labelOverride: 'gpt-5.4-mini',
-  },
-  'claude-gpt-5.5-sp': {
-    routeId: 'claude-5.5-sp',
-    labelOverride: 'gpt-5.5-sp',
-  },
-  'claude-gpt-5.4-mini-sp': {
-    routeId: 'claude-5.4-mini-sp',
-    labelOverride: 'gpt-5.4-mini-sp',
-  },
-  'claude-deepseek-v4-pro': {
-    routeId: 'claude-deev4-pro',
-    labelOverride: 'deepseek-v4-pro',
-  },
-  'claude-deepseek-v4-flash': {
-    routeId: 'claude-deev4-flash',
-    labelOverride: 'deepseek-v4-flash',
-  },
-  'claude-MiniMax-M3': {
-    routeId: 'claude-max-m3',
-    labelOverride: 'MiniMax-M3',
-  },
-  'claude-qwen3.7-max': {
-    routeId: 'claude-wen3.7-max',
-    labelOverride: 'qwen3.7-max',
-  },
-  'claude-qwen3.6-flash': {
-    routeId: 'claude-wen3.6-flash',
-    labelOverride: 'qwen3.6-flash',
-  },
-  'claude-kimi-k2.6': {
-    routeId: 'claude-kim2.6',
-    labelOverride: 'Kimi K2.6',
-  },
-  'claude-glm-5.1': {
-    routeId: 'claude-lm5.1',
-    labelOverride: 'glm-5.1',
-  },
-};
-const MODELS_WITHOUT_ONE_M_CONTEXT = new Set([
-  'claude-haiku-4-5-20251001',
-  'aws-claude-haiku-4-5-20251001',
-  'claude-gpt-5.4-mini',
-  'claude-gpt-5.4-mini-sp',
-  'claude-kimi-k2.6',
-  'claude-glm-5.1',
-]);
-const DESKTOP_MODEL_ORDER = [
-  'claude-opus-4-8',
-  'claude-sonnet-4-6',
-  'claude-haiku-4-5',
-  'aws-claude-opus-4-8',
-  'aws-claude-sonnet-4-6',
-  'aws-claude-haiku-4-5',
-  'claude-5.5',
-  'claude-5.4',
-  'claude-5.4-mini',
-  'claude-5.5-sp',
-  'claude-5.4-mini-sp',
-  'claude-deev4-pro',
-  'claude-deev4-flash',
-  'claude-max-m3',
-  'claude-wen3.7-max',
-  'claude-wen3.6-flash',
-  'claude-kim2.6',
-  'claude-lm5.1',
-];
-export const DESKTOP_MAPPING_STRATEGIES = {
-  routerlab: [
-    'default',
-    'aws',
-    'claude-gpt',
-    'claude-kimi-k2.6',
-    'glm-5.1',
-  ],
-  llm: [
-    'claude',
-    'claude-gpt',
-    'claude-gpt-special',
-    'deepseek-v4-beta',
-    'claude-MiniMax-M3',
-    'claude-qwen3.7-max',
-    'glm-5.1',
-  ],
-};
 
 export function isClaudeDesktopSupportedPlatform(platform = process.platform) {
   return platform === 'win32' || platform === 'darwin' || platform === 'linux';
@@ -241,7 +117,7 @@ export function buildGatewayProfile({ baseUrl, apiKey, modelSpecs = [] }) {
 }
 
 export function modelSpecsForDirectStrategy(strategyValue, serviceValue) {
-  const models = strategyModels(strategyValue, serviceValue);
+  const models = getStrategyModels(strategyValue, serviceValue);
   const hidden = models
     .map((entry) => entry.model)
     .filter((model) => !isClaudeDesktopSafeModelId(model));
@@ -257,7 +133,7 @@ export function modelSpecsForDirectStrategy(strategyValue, serviceValue) {
 }
 
 export function modelRoutesForProxyStrategy(strategyValue, serviceValue) {
-  return strategyModels(strategyValue, serviceValue).map((entry) => ({
+  return getStrategyModels(strategyValue, serviceValue).map((entry) => ({
     role: entry.role,
     routeId: desktopRouteIdForStrategyModel(entry.role, entry.model),
     upstreamModel: entry.model,
@@ -276,7 +152,7 @@ export function modelRoutesForDesktopMapping(serviceValue, strategyValues = null
     const strategy = findStrategy(strategyValue, service.value);
     const strategyLabel = strategy?.selectionName ?? strategy?.name ?? strategyValue;
     const suffix = desktopRouteSuffix(strategyValue);
-    return strategyModels(strategyValue, service.value).map((entry) => ({
+    return getStrategyModels(strategyValue, service.value).map((entry) => ({
       role: entry.role,
       strategyValue,
       routeId: desktopRouteIdForStrategyModel(entry.role, entry.model, suffix),
@@ -287,65 +163,6 @@ export function modelRoutesForDesktopMapping(serviceValue, strategyValues = null
   });
 
   return sortDesktopRoutes(routes);
-}
-
-export function supportsOneMillionContext(model) {
-  const normalized = model.trim().toLowerCase();
-  return !MODELS_WITHOUT_ONE_M_CONTEXT.has(normalized);
-}
-
-export function desktopRouteIdForStrategyModel(role, upstreamModel, suffix = null) {
-  const override = DESKTOP_MODEL_OVERRIDES[upstreamModel];
-  if (override) {
-    return override.routeId;
-  }
-
-  const prefix = DESKTOP_ROUTE_PREFIX_BY_ROLE[role] ?? DESKTOP_ROUTE_PREFIX_BY_ROLE.sonnet;
-  return suffix ? `${prefix}-${suffix}` : prefix;
-}
-
-function desktopLabelForStrategyModel(upstreamModel) {
-  return DESKTOP_MODEL_OVERRIDES[upstreamModel]?.labelOverride ?? upstreamModel;
-}
-
-function desktopLabelForDesktopMapping(strategyLabel, upstreamModel) {
-  const override = DESKTOP_MODEL_OVERRIDES[upstreamModel];
-  if (override) {
-    return override.labelOverride;
-  }
-  return `${strategyLabel} - ${upstreamModel}`;
-}
-
-function strategyModels(strategyValue, serviceValue) {
-  const env = getStrategyEnvironment(strategyValue, serviceValue);
-  const seen = new Set();
-  const models = [];
-
-  if (Object.keys(env).length === 0 && strategyValue === 'default') {
-    return [
-      { role: 'opus', model: 'claude-opus-4-7' },
-      { role: 'sonnet', model: 'claude-sonnet-4-6' },
-      { role: 'haiku', model: 'claude-haiku-4-5-20251001' },
-    ];
-  }
-
-  for (const [role, key] of STRATEGY_MODEL_KEYS) {
-    const model = env[key]?.trim();
-    if (model && !seen.has(model)) {
-      seen.add(model);
-      models.push({ role, model });
-    }
-  }
-
-  return models;
-}
-
-function sortDesktopRoutes(routes) {
-  const order = new Map(DESKTOP_MODEL_ORDER.map((routeId, index) => [routeId, index]));
-  return [...routes].sort((left, right) => (
-    (order.get(left.routeId) ?? Number.MAX_SAFE_INTEGER)
-      - (order.get(right.routeId) ?? Number.MAX_SAFE_INTEGER)
-  ));
 }
 
 function desktopRouteSuffix(strategyValue) {

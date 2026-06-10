@@ -28,14 +28,14 @@ Current adapters:
 
 - `claude-code.js`: launches Claude Code with RouterLab environment variables
 - `claude-desktop.js`: writes a direct Claude Desktop 3P profile on Windows/macOS/Linux
-- `codex.js`: generates and applies provider-scoped Codex config
+- `codex.js`: launches Codex with runtime provider overrides and generates non-persistent config templates
 
 Shared modules stay independent:
 
-- `src/routerlab`: services, strategies, model validation
+- `src/routerlab`: services, strategies, shared model metadata, model validation
 - `src/security`: secure token storage
-- `src/platform`: local tool and OS detection
-- `src/cli`: command parsing and command dispatch
+- `src/platform`: local tool detection, OS detection, process launching
+- `src/cli`: command parsing, command registry, and per-command handlers
 
 ## Claude Desktop Rules
 
@@ -68,8 +68,13 @@ The default Codex CLI launch path should be non-destructive: pass runtime `-c` o
 selected RouterLab token through the child process environment instead of rewriting
 `~/.codex/config.toml`.
 
-Explicit persistent provider switching may edit `~/.codex/config.toml` atomically, but must avoid
-overwriting ChatGPT OAuth state stored in `~/.codex/auth.json` and keep restore semantics clear.
+When Codex needs the RouterLab model list, generate a temporary `model_catalog_json` file under the
+system temp directory and pass it with a runtime `-c` override. Remove that file after the Codex
+process exits.
+
+The wrapper no longer offers persistent provider switching because rewriting
+`~/.codex/config.toml` can overwrite unrelated Codex settings. Restore support remains only as a
+recovery path for users who previously wrote a wrapper-generated config.
 
 ## Initial Structure
 
@@ -78,25 +83,33 @@ index.js
 src/
   apps/
     claude-code.js
+    claude-desktop-proxy.js
     claude-desktop.js
     codex.js
   cli/
     args.js
+    commands/
     main.js
   platform/
     detect.js
+    process.js
   routerlab/
     models.js
     services.js
     strategies.js
+    strategy-models.js
   security/
     token-store.js
 tests/
+  claude-code.test.js
+  claude-desktop.test.js
+  cli.test.js
+  codex.test.js
+  proxy.test.js
+  routerlab.test.js
 ```
 
 ## Next Steps
 
-1. Add local proxy/mapping mode for Claude Desktop routes such as `claude-gpt-*`,
-   `claude-deepseek-*`, `claude-kimi-*`, and `claude-glm-*`.
-2. Add import helpers for existing ScioNos wrapper configurations.
-3. Add release packaging after the CLI surface stabilizes.
+1. Add import helpers for existing ScioNos wrapper configurations.
+2. Add release packaging after the CLI surface stabilizes.

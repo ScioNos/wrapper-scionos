@@ -2,7 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 2.5.0 - 2026-06-10
+
+### Added
+
+- Added a runtime Codex CLI model catalog for `codex launch`, derived from non-Claude Claude Code strategy routes.
+- Added shared RouterLab model metadata used by both Codex CLI catalogs and Claude Desktop mappings.
+- Added `claude-fable-5` to Claude Desktop local mappings for both RouterLab services.
+
+### Removed
+
+- Removed the `codex apply` user-facing flow because persistent rewrites of Codex `config.toml` can overwrite unrelated user settings.
+- Removed the interactive Codex CLI submenu; selecting Codex CLI from the main menu now launches Codex directly.
+
+### Changed
+
+- Changed `applyCodexConfig` into a compatibility preview path that no longer writes persistent Codex files.
+- Changed Windows Codex launching to call `codex` through PATH, matching the user terminal and avoiding absolute npm shim path issues.
+- Changed Codex runtime provider overrides to use dotted `-c` keys so Codex parses `model_providers.custom` as a provider struct.
+- Split CLI handlers into per-command modules behind a small command registry.
+- Split the monolithic test file into domain-focused test files.
+- Package version promoted from `2.2.0` to `2.5.0`.
 
 ## 2.2.0 - 2026-06-09
 

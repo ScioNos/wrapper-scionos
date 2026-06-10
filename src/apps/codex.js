@@ -1,33 +1,21 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { detectCodexCli } from '../platform/detect.js';
+import { runInteractiveCli } from '../platform/process.js';
+import { codexModelDisplayName, codexModelsFromClaudeCodeStrategies } from '../routerlab/strategy-models.js';
 
-export const CODEX_ROUTERLAB_MODELS = [
-  'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.3-codex',
-  'gpt-5.4-mini',
-  'minimax-m2.7',
-  'glm-5.1',
-];
+export { codexModelDisplayName };
 
-export const CODEX_LLM_MODELS = [
-  'MiniMax-M3',
-  'deepseek-v4-pro',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gpt-5.5',
-  'qwen3.7-max',
-  'glm-5.1',
-];
+export const CODEX_ROUTERLAB_MODELS = codexModelsFromClaudeCodeStrategies('routerlab');
+export const CODEX_LLM_MODELS = codexModelsFromClaudeCodeStrategies('llm');
 
 export const DEFAULT_CODEX_MODEL = CODEX_ROUTERLAB_MODELS[0];
 export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.5';
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
+export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
 
 export function getCodexPaths(env = process.env) {
   const configDir = env.CODEX_HOME || path.join(os.homedir(), '.codex');
@@ -78,7 +66,10 @@ export function buildCodexRuntimeArgs({
     `sandbox_mode=${q('workspace-write')}`,
     `approval_policy=${q('on-request')}`,
     ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
-    `model_providers.custom={ name = ${q(providerName)}, base_url = ${q(baseUrl)}, wire_api = ${q('responses')}, env_key = ${q('OPENAI_API_KEY')} }`,
+    `model_providers.custom.name=${q(providerName)}`,
+    `model_providers.custom.base_url=${q(baseUrl)}`,
+    `model_providers.custom.wire_api=${q('responses')}`,
+    `model_providers.custom.env_key=${q('OPENAI_API_KEY')}`,
   ];
 
   return overrides.flatMap((override) => ['-c', override]);
@@ -96,12 +87,40 @@ export function buildCodexAuth(apiKey = '') {
   return { OPENAI_API_KEY: apiKey };
 }
 
-export function applyCodexConfig({
+export function writeCodexRuntimeModelCatalog({
+  serviceValue = 'routerlab',
+  paths = getCodexPaths(),
+  tmpDir = os.tmpdir(),
+} = {}) {
+  const models = codexModelsForService(serviceValue);
+  const catalog = buildCodexModelCatalogFromCache({ paths, models });
+  if (!catalog) {
+    return null;
+  }
+
+  const catalogDir = path.join(tmpDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
+  fs.mkdirSync(catalogDir, { recursive: true });
+  const catalogPath = path.join(catalogDir, `${serviceValue}-${randomUUID()}-${CODEX_MODEL_CATALOG_FILENAME}`);
+  writeJsonAtomic(catalogPath, catalog);
+
+  return {
+    path: catalogPath,
+    modelCount: catalog.models.length,
+    models: catalog.models.map((entry) => entry.slug),
+  };
+}
+
+export function cleanupCodexRuntimeModelCatalog(catalog) {
+  if (catalog?.path) {
+    fs.rmSync(catalog.path, { force: true });
+  }
+}
+
+export function buildCodexConfigPreview({
   providerName = 'routerlab',
   baseUrl,
   model = DEFAULT_CODEX_MODEL,
   paths = getCodexPaths(),
-  dryRun = true,
   modelCatalogModels = CODEX_ROUTERLAB_MODELS,
 } = {}) {
   const resolvedPaths = resolveCodexPaths(paths);
@@ -122,38 +141,20 @@ export function applyCodexConfig({
     models: catalog.models.map((entry) => entry.slug),
   } : null;
 
-  if (dryRun) {
-    return {
-      dryRun: true,
-      changed,
-      paths: resolvedPaths,
-      config,
-      catalog: catalogSummary,
-      backupExists,
-      backupCreated,
-      authPreserved: true,
-    };
-  }
-
-  fs.mkdirSync(path.dirname(resolvedPaths.configPath), { recursive: true });
-  if (backupCreated) {
-    writeTextAtomic(resolvedPaths.backupPath, `${previousConfig}\n`);
-  }
-  writeTextAtomic(resolvedPaths.configPath, `${config}\n`);
-  if (catalog) {
-    writeJsonAtomic(resolvedPaths.modelCatalogPath, catalog);
-  }
-
   return {
-    dryRun: false,
+    dryRun: true,
     changed,
     paths: resolvedPaths,
-    catalogWritten: Boolean(catalog),
+    config,
+    catalog: catalogSummary,
     backupExists,
     backupCreated,
-    backupPath: resolvedPaths.backupPath,
     authPreserved: true,
   };
+}
+
+export function applyCodexConfig(options = {}) {
+  return buildCodexConfigPreview(options);
 }
 
 export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = {}) {
@@ -204,26 +205,12 @@ export async function launchCodex({ apiKey = null, codexArgs = [] } = {}) {
     throw new Error('Codex CLI not found. Install the official Codex CLI first.');
   }
 
-  const child = spawn(codex.cliPath, codexArgs, {
-    stdio: 'inherit',
+  await runInteractiveCli(codex.cliPath, codexArgs, {
     env: {
       ...process.env,
       ...(apiKey ? buildCodexAuth(apiKey) : {}),
     },
-    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(codex.cliPath),
   });
-
-  const exitCode = await new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      if (typeof code === 'number') {
-        resolve(code);
-      } else {
-        resolve(signal === 'SIGINT' ? 130 : 1);
-      }
-    });
-  });
-  process.exitCode = exitCode;
 }
 
 export function readCodexStatus(paths = getCodexPaths()) {
@@ -237,7 +224,6 @@ export function readCodexStatus(paths = getCodexPaths()) {
     modelCatalogExists: fs.existsSync(resolvedPaths.modelCatalogPath),
     wrapperConfig: isWrapperCodexConfig(config),
     routerlabEndpoint: hasRouterlabEndpoint(config),
-    config,
   };
 }
 
@@ -282,32 +268,21 @@ function isWrapperCodexConfig(config) {
 }
 
 function hasRouterlabEndpoint(config) {
-  return Boolean(config && /https:\/\/(llm-api\.)?routerlab\.ch\/v1/.test(config));
+  return Boolean(config && /https:\/\/(api\.|llm-api\.)?routerlab\.ch\/v1/.test(config));
 }
 
 function readCodexModelTemplate(modelsCachePath) {
   try {
     const cache = JSON.parse(fs.readFileSync(modelsCachePath, 'utf8'));
-    return cache.models?.find((entry) => entry?.slug === DEFAULT_CODEX_MODEL) ?? null;
+    return cache.models?.find((entry) => entry?.slug === DEFAULT_CODEX_MODEL)
+      ?? cache.models?.[0]
+      ?? null;
   } catch (error) {
     if (error.code === 'ENOENT') {
       return null;
     }
     throw error;
   }
-}
-
-function codexModelDisplayName(model) {
-  if (model === 'MiniMax-M3') return 'MiniMax M3';
-  if (model === 'deepseek-v4-pro') return 'DeepSeek V4 Pro';
-  if (model === 'gpt-5.5') return 'GPT 5.5';
-  if (model === 'gpt-5.4') return 'GPT 5.4';
-  if (model === 'gpt-5.3-codex') return 'GPT 5.3 Codex';
-  if (model === 'gpt-5.4-mini') return 'GPT 5.4 mini';
-  if (model === 'qwen3.7-max') return 'Qwen 3.7 Max';
-  if (model === 'minimax-m2.7') return 'MiniMax M2.7';
-  if (model === 'glm-5.1') return 'GLM 5.1';
-  return model;
 }
 
 function readText(filePath) {

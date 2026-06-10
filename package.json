@@ -1,6 +1,6 @@
 {
   "name": "wrapper-scionos",
-  "version": "2.2.0",
+  "version": "2.5.0",
   "description": "Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants",
   "type": "module",
   "main": "index.js",

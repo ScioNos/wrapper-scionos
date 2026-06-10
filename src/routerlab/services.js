@@ -13,6 +13,7 @@ export const SERVICES = {
     legacySecureStorageFileName: 'routerlab-token.secure.txt',
     strategyValues: [
       'default',
+      'claude-fable-5',
       'aws',
       'claude-gpt',
       'deepseek-v4-beta',
@@ -31,6 +32,7 @@ export const SERVICES = {
     legacySecureStorageFileName: 'routerlab-llm-token.secure.txt',
     strategyValues: [
       'claude',
+      'claude-fable-5',
       'claude-gpt',
       'claude-gpt-special',
       'deepseek-v4-beta',

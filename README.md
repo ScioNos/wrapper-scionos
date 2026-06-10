@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `2.2.0`.
+Current version: `2.5.0`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -54,9 +54,6 @@ node index.js claude-desktop proxy --service llm
 node index.js codex launch --service routerlab
 node index.js codex launch --service llm
 node index.js codex template --service routerlab
-node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
-node index.js codex apply --service routerlab --yes
-node index.js codex apply --service llm --yes
 node index.js codex restore --yes
 ```
 
@@ -158,6 +155,7 @@ strategy models. The default RouterLab Desktop catalog is ordered as:
 claude-opus-4-8
 claude-sonnet-4-6
 claude-haiku-4-5
+claude-fable-5
 aws-claude-opus-4-8
 aws-claude-sonnet-4-6
 aws-claude-haiku-4-5
@@ -169,7 +167,7 @@ glm-5.1
 ```
 
 For `--service llm`, the Desktop local mapping mirrors the Claude Code LLM strategies: Claude,
-OpenAI GPT, OpenAI GPT special price, DeepSeek, MiniMax, Qwen, and GLM. Display names remove the
+Claude Fable 5, OpenAI GPT, OpenAI GPT special price, DeepSeek, MiniMax, Qwen, and GLM. Display names remove the
 RouterLab `claude-` routing prefix where helpful, for example `gpt-5.5`, `deepseek-v4-pro`,
 `qwen3.7-max`, and `glm-5.1`.
 
@@ -177,8 +175,8 @@ RouterLab `claude-` routing prefix where helpful, for example `gpt-5.5`, `deepse
 `claude-desktop apply-proxy` writes a profile pointing to `http://127.0.0.1:15721`.
 `claude-desktop proxy` must stay running while Claude Desktop uses mapped routes.
 
-The 1M context flag is applied per upstream model. Haiku, Kimi, GLM, GPT mini, and GPT special
-mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
+The 1M context flag is applied per upstream model. Haiku, Fable, Kimi, GLM, GPT mini, and GPT
+special mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
 ## Codex CLI
 
@@ -190,19 +188,20 @@ node index.js codex launch --service routerlab
 node index.js codex launch --service llm
 ```
 
+`codex launch` starts Codex directly with the RouterLab model catalog derived from the Claude Code
+strategies. For scripted launches, pass `--model <value>` to choose the initial model; otherwise
+the service default is used.
+
 The wrapper also includes a Codex CLI config template generator:
 
 ```powershell
 node index.js codex template --service routerlab
 ```
 
-It can also persistently write `~/.codex/config.toml` when you explicitly choose apply:
+If you previously used an older wrapper version to persistently rewrite Codex config, you can
+restore the saved backup:
 
 ```powershell
-node index.js codex apply --service routerlab --dry-run
-node index.js codex apply --service routerlab --model gpt-5.3-codex --yes
-node index.js codex apply --service routerlab --yes
-node index.js codex apply --service llm --yes
 node index.js codex restore --yes
 ```
 
@@ -211,37 +210,41 @@ RouterLab Codex CLI models are offered in this order:
 ```text
 gpt-5.5
 gpt-5.4
-gpt-5.3-codex
 gpt-5.4-mini
-minimax-m2.7
+deepseek-v4-pro
+deepseek-v4-flash
+kimi-k2.6
 glm-5.1
 ```
 
 RouterLab LLM Codex CLI models are offered in this order:
 
 ```text
-MiniMax-M3
-deepseek-v4-pro
+gpt-5.5
 gpt-5.4
 gpt-5.4-mini
-gpt-5.5
+gpt-5.5-sp
+gpt-5.4-mini-sp
+deepseek-v4-pro
+deepseek-v4-flash
+MiniMax-M3
 qwen3.7-max
+qwen3.6-flash
 glm-5.1
 ```
 
 `codex launch` is non-destructive by default: it starts the official `codex` binary with
 runtime `-c` overrides and passes the selected RouterLab service token through
 `OPENAI_API_KEY` only to the child process. It does not rewrite `config.toml` and does not
-touch `auth.json`.
+touch `auth.json`. When a local Codex `models_cache.json` is available, the wrapper writes a
+temporary model catalog under the system temp directory for the duration of the Codex process, then
+removes it.
 
-`codex apply` is dry-run by default. It writes `config.toml` atomically when `--yes` is passed
-and leaves `auth.json` untouched so existing Codex login state is preserved. The generated custom
-provider reads `OPENAI_API_KEY`. Before replacing an existing Codex config,
-the wrapper saves it as `config.toml.wrapper-scionos-backup` when no backup already exists. `codex
-restore --yes` restores that backup; if no backup exists, it only removes a config that clearly
-looks like a wrapper-generated RouterLab config. When Codex has a local `models_cache.json`, the
-wrapper also writes `wrapper-scionos-model-catalog.json` and points `model_catalog_json` at it so
-Codex CLI can see the RouterLab model catalog after restart.
+The persistent `codex apply` flow was removed because replacing the user's Codex `config.toml`
+can overwrite unrelated Codex settings such as MCP, hooks, features, and sandbox preferences.
+`codex restore --yes` remains available only as a recovery command: it restores
+`config.toml.wrapper-scionos-backup` when present; if no backup exists, it only removes a config
+that clearly looks like a wrapper-generated RouterLab config.
 
 ## Development
 

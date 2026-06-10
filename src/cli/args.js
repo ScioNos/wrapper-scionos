@@ -10,7 +10,6 @@ export function parseOptions(argv) {
     model: null,
     noPrompt: false,
     yes: false,
-    dryRun: true,
     json: false,
     help: false,
     version: false,
@@ -61,9 +60,8 @@ export function parseOptions(argv) {
       options.noPrompt = true;
     } else if (arg === '--yes' || arg === '-y') {
       options.yes = true;
-      options.dryRun = false;
     } else if (arg === '--dry-run') {
-      options.dryRun = true;
+      options.yes = false;
     } else if (arg === '--json') {
       options.json = true;
     } else if (arg === '--help' || arg === '-h') {

@@ -12,18 +12,7 @@ const WINDOWS_POWERSHELL_MODULE_PATHS = [
 ];
 
 export function getSecureStorageBackend() {
-  if (process.platform === 'win32') {
-    return { supported: true, backend: 'Windows DPAPI' };
-  }
-  if (process.platform === 'darwin') {
-    return { supported: true, backend: 'macOS Keychain' };
-  }
-  if (process.platform === 'linux') {
-    return commandExists('secret-tool')
-      ? { supported: true, backend: 'Linux Secret Service' }
-      : { supported: false, backend: 'Linux Secret Service', reason: '`secret-tool` not found' };
-  }
-  return { supported: false, backend: 'Unknown', reason: 'Unsupported operating system' };
+  return currentTokenBackend().status();
 }
 
 function commandExists(command) {
@@ -87,48 +76,7 @@ export function storeToken(token, serviceValue) {
     throw new Error(storage.reason || 'Secure storage is not available.');
   }
 
-  if (process.platform === 'win32') {
-    const tokenFile = getWindowsTokenFile(service.value);
-    fs.mkdirSync(path.dirname(tokenFile), { recursive: true });
-    const encrypted = runPowerShell(
-      '$token = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($token)) { throw "Token input is empty" }; $secure = ConvertTo-SecureString $token -AsPlainText -Force; ConvertFrom-SecureString $secure',
-      { input: token },
-    );
-    fs.writeFileSync(tokenFile, encrypted, 'utf8');
-    if (!hasNonEmptyFile(tokenFile)) {
-      throw new Error('Secure token file was created but no encrypted content was written.');
-    }
-    return storage;
-  }
-
-  if (process.platform === 'darwin') {
-    const result = runCommand('security', [
-      'add-generic-password',
-      '-U',
-      '-a',
-      service.secureStorageAccount,
-      '-s',
-      SECURE_STORAGE_SERVICE,
-      '-w',
-      token,
-    ]);
-    if (result.status !== 0) {
-      throw new Error((result.stderr || result.stdout || 'Unable to store token in Keychain').trim());
-    }
-    return storage;
-  }
-
-  const result = runCommand('secret-tool', [
-    'store',
-    `--label=${service.secureStorageLabel}`,
-    'service',
-    SECURE_STORAGE_SERVICE,
-    'account',
-    service.secureStorageAccount,
-  ], { input: token });
-  if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || 'Unable to store token in Secret Service').trim());
-  }
+  currentTokenBackend().store(token, service);
   return storage;
 }
 
@@ -140,18 +88,7 @@ export function getStoredToken(serviceValue) {
   }
 
   try {
-    if (process.platform === 'win32') {
-      const token = readWindowsTokenFile(getWindowsTokenFile(service.value));
-      return token ?? readWindowsTokenFile(getWindowsTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
-    }
-
-    if (process.platform === 'darwin') {
-      return readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
-        ?? readMacOSToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
-    }
-
-    return readLinuxToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
-      ?? readLinuxToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
+    return currentTokenBackend().get(service);
   } catch {
     return null;
   }
@@ -188,32 +125,7 @@ export function deleteStoredToken(serviceValue) {
     return false;
   }
 
-  if (process.platform === 'win32') {
-    const tokenFile = getWindowsTokenFile(service.value);
-    if (!fs.existsSync(tokenFile)) {
-      return false;
-    }
-    fs.unlinkSync(tokenFile);
-    return true;
-  }
-
-  if (process.platform === 'darwin') {
-    return runCommand('security', [
-      'delete-generic-password',
-      '-a',
-      service.secureStorageAccount,
-      '-s',
-      SECURE_STORAGE_SERVICE,
-    ]).status === 0;
-  }
-
-  return runCommand('secret-tool', [
-    'clear',
-    'service',
-    SECURE_STORAGE_SERVICE,
-    'account',
-    service.secureStorageAccount,
-  ]).status === 0;
+  return currentTokenBackend().delete(service);
 }
 
 export function getStoredTokenStatus(serviceValue) {
@@ -222,4 +134,127 @@ export function getStoredTokenStatus(serviceValue) {
     ...storage,
     stored: Boolean(getStoredToken(serviceValue)),
   };
+}
+
+function currentTokenBackend() {
+  return TOKEN_BACKENDS[process.platform] ?? UNSUPPORTED_BACKEND;
+}
+
+const TOKEN_BACKENDS = {
+  win32: {
+    status: () => ({ supported: true, backend: 'Windows DPAPI' }),
+    store: storeWindowsToken,
+    get: getWindowsToken,
+    delete: deleteWindowsToken,
+  },
+  darwin: {
+    status: () => ({ supported: true, backend: 'macOS Keychain' }),
+    store: storeMacOSToken,
+    get: getMacOSToken,
+    delete: deleteMacOSToken,
+  },
+  linux: {
+    status: () => (
+      commandExists('secret-tool')
+        ? { supported: true, backend: 'Linux Secret Service' }
+        : { supported: false, backend: 'Linux Secret Service', reason: '`secret-tool` not found' }
+    ),
+    store: storeLinuxToken,
+    get: getLinuxToken,
+    delete: deleteLinuxToken,
+  },
+};
+
+const UNSUPPORTED_BACKEND = {
+  status: () => ({ supported: false, backend: 'Unknown', reason: 'Unsupported operating system' }),
+  store: () => {},
+  get: () => null,
+  delete: () => false,
+};
+
+function storeWindowsToken(token, service) {
+  const tokenFile = getWindowsTokenFile(service.value);
+  fs.mkdirSync(path.dirname(tokenFile), { recursive: true });
+  const encrypted = runPowerShell(
+    '$token = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($token)) { throw "Token input is empty" }; $secure = ConvertTo-SecureString $token -AsPlainText -Force; ConvertFrom-SecureString $secure',
+    { input: token },
+  );
+  fs.writeFileSync(tokenFile, encrypted, 'utf8');
+  if (!hasNonEmptyFile(tokenFile)) {
+    throw new Error('Secure token file was created but no encrypted content was written.');
+  }
+}
+
+function getWindowsToken(service) {
+  const token = readWindowsTokenFile(getWindowsTokenFile(service.value));
+  return token ?? readWindowsTokenFile(getWindowsTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
+}
+
+function deleteWindowsToken(service) {
+  const tokenFile = getWindowsTokenFile(service.value);
+  if (!fs.existsSync(tokenFile)) {
+    return false;
+  }
+  fs.unlinkSync(tokenFile);
+  return true;
+}
+
+function storeMacOSToken(token, service) {
+  const result = runCommand('security', [
+    'add-generic-password',
+    '-U',
+    '-a',
+    service.secureStorageAccount,
+    '-s',
+    SECURE_STORAGE_SERVICE,
+    '-w',
+    token,
+  ]);
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || 'Unable to store token in Keychain').trim());
+  }
+}
+
+function getMacOSToken(service) {
+  return readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
+    ?? readMacOSToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
+}
+
+function deleteMacOSToken(service) {
+  return runCommand('security', [
+    'delete-generic-password',
+    '-a',
+    service.secureStorageAccount,
+    '-s',
+    SECURE_STORAGE_SERVICE,
+  ]).status === 0;
+}
+
+function storeLinuxToken(token, service) {
+  const result = runCommand('secret-tool', [
+    'store',
+    `--label=${service.secureStorageLabel}`,
+    'service',
+    SECURE_STORAGE_SERVICE,
+    'account',
+    service.secureStorageAccount,
+  ], { input: token });
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || 'Unable to store token in Secret Service').trim());
+  }
+}
+
+function getLinuxToken(service) {
+  return readLinuxToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
+    ?? readLinuxToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
+}
+
+function deleteLinuxToken(service) {
+  return runCommand('secret-tool', [
+    'clear',
+    'service',
+    SECURE_STORAGE_SERVICE,
+    'account',
+    service.secureStorageAccount,
+  ]).status === 0;
 }

@@ -20,7 +20,7 @@ export const MAIN_MENU_ITEMS = [
     key: '3',
     value: 'codex',
     label: 'Codex CLI',
-    description: 'Configure Codex CLI for RouterLab.',
+    description: 'Launch Codex CLI through RouterLab.',
   },
   {
     key: '4',
@@ -39,60 +39,6 @@ export const MAIN_MENU_ITEMS = [
     value: 'quit',
     label: 'Quit',
     description: 'Exit without changing anything.',
-  },
-];
-
-export const CODEX_MENU_ITEMS = [
-  {
-    key: '1',
-    value: 'launch',
-    label: 'Launch Codex CLI',
-    description: 'Launch Codex CLI for this session without rewriting config.toml.',
-  },
-  {
-    key: '2',
-    value: 'status',
-    label: 'Status',
-    description: 'Show Codex CLI configuration status.',
-  },
-  {
-    key: '3',
-    value: 'advanced',
-    label: 'Advanced',
-    description: 'Persistent config, restore, and template actions.',
-  },
-  {
-    key: '0',
-    value: 'back',
-    label: 'Back',
-    description: 'Return to the main menu.',
-  },
-];
-
-export const CODEX_ADVANCED_MENU_ITEMS = [
-  {
-    key: '1',
-    value: 'apply',
-    label: 'Apply Persistent Config',
-    description: 'Persistently write Codex CLI config.toml for the selected service.',
-  },
-  {
-    key: '2',
-    value: 'restore',
-    label: 'Restore Official Config',
-    description: 'Restore the previous Codex CLI config or remove the wrapper config.',
-  },
-  {
-    key: '3',
-    value: 'template',
-    label: 'Print Template',
-    description: 'Show the Codex CLI config template.',
-  },
-  {
-    key: '0',
-    value: 'back',
-    label: 'Back',
-    description: 'Return to the Codex CLI menu.',
   },
 ];
 

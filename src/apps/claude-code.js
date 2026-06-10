@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { password, select, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
+import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { allowsSubagentModelOverride, assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
@@ -201,22 +201,7 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
   }
 
-  const child = spawn(claude.cliPath, claudeArgs, {
-    stdio: 'inherit',
-    env,
-    shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(claude.cliPath),
-  });
-
-  const exitCode = await new Promise((resolve) => {
-    child.on('exit', (code, signal) => {
-      if (typeof code === 'number') {
-        resolve(code);
-      } else {
-        resolve(signal === 'SIGINT' ? 130 : 1);
-      }
-    });
-  });
-  process.exitCode = exitCode;
+  await runInteractiveCli(claude.cliPath, claudeArgs, { env });
 }
 
 export function formatClaudeCodeIntro(version = null) {

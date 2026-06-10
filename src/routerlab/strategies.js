@@ -12,6 +12,10 @@ export const LLM_CLAUDE_MODELS = [
   'claude-haiku-4-5-20251001',
 ];
 
+export const FABLE_CLAUDE_MODELS = [
+  'claude-fable-5',
+];
+
 export const AWS_CLAUDE_MODELS = [
   'aws-claude-haiku-4-5-20251001',
   'aws-claude-sonnet-4-6',
@@ -81,6 +85,15 @@ export const STRATEGIES = [
       haiku: 'aws-claude-haiku-4-5-20251001',
       subagent: 'aws-claude-haiku-4-5-20251001',
     }),
+  },
+  {
+    value: 'claude-fable-5',
+    name: 'Claude Fable 5',
+    description: 'Sets all Claude Code model environment variables to claude-fable-5.',
+    selectionName: 'Claude Fable 5',
+    selectionDescription: 'Uses claude-fable-5 for all model aliases.',
+    requiredModels: FABLE_CLAUDE_MODELS,
+    environment: createSingleModelEnvironment('claude-fable-5'),
   },
   {
     value: 'claude',

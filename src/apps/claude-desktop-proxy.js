@@ -65,14 +65,13 @@ export async function startClaudeDesktopProxy(options) {
 }
 
 async function handleProxyRequest(req, res, context) {
-  if (req.method === 'OPTIONS') {
+  if (isPreflight(req)) {
     res.writeHead(204, corsHeaders());
     res.end();
     return;
   }
 
-  const url = new URL(req.url, 'http://127.0.0.1');
-  if (req.method === 'GET' && (url.pathname === '/v1/models' || url.pathname === '/models')) {
+  if (isModelListRequest(req)) {
     writeJson(res, modelListResponse(context.routes));
     return;
   }
@@ -82,13 +81,17 @@ async function handleProxyRequest(req, res, context) {
     return;
   }
 
-  const bodyText = await readRequestBody(req);
-  const body = bodyText ? JSON.parse(bodyText) : {};
-  if (typeof body.model === 'string' && context.routeMap.has(body.model)) {
-    body.model = context.routeMap.get(body.model);
-  }
+  const body = await rewriteRequestBody(req, context.routeMap);
+  await forwardToRouterLab(req, res, context.service, context.routerlabToken, body);
+}
 
-  await forwardToRouterLab(req, res, context.service, context.routerlabToken, JSON.stringify(body));
+function isPreflight(req) {
+  return req.method === 'OPTIONS';
+}
+
+function isModelListRequest(req) {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  return req.method === 'GET' && (url.pathname === '/v1/models' || url.pathname === '/models');
 }
 
 function modelListResponse(routes) {
@@ -115,8 +118,31 @@ function isAuthorized(req, gatewayToken) {
   return authorization === `Bearer ${gatewayToken}`;
 }
 
+async function rewriteRequestBody(req, routeMap) {
+  const bodyText = await readRequestBody(req);
+  const body = bodyText ? JSON.parse(bodyText) : {};
+  if (typeof body.model === 'string' && routeMap.has(body.model)) {
+    body.model = routeMap.get(body.model);
+  }
+  return JSON.stringify(body);
+}
+
 async function forwardToRouterLab(req, res, service, routerlabToken, body) {
-  const upstreamUrl = new URL(req.url, service.baseUrl);
+  const upstream = await fetch(buildUpstreamUrl(req, service), {
+    method: req.method,
+    headers: forwardHeaders(req, routerlabToken),
+    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
+  });
+
+  writeProxyResponse(res, upstream);
+}
+
+function buildUpstreamUrl(req, service) {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  return new URL(`${url.pathname}${url.search}`, service.baseUrl);
+}
+
+function forwardHeaders(req, routerlabToken) {
   const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
     const normalized = key.toLowerCase();
@@ -128,13 +154,10 @@ async function forwardToRouterLab(req, res, service, routerlabToken, body) {
   headers['content-type'] = 'application/json';
   headers['x-api-key'] = routerlabToken;
   headers['anthropic-version'] = headers['anthropic-version'] ?? DEFAULT_ANTHROPIC_VERSION;
+  return headers;
+}
 
-  const upstream = await fetch(upstreamUrl, {
-    method: req.method,
-    headers,
-    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
-  });
-
+function writeProxyResponse(res, upstream) {
   const responseHeaders = {};
   upstream.headers.forEach((value, key) => {
     if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {

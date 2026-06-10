@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { buildInteractiveCliInvocation } from './process.js';
 
 export function detectOS() {
   const platform = os.platform();
@@ -30,7 +31,7 @@ export function findExecutable(command, candidates = []) {
     }
   }
 
-  const lookup = process.platform === 'win32' ? 'where' : 'which';
+  const lookup = process.platform === 'win32' ? 'where.exe' : 'which';
   const result = spawnSync(lookup, [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   if (result.status !== 0) {
     return null;
@@ -49,7 +50,7 @@ export function findWindowsExecutable(command, candidates = []) {
     return fromCandidates;
   }
 
-  const result = spawnSync('where', [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const result = spawnSync('where.exe', [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   if (result.status !== 0) {
     return null;
   }
@@ -72,6 +73,34 @@ function isWindowsExecutableShim(filePath) {
   return /\.(cmd|bat|exe)$/i.test(filePath);
 }
 
+export function detectCli({
+  command,
+  candidates = [],
+  configPath = null,
+  preferWindowsShim = false,
+} = {}) {
+  const find = preferWindowsShim ? findWindowsExecutable : findExecutable;
+  const cliPath = find(command, candidates);
+  let version = null;
+  if (cliPath) {
+    const invocation = buildInteractiveCliInvocation(cliPath, ['--version']);
+    const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    if (result.status === 0) {
+      version = result.stdout.trim();
+    }
+  }
+
+  const detected = {
+    installed: Boolean(cliPath),
+    cliPath,
+    version,
+  };
+  if (configPath) {
+    detected.configPath = fs.existsSync(configPath) ? configPath : null;
+  }
+  return detected;
+}
+
 export function detectClaudeCode() {
   const home = os.homedir();
   const candidates = process.platform === 'win32'
@@ -85,28 +114,19 @@ export function detectClaudeCode() {
         '/usr/local/bin/claude',
       ];
 
-  const cliPath = findExecutable('claude', candidates);
-  let version = null;
-  if (cliPath) {
-    const result = spawnSync(cliPath, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    if (result.status === 0) {
-      version = result.stdout.trim();
-    }
-  }
-
-  const configPath = path.join(home, '.claude', 'settings.json');
-  return {
-    installed: Boolean(cliPath),
-    cliPath,
-    version,
-    configPath: fs.existsSync(configPath) ? configPath : null,
-  };
+  return detectCli({
+    command: 'claude',
+    candidates,
+    configPath: path.join(home, '.claude', 'settings.json'),
+  });
 }
 
 export function detectCodexCli() {
   const home = os.homedir();
+  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
   const candidates = process.platform === 'win32'
     ? [
+        path.join(appData, 'npm', 'codex'),
         path.join(home, '.local', 'bin', 'codex.exe'),
         path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'codex.exe'),
       ]
@@ -116,20 +136,19 @@ export function detectCodexCli() {
         '/usr/local/bin/codex',
       ];
 
-  const cliPath = findWindowsExecutable('codex', candidates);
-  let version = null;
-  if (cliPath) {
-    const result = spawnSync(cliPath, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    if (result.status === 0) {
-      version = result.stdout.trim();
-    }
+  const detected = detectCli({
+    command: 'codex',
+    candidates,
+    preferWindowsShim: true,
+  });
+  if (process.platform === 'win32' && detected.installed) {
+    return {
+      ...detected,
+      cliPath: 'codex',
+      resolvedCliPath: detected.cliPath,
+    };
   }
-
-  return {
-    installed: Boolean(cliPath),
-    cliPath,
-    version,
-  };
+  return detected;
 }
 
 export function checkGitBashOnWindows() {

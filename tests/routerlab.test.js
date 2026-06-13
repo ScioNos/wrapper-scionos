@@ -17,13 +17,6 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-gpt-5.4-mini',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-gpt-5.4-mini',
   });
-  assert.deepEqual(getStrategyEnvironment('claude-fable-5', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-fable-5',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-fable-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-fable-5',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5',
-  });
-
   assert.deepEqual(getStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
@@ -92,7 +85,6 @@ test('fixed-subagent strategies do not prompt for subagent overrides', async () 
 test('service strategy lists stay scoped', () => {
   assert.deepEqual(getStrategyChoices([], 'routerlab').map((choice) => choice.value), [
     'default',
-    'claude-fable-5',
     'aws',
     'claude-gpt',
     'deepseek-v4-beta',
@@ -101,7 +93,6 @@ test('service strategy lists stay scoped', () => {
   ]);
   assert.deepEqual(getStrategyChoices([], 'llm').map((choice) => choice.value), [
     'claude',
-    'claude-fable-5',
     'claude-gpt',
     'claude-gpt-special',
     'deepseek-v4-beta',
@@ -117,8 +108,9 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.some((choice) => choice.value === 'deepseek-v4'), false);
   assert.equal(choices.find((choice) => choice.value === 'deepseek-v4-beta').name, 'deepseek-v4 beta');
   assert.throws(() => getStrategyEnvironment('deepseek-v4', 'routerlab'), /Unknown strategy/);
+  assert.throws(() => getStrategyEnvironment('claude-fable-5', 'routerlab'), /Unknown strategy/);
   assert.equal(choices.find((choice) => choice.value === 'default').description, 'Standard behavior. Claude decides which model to use.');
-  assert.equal(choices.find((choice) => choice.value === 'claude-fable-5').name, 'Claude Fable 5');
+  assert.equal(choices.some((choice) => choice.value === 'claude-fable-5'), false);
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').name, 'OpenAI GPT');
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.5, Sonnet => GPT 5.4, Haiku/subagents => GPT 5.4 mini.');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-MiniMax-M3').name, 'MiniMax-M3 beta');

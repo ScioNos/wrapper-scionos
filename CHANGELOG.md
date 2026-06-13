@@ -2,13 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.0.0 - 2026-06-13
+
+### Added
+
+- Added a shared long-running local LLM proxy for RouterLab-backed clients.
+- Added resilient stream forwarding for Claude Code, Claude Desktop proxy mode, and Codex CLI launches.
+
+### Changed
+
+- Claude Code and Codex CLI launches now route through the local long-running proxy before RouterLab.
+- Claude Desktop proxy mode now reuses the shared long-running proxy transport.
+- Long LLM generations and irregular agent/subagent streams are handled without crashing on Undici body timeouts.
+- Package version promoted from `2.5.0` to `3.0.0`.
+
+### Removed
+
+- Removed `claude-fable-5` from RouterLab and RouterLab LLM strategy catalogs.
+
 ## 2.5.0 - 2026-06-10
 
 ### Added
 
 - Added a runtime Codex CLI model catalog for `codex launch`, derived from non-Claude Claude Code strategy routes.
 - Added shared RouterLab model metadata used by both Codex CLI catalogs and Claude Desktop mappings.
-- Added `claude-fable-5` to Claude Desktop local mappings for both RouterLab services.
 
 ### Removed
 

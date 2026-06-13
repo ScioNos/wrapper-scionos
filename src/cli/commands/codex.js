@@ -1,5 +1,6 @@
 import { requireServiceConfig } from '../../routerlab/services.js';
 import { resolveToken } from '../../apps/claude-code.js';
+import { DEFAULT_LLM_PROXY_GATEWAY_TOKEN, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platform/llm-proxy.js';
 import {
   buildCodexAuth,
   buildCodexConfigPreview,
@@ -19,17 +20,23 @@ export async function launchCodexForService(options) {
   const service = requireServiceConfig(options.service);
   const model = options.model ?? defaultCodexModelForService(service.value);
   const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: service.baseUrl,
+    routerlabToken: token,
+    upstreamAuth: 'openai',
+  });
   const catalog = writeCodexRuntimeModelCatalog({ serviceValue: service.value });
   const codexArgs = buildCodexRuntimeArgs({
     providerName: service.value,
-    baseUrl: `${service.baseUrl}/v1`,
+    baseUrl: `${proxy.baseUrl}/v1`,
     model,
     modelCatalogPath: catalog?.path ?? null,
   });
   try {
-    await launchCodex({ apiKey: token, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
+    await launchCodex({ apiKey: DEFAULT_LLM_PROXY_GATEWAY_TOKEN, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
   } finally {
     cleanupCodexRuntimeModelCatalog(catalog);
+    await stopLongRunningLlmProxy(proxy);
   }
 }
 

@@ -10,7 +10,6 @@ export const STRATEGY_MODEL_KEYS = [
 export const DESKTOP_MAPPING_STRATEGIES = {
   routerlab: [
     'default',
-    'claude-fable-5',
     'aws',
     'claude-gpt',
     'claude-kimi-k2.6',
@@ -18,7 +17,6 @@ export const DESKTOP_MAPPING_STRATEGIES = {
   ],
   llm: [
     'claude',
-    'claude-fable-5',
     'claude-gpt',
     'claude-gpt-special',
     'deepseek-v4-beta',
@@ -57,11 +55,6 @@ export const MODEL_ROUTE_METADATA = {
   'claude-opus-4-7': {
     desktopRouteId: 'claude-opus-4-8',
     label: 'claude-opus-4-8',
-  },
-  'claude-fable-5': {
-    desktopRouteId: 'claude-fable-5',
-    label: 'claude-fable-5',
-    supports1m: false,
   },
   'aws-claude-haiku-4-5-20251001': {
     desktopRouteId: 'aws-claude-haiku-4-5',
@@ -158,7 +151,6 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-opus-4-8',
   'claude-sonnet-4-6',
   'claude-haiku-4-5',
-  'claude-fable-5',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
   'aws-claude-haiku-4-5',
@@ -275,7 +267,6 @@ export function isClaudeFamilyModel(model) {
   return normalized.startsWith('claude-haiku-')
     || normalized.startsWith('claude-sonnet-')
     || normalized.startsWith('claude-opus-')
-    || normalized.startsWith('claude-fable-')
     || normalized.startsWith('aws-claude-')
     || normalized.startsWith('anthropic/claude-')
     || normalized.startsWith('cursor-aws-');

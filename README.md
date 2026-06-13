@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `2.5.0`.
+Current version: `3.0.0`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -69,7 +69,7 @@ Tokens are service-scoped. New tokens are stored under `wrapper-scionos`; existi
 
 ## Claude Code
 
-Launch directly through RouterLab:
+Launch through the wrapper's local resilient proxy to RouterLab:
 
 ```powershell
 node index.js claude-code --service routerlab --strategy aws
@@ -97,10 +97,14 @@ Strategies with fixed subagent mappings ignore `--subagent-model`: `claude-gpt-s
 keeps `claude-gpt-5.4-mini-sp`, `claude-MiniMax-M3` keeps `claude-MiniMax-M3`, and
 `claude-qwen3.7-max` keeps `claude-qwen3.6-flash`.
 
-The wrapper always configures:
+The wrapper starts a local long-running proxy for Claude Code launches and configures:
 
 - `ANTHROPIC_BASE_URL`
 - `ANTHROPIC_AUTH_TOKEN`
+
+`ANTHROPIC_BASE_URL` points to the local proxy, while the proxy forwards to the selected RouterLab
+service with the stored RouterLab token. This avoids body timeout crashes during long thinking,
+tool, and subagent pauses.
 
 Claude Code launches also receive temporary child-process environment:
 
@@ -142,7 +146,8 @@ node index.js claude-desktop apply-proxy --service routerlab --strategy claude-g
 node index.js claude-desktop proxy --service routerlab
 ```
 
-The proxy terminal must stay open while Claude Desktop uses mapped models.
+The proxy terminal must stay open while Claude Desktop uses mapped models. This mode uses the same
+long-running proxy transport as Claude Code and Codex CLI launches.
 
 With `claude-desktop apply` and no strategy, Claude Desktop reads the model catalog from
 RouterLab directly. Some non-Claude-family model ids can be hidden by Claude Desktop even when
@@ -155,7 +160,6 @@ strategy models. The default RouterLab Desktop catalog is ordered as:
 claude-opus-4-8
 claude-sonnet-4-6
 claude-haiku-4-5
-claude-fable-5
 aws-claude-opus-4-8
 aws-claude-sonnet-4-6
 aws-claude-haiku-4-5
@@ -167,7 +171,7 @@ glm-5.1
 ```
 
 For `--service llm`, the Desktop local mapping mirrors the Claude Code LLM strategies: Claude,
-Claude Fable 5, OpenAI GPT, OpenAI GPT special price, DeepSeek, MiniMax, Qwen, and GLM. Display names remove the
+OpenAI GPT, OpenAI GPT special price, DeepSeek, MiniMax, Qwen, and GLM. Display names remove the
 RouterLab `claude-` routing prefix where helpful, for example `gpt-5.5`, `deepseek-v4-pro`,
 `qwen3.7-max`, and `glm-5.1`.
 
@@ -175,12 +179,12 @@ RouterLab `claude-` routing prefix where helpful, for example `gpt-5.5`, `deepse
 `claude-desktop apply-proxy` writes a profile pointing to `http://127.0.0.1:15721`.
 `claude-desktop proxy` must stay running while Claude Desktop uses mapped routes.
 
-The 1M context flag is applied per upstream model. Haiku, Fable, Kimi, GLM, GPT mini, and GPT
+The 1M context flag is applied per upstream model. Haiku, Kimi, GLM, GPT mini, and GPT
 special mini routes do not get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
 ## Codex CLI
 
-Launch the official Codex CLI through RouterLab for the current session without rewriting
+Launch the official Codex CLI through the wrapper's local resilient proxy to RouterLab for the current session without rewriting
 `~/.codex/config.toml`:
 
 ```powershell
@@ -188,7 +192,7 @@ node index.js codex launch --service routerlab
 node index.js codex launch --service llm
 ```
 
-`codex launch` starts Codex directly with the RouterLab model catalog derived from the Claude Code
+`codex launch` starts Codex with the RouterLab model catalog derived from the Claude Code
 strategies. For scripted launches, pass `--model <value>` to choose the initial model; otherwise
 the service default is used.
 
@@ -234,11 +238,11 @@ glm-5.1
 ```
 
 `codex launch` is non-destructive by default: it starts the official `codex` binary with
-runtime `-c` overrides and passes the selected RouterLab service token through
-`OPENAI_API_KEY` only to the child process. It does not rewrite `config.toml` and does not
-touch `auth.json`. When a local Codex `models_cache.json` is available, the wrapper writes a
-temporary model catalog under the system temp directory for the duration of the Codex process, then
-removes it.
+runtime `-c` overrides pointing to the local proxy and passes only a local proxy token through
+`OPENAI_API_KEY` to the child process. The proxy forwards requests to RouterLab with the selected
+service token. It does not rewrite `config.toml` and does not touch `auth.json`. When a local Codex
+`models_cache.json` is available, the wrapper writes a temporary model catalog under the system temp
+directory for the duration of the Codex process, then removes it.
 
 The persistent `codex apply` flow was removed because replacing the user's Codex `config.toml`
 can overwrite unrelated Codex settings such as MCP, hooks, features, and sandbox preferences.

@@ -1,6 +1,7 @@
 import { password, select, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
+import { DEFAULT_LLM_PROXY_GATEWAY_TOKEN, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig } from '../routerlab/services.js';
@@ -186,7 +187,14 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     noPrompt,
     preferredSubagentModel: subagentModel,
   });
-  const env = buildClaudeCodeEnvironment(token, service, selectedStrategy, {
+
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: service.baseUrl,
+    routerlabToken: token,
+    upstreamAuth: 'anthropic',
+  });
+  const proxiedService = { ...service, baseUrl: proxy.baseUrl };
+  const env = buildClaudeCodeEnvironment(DEFAULT_LLM_PROXY_GATEWAY_TOKEN, proxiedService, selectedStrategy, {
     subagentModel: selectedSubagentModel,
   });
   const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
@@ -196,12 +204,16 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
       service,
       strategy: selectedStrategyName,
       subagentModel: selectedSubagentModel,
-      endpoint: service.baseUrl,
+      endpoint: `${proxy.baseUrl} -> ${service.baseUrl}`,
     }));
     console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
   }
 
-  await runInteractiveCli(claude.cliPath, claudeArgs, { env });
+  try {
+    await runInteractiveCli(claude.cliPath, claudeArgs, { env });
+  } finally {
+    await stopLongRunningLlmProxy(proxy);
+  }
 }
 
 export function formatClaudeCodeIntro(version = null) {

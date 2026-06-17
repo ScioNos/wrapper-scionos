@@ -12,17 +12,16 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'default',
     'aws',
     'claude-gpt',
-    'claude-kimi-k2.6',
+    'claude-kimi-k2.7-code',
     'glm-5.1',
   ],
   llm: [
     'claude',
     'claude-gpt',
-    'claude-gpt-special',
-    'deepseek-v4-beta',
-    'claude-MiniMax-M3',
+    'glm-5.2',
     'claude-qwen3.7-max',
-    'glm-5.1',
+    'claude-MiniMax-M3',
+    'deepseek-v4',
   ],
 };
 
@@ -88,19 +87,6 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'GPT 5.4 mini',
     supports1m: false,
   },
-  'claude-gpt-5.5-sp': {
-    desktopRouteId: 'claude-5.5-sp',
-    label: 'gpt-5.5-sp',
-    codexModel: 'gpt-5.5-sp',
-    codexDisplayName: 'GPT 5.5 special price',
-  },
-  'claude-gpt-5.4-mini-sp': {
-    desktopRouteId: 'claude-5.4-mini-sp',
-    label: 'gpt-5.4-mini-sp',
-    codexModel: 'gpt-5.4-mini-sp',
-    codexDisplayName: 'GPT 5.4 mini special price',
-    supports1m: false,
-  },
   'claude-deepseek-v4-pro': {
     desktopRouteId: 'claude-deev4-pro',
     label: 'deepseek-v4-pro',
@@ -131,11 +117,11 @@ export const MODEL_ROUTE_METADATA = {
     codexModel: 'qwen3.6-flash',
     codexDisplayName: 'Qwen 3.6 Flash',
   },
-  'claude-kimi-k2.6': {
-    desktopRouteId: 'claude-kim2.6',
-    label: 'Kimi K2.6',
-    codexModel: 'kimi-k2.6',
-    codexDisplayName: 'Kimi K2.6',
+  'claude-kimi-k2.7-code': {
+    desktopRouteId: 'claude-kim2.7-code',
+    label: 'kimi-k2.7-code',
+    codexModel: 'kimi-k2.7-code',
+    codexDisplayName: 'Kimi K2.7 Code',
     supports1m: false,
   },
   'claude-glm-5.1': {
@@ -143,6 +129,13 @@ export const MODEL_ROUTE_METADATA = {
     label: 'glm-5.1',
     codexModel: 'glm-5.1',
     codexDisplayName: 'GLM 5.1',
+    supports1m: false,
+  },
+  'claude-glm-5.2': {
+    desktopRouteId: 'claude-lm5.2',
+    label: 'glm-5.2',
+    codexModel: 'glm-5.2',
+    codexDisplayName: 'GLM 5.2',
     supports1m: false,
   },
 };
@@ -157,14 +150,13 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-5.5',
   'claude-5.4',
   'claude-5.4-mini',
-  'claude-5.5-sp',
-  'claude-5.4-mini-sp',
-  'claude-deev4-pro',
-  'claude-deev4-flash',
-  'claude-max-m3',
+  'claude-lm5.2',
   'claude-wen3.7-max',
   'claude-wen3.6-flash',
-  'claude-kim2.6',
+  'claude-max-m3',
+  'claude-deev4-pro',
+  'claude-deev4-flash',
+  'claude-kim2.7-code',
   'claude-lm5.1',
 ];
 

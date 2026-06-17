@@ -1,6 +1,6 @@
 import { DEFAULT_SERVICE } from '../routerlab/services.js';
 
-const OPTION_WITH_VALUE = new Set(['--service', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host']);
+const OPTION_WITH_VALUE = new Set(['--service', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host', '--transport']);
 
 export function parseOptions(argv) {
   const options = {
@@ -16,6 +16,7 @@ export function parseOptions(argv) {
     token: null,
     host: '127.0.0.1',
     port: 15721,
+    transport: 'direct',
     passthrough: [],
   };
 
@@ -46,6 +47,12 @@ export function parseOptions(argv) {
       if (key === '--model') options.model = value;
       if (key === '--token') options.token = value;
       if (key === '--host') options.host = value;
+      if (key === '--transport') {
+        if (value !== 'direct' && value !== 'proxy') {
+          throw new Error('--transport must be either "direct" or "proxy".');
+        }
+        options.transport = value;
+      }
       if (key === '--port') {
         const port = Number.parseInt(value, 10);
         if (!Number.isInteger(port) || port <= 0 || port > 65535) {
@@ -68,6 +75,10 @@ export function parseOptions(argv) {
       options.help = true;
     } else if (arg === '--version' || arg === '-v') {
       options.version = true;
+    } else if (arg === '--direct') {
+      options.transport = 'direct';
+    } else if (arg === '--proxy') {
+      options.transport = 'proxy';
     } else {
       options.passthrough.push(arg);
     }

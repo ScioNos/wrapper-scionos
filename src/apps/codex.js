@@ -9,7 +9,15 @@ import { codexModelDisplayName, codexModelsFromClaudeCodeStrategies } from '../r
 export { codexModelDisplayName };
 
 export const CODEX_ROUTERLAB_MODELS = codexModelsFromClaudeCodeStrategies('routerlab');
-export const CODEX_LLM_MODELS = codexModelsFromClaudeCodeStrategies('llm');
+export const CODEX_LLM_MODELS = [
+  'gpt-5.5',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'glm-5.2',
+  'qwen3.7-max',
+  'MiniMax-M3',
+  'deepseek-v4-pro',
+];
 
 export const DEFAULT_CODEX_MODEL = CODEX_ROUTERLAB_MODELS[0];
 export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.5';

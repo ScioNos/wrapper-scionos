@@ -111,26 +111,12 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'claude-gpt-special',
-    name: 'OpenAI GPT special price',
-    description: 'Use special-price GPT routes when available on RouterLab LLM.',
-    selectionDescription: 'Use special-price GPT routes when available on RouterLab LLM.',
-    aliases: ['gpt-5.5-sp'],
-    requiredModels: ['claude-gpt-5.5-sp', 'claude-gpt-5.4-mini-sp'],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'claude-gpt-5.5-sp',
-      sonnet: 'claude-gpt-5.5-sp',
-      haiku: 'claude-gpt-5.4-mini-sp',
-      subagent: 'claude-gpt-5.4-mini-sp',
-    }),
-  },
-  {
-    value: 'deepseek-v4-beta',
-    name: 'deepseek-v4 beta',
-    selectionName: 'deepseek-v4 beta',
+    value: 'deepseek-v4',
+    name: 'deepseek-v4',
+    selectionName: 'deepseek-v4',
     description: 'Sets Claude Code model environment variables to the claude-deepseek-v4 family. Opus and Sonnet => claude-deepseek-v4-pro, Haiku => claude-deepseek-v4-flash.',
     selectionDescription: 'Opus and Sonnet => claude-deepseek-v4-pro, Haiku => claude-deepseek-v4-flash.',
+    aliases: ['deepseek-v4-beta'],
     requiredModels: DEEPSEEK_V4_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-deepseek-v4-pro',
@@ -141,12 +127,11 @@ export const STRATEGIES = [
   },
   {
     value: 'claude-MiniMax-M3',
-    name: 'MiniMax-M3 beta',
-    selectionName: 'MiniMax-M3 beta',
+    name: 'MiniMax-M3',
+    selectionName: 'MiniMax-M3',
     description: 'Sets all Claude Code model environment variables to claude-MiniMax-M3.',
     selectionDescription: 'Uses claude-MiniMax-M3 for all model aliases.',
     requiredModels: ['claude-MiniMax-M3'],
-    allowSubagentOverride: false,
     environment: createSingleModelEnvironment('claude-MiniMax-M3'),
   },
   {
@@ -156,7 +141,6 @@ export const STRATEGIES = [
     description: 'Sets Claude Code main model aliases to claude-qwen3.7-max and subagents to claude-qwen3.6-flash.',
     selectionDescription: 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.',
     requiredModels: ['claude-qwen3.7-max', 'claude-qwen3.6-flash'],
-    allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'claude-qwen3.7-max',
       sonnet: 'claude-qwen3.7-max',
@@ -165,12 +149,14 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'claude-kimi-k2.6',
-    name: 'Kimi K2.6',
-    description: 'Sets all Claude Code model environment variables to claude-kimi-k2.6.',
-    selectionDescription: 'Uses claude-kimi-k2.6 for all model aliases.',
-    requiredModels: ['claude-kimi-k2.6'],
-    environment: createSingleModelEnvironment('claude-kimi-k2.6'),
+    value: 'claude-kimi-k2.7-code',
+    name: 'kimi-k2.7-code',
+    selectionName: 'kimi-k2.7-code',
+    description: 'Sets all Claude Code model environment variables to claude-kimi-k2.7-code.',
+    selectionDescription: 'Uses claude-kimi-k2.7-code for all model aliases.',
+    aliases: ['kimi-k2.7-code'],
+    requiredModels: ['claude-kimi-k2.7-code'],
+    environment: createSingleModelEnvironment('claude-kimi-k2.7-code'),
   },
   {
     value: 'glm-5.1',
@@ -180,14 +166,19 @@ export const STRATEGIES = [
     requiredModels: ['claude-glm-5.1'],
     environment: createSingleModelEnvironment('claude-glm-5.1'),
   },
+  {
+    value: 'glm-5.2',
+    name: 'glm-5.2',
+    description: 'Sets all Claude Code model environment variables to claude-glm-5.2.',
+    selectionDescription: 'Uses claude-glm-5.2 for all model aliases.',
+    requiredModels: ['claude-glm-5.2'],
+    environment: createSingleModelEnvironment('claude-glm-5.2'),
+  },
 ];
 
 export function normalizeStrategyValue(strategyValue) {
   if (strategyValue === 'claude-gpt-5.4') {
     return 'claude-gpt';
-  }
-  if (strategyValue === 'gpt-5.5-sp') {
-    return 'claude-gpt-special';
   }
   return strategyValue;
 }

@@ -11,21 +11,17 @@ test('Codex template uses provider-scoped model provider config', () => {
     'gpt-5.4-mini',
     'deepseek-v4-pro',
     'deepseek-v4-flash',
-    'kimi-k2.6',
+    'kimi-k2.7-code',
     'glm-5.1',
   ]);
   assert.deepEqual(CODEX_LLM_MODELS, [
     'gpt-5.5',
     'gpt-5.4',
     'gpt-5.4-mini',
-    'gpt-5.5-sp',
-    'gpt-5.4-mini-sp',
-    'deepseek-v4-pro',
-    'deepseek-v4-flash',
-    'MiniMax-M3',
+    'glm-5.2',
     'qwen3.7-max',
-    'qwen3.6-flash',
-    'glm-5.1',
+    'MiniMax-M3',
+    'deepseek-v4-pro',
   ]);
   assert.deepEqual(codexModelsForService('routerlab'), CODEX_ROUTERLAB_MODELS);
   assert.deepEqual(codexModelsForService('llm'), CODEX_LLM_MODELS);
@@ -226,7 +222,7 @@ test('Codex template preview includes model_catalog_json when Codex model cache 
     dryRun: false,
   });
   assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
-  assert.equal(preview.catalog.models[5], 'kimi-k2.6');
+  assert.equal(preview.catalog.models[5], 'kimi-k2.7-code');
   assert.match(preview.config, /model_catalog_json = /);
   assert.equal(fs.existsSync(paths.configPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
@@ -262,8 +258,10 @@ test('Codex template preview builds LLM-specific model catalog for llm service',
   assert.deepEqual(preview.catalog.models, CODEX_LLM_MODELS);
   const catalog = buildCodexModelCatalogFromCache({ paths, models: CODEX_LLM_MODELS });
   assert.equal(catalog.models[0].display_name, 'GPT 5.5');
-  assert.equal(catalog.models[5].display_name, 'DeepSeek V4 Pro');
-  assert.equal(catalog.models[9].display_name, 'Qwen 3.6 Flash');
+  assert.equal(catalog.models[3].display_name, 'GLM 5.2');
+  assert.equal(catalog.models[4].display_name, 'Qwen 3.7 Max');
+  assert.equal(catalog.models[5].display_name, 'MiniMax M3');
+  assert.equal(catalog.models[6].display_name, 'DeepSeek V4 Pro');
   assert.equal(fs.existsSync(paths.configPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
 });

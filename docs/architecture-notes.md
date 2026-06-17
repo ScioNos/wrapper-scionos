@@ -64,9 +64,12 @@ Desktop menu.
 
 Codex CLI support should preserve user login material.
 
-The default Codex CLI launch path should be non-destructive: pass runtime `-c` overrides and the
-selected RouterLab token through the child process environment instead of rewriting
-`~/.codex/config.toml`.
+The default Codex CLI launch path should be direct and non-destructive: pass runtime `-c`
+overrides for the custom provider base URL and the selected RouterLab token through the child
+process environment instead of rewriting `~/.codex/config.toml`.
+
+Keep proxy launch support as an explicit fallback transport for long stream issues, not as the
+default Codex path.
 
 When Codex needs the RouterLab model list, generate a temporary `model_catalog_json` file under the
 system temp directory and pass it with a runtime `-c` override. Remove that file after the Codex

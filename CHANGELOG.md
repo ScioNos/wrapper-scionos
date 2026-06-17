@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.1.0 - 2026-06-17
+
+### Changed
+
+- Changed Codex CLI launches to connect directly to RouterLab by default with runtime `-c` provider overrides and `OPENAI_API_KEY`.
+- Kept the v3 Codex proxy path as an explicit `--transport proxy` fallback.
+- Updated the RouterLab LLM strategy catalog to remove OpenAI GPT special price, replace `glm-5.1` with `glm-5.2`, and route GLM through `claude-glm-5.2`.
+- Reordered RouterLab LLM strategies as Claude, OpenAI GPT, GLM 5.2, Qwen 3.7 Max, MiniMax M3, and DeepSeek V4.
+- Made all RouterLab LLM strategies accept `--subagent-model`, including Qwen 3.7 Max and MiniMax M3.
+- Curated the RouterLab LLM Codex model catalog to `gpt-5.5`, `gpt-5.4`, `gpt-5.4-mini`, `glm-5.2`, `qwen3.7-max`, `MiniMax-M3`, and `deepseek-v4-pro`.
+- Renamed the Claude DeepSeek strategy to `deepseek-v4` and replaced `Kimi K2.6` with `kimi-k2.7-code`.
+
 ## 3.0.0 - 2026-06-13
 
 ### Added

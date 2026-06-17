@@ -53,12 +53,11 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(desktopRouteIdForStrategyModel('opus', 'claude-gpt-5.5'), 'claude-5.5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-gpt-5.4'), 'claude-5.4');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-gpt-5.4-mini'), 'claude-5.4-mini');
-  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-gpt-5.5-sp'), 'claude-5.5-sp');
-  assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-gpt-5.4-mini-sp'), 'claude-5.4-mini-sp');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-haiku-4-5-20251001'), 'claude-haiku-4-5');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-4-5-20251001'), 'aws-claude-haiku-4-5');
-  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-kimi-k2.6'), 'claude-kim2.6');
+  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-kimi-k2.7-code'), 'claude-kim2.7-code');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-glm-5.1'), 'claude-lm5.1');
+  assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-glm-5.2'), 'claude-lm5.2');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-deepseek-v4-pro'), 'claude-deev4-pro');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-deepseek-v4-flash'), 'claude-deev4-flash');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-MiniMax-M3'), 'claude-max-m3');
@@ -73,8 +72,9 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(supportsOneMillionContext('claude-MiniMax-M3'), true);
   assert.equal(supportsOneMillionContext('claude-qwen3.7-max'), true);
   assert.equal(supportsOneMillionContext('claude-qwen3.6-flash'), true);
-  assert.equal(supportsOneMillionContext('claude-kimi-k2.6'), false);
+  assert.equal(supportsOneMillionContext('claude-kimi-k2.7-code'), false);
   assert.equal(supportsOneMillionContext('claude-glm-5.1'), false);
+  assert.equal(supportsOneMillionContext('claude-glm-5.2'), false);
 });
 
 test('Claude Desktop default local mapping exposes the selected RouterLab catalog', () => {
@@ -82,17 +82,16 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'default',
     'aws',
     'claude-gpt',
-    'claude-kimi-k2.6',
+    'claude-kimi-k2.7-code',
     'glm-5.1',
   ]);
   assert.deepEqual(DESKTOP_MAPPING_STRATEGIES.llm, [
     'claude',
     'claude-gpt',
-    'claude-gpt-special',
-    'deepseek-v4-beta',
-    'claude-MiniMax-M3',
+    'glm-5.2',
     'claude-qwen3.7-max',
-    'glm-5.1',
+    'claude-MiniMax-M3',
+    'deepseek-v4',
   ]);
 
   const routes = modelRoutesForDesktopMapping('routerlab');
@@ -100,7 +99,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'default',
     'aws',
     'claude-gpt',
-    'claude-kimi-k2.6',
+    'claude-kimi-k2.7-code',
     'glm-5.1',
   ]);
   assert.deepEqual(routes.map((route) => route.routeId), [
@@ -113,7 +112,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-5.5',
     'claude-5.4',
     'claude-5.4-mini',
-    'claude-kim2.6',
+    'claude-kim2.7-code',
     'claude-lm5.1',
   ]);
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-opus-4-8' && route.labelOverride === 'claude-opus-4-8'), true);
@@ -123,7 +122,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-4-6' && route.labelOverride === 'aws-claude-sonnet-4-6'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-4-5' && route.labelOverride === 'aws-claude-haiku-4-5' && route.supports1m === false), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-5.5' && route.labelOverride === 'gpt-5.5'), true);
-  assert.equal(routes.some((route) => route.routeId === 'claude-kim2.6' && route.labelOverride === 'Kimi K2.6' && route.supports1m === false), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-kim2.7-code' && route.labelOverride === 'kimi-k2.7-code' && route.supports1m === false), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-lm5.1' && route.labelOverride === 'glm-5.1' && route.supports1m === false), true);
   assert.equal(new Set(routes.map((route) => route.routeId)).size, routes.length);
 
@@ -131,11 +130,10 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.deepEqual([...new Set(llmRoutes.map((route) => route.strategyValue))], [
     'claude',
     'claude-gpt',
-    'claude-gpt-special',
-    'deepseek-v4-beta',
-    'claude-MiniMax-M3',
+    'glm-5.2',
     'claude-qwen3.7-max',
-    'glm-5.1',
+    'claude-MiniMax-M3',
+    'deepseek-v4',
   ]);
   assert.deepEqual(llmRoutes.map((route) => route.routeId), [
     'claude-opus-4-8',
@@ -144,14 +142,12 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-5.5',
     'claude-5.4',
     'claude-5.4-mini',
-    'claude-5.5-sp',
-    'claude-5.4-mini-sp',
-    'claude-deev4-pro',
-    'claude-deev4-flash',
-    'claude-max-m3',
+    'claude-lm5.2',
     'claude-wen3.7-max',
     'claude-wen3.6-flash',
-    'claude-lm5.1',
+    'claude-max-m3',
+    'claude-deev4-pro',
+    'claude-deev4-flash',
   ]);
   assert.equal(llmRoutes.some((route) => (
     route.routeId === 'claude-haiku-4-5'
@@ -161,12 +157,12 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => route.upstreamModel === 'claude-opus-4-6'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-haiku-4-5-gpt-special'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-sonnet-4-6-gpt-special'), false);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp' && route.labelOverride === 'gpt-5.5-sp'), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp' && route.labelOverride === 'gpt-5.4-mini-sp' && route.supports1m === false), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp'), false);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro' && route.labelOverride === 'deepseek-v4-pro' && route.supports1m === true), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash' && route.labelOverride === 'deepseek-v4-flash' && route.supports1m === true), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.labelOverride === 'MiniMax-M3' && route.supports1m === true), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.7-max' && route.labelOverride === 'qwen3.7-max' && route.supports1m === true), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.6-flash' && route.labelOverride === 'qwen3.6-flash' && route.supports1m === true), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.1' && route.labelOverride === 'glm-5.1' && route.supports1m === false), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.2' && route.upstreamModel === 'claude-glm-5.2' && route.labelOverride === 'glm-5.2' && route.supports1m === false), true);
 });

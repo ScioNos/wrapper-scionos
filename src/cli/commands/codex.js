@@ -20,6 +20,26 @@ export async function launchCodexForService(options) {
   const service = requireServiceConfig(options.service);
   const model = options.model ?? defaultCodexModelForService(service.value);
   const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  if (options.transport === 'proxy') {
+    await launchCodexViaProxy({ service, model, token, options });
+    return;
+  }
+
+  const catalog = writeCodexRuntimeModelCatalog({ serviceValue: service.value });
+  const codexArgs = buildCodexRuntimeArgs({
+    providerName: service.value,
+    baseUrl: `${service.baseUrl}/v1`,
+    model,
+    modelCatalogPath: catalog?.path ?? null,
+  });
+  try {
+    await launchCodex({ apiKey: token, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
+  } finally {
+    cleanupCodexRuntimeModelCatalog(catalog);
+  }
+}
+
+async function launchCodexViaProxy({ service, model, token, options }) {
   const proxy = await startLongRunningLlmProxy({
     targetBaseUrl: service.baseUrl,
     routerlabToken: token,

@@ -114,6 +114,7 @@ Common flags:
   --strategy <value>
   --subagent-model <default|haiku|gpt-5.4-mini|claude-deepseek-v4-flash>
   --model <value>
+  --transport <direct|proxy>
   --host <value>
   --port <value>
   --no-prompt

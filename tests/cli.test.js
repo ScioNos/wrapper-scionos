@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
+import { getAuthMenuContext } from '../src/cli/commands/auth.js';
 import { parseOptions } from '../src/cli/args.js';
 import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
 
@@ -65,6 +66,18 @@ test('interactive select menus stay compact without separator rows', () => {
   for (const items of [MAIN_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, AUTH_MENU_ITEMS]) {
     assert.equal(items.some((item) => !item.label || !item.value), false);
   }
+});
+
+test('auth menu uses the command-selected service', () => {
+  const routerlab = getAuthMenuContext(parseOptions([]));
+  assert.equal(routerlab.service.value, 'routerlab');
+  assert.equal(routerlab.title, 'Auth (RouterLab)');
+  assert.equal(routerlab.options.service, 'routerlab');
+
+  const llm = getAuthMenuContext(parseOptions(['--service', 'llm']));
+  assert.equal(llm.service.value, 'llm');
+  assert.equal(llm.title, 'Auth (RouterLab LLM)');
+  assert.equal(llm.options.service, 'llm');
 });
 
 test('Codex apply command is rejected before writing config', async () => {

@@ -228,6 +228,44 @@ test('Codex template preview includes model_catalog_json when Codex model cache 
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
 });
 
+test('Codex template preview includes fallback model_catalog_json without local Codex cache', (t) => {
+  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-fallback-catalog-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  const paths = {
+    configDir: tempDir,
+    configPath: path.join(tempDir, 'config.toml'),
+    modelsCachePath: path.join(tempDir, 'missing-models-cache.json'),
+    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+  };
+
+  const catalog = buildCodexModelCatalogFromCache({ paths });
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), CODEX_ROUTERLAB_MODELS);
+  assert.equal(catalog.models[5].slug, 'kimi-k2.7-code');
+  assert.equal(catalog.models[5].display_name, 'Kimi K2.7 Code');
+  assert.equal(catalog.models[5].visibility, 'list');
+  assert.equal(catalog.models[5].context_window, 272000);
+  assert.equal(catalog.models[5].supported_reasoning_levels.some((entry) => entry.effort === 'high'), true);
+
+  const preview = buildCodexConfigPreview({
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.5',
+    paths,
+    dryRun: false,
+  });
+  assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
+  assert.equal(preview.catalog.models[5], 'kimi-k2.7-code');
+  assert.match(preview.config, /model_catalog_json = /);
+
+  const runtimeCatalog = writeCodexRuntimeModelCatalog({ paths, tmpDir: tempDir });
+  assert.deepEqual(runtimeCatalog.models, CODEX_ROUTERLAB_MODELS);
+  const written = JSON.parse(fs.readFileSync(runtimeCatalog.path, 'utf8'));
+  assert.equal(written.models[5].slug, 'kimi-k2.7-code');
+  cleanupCodexRuntimeModelCatalog(runtimeCatalog);
+  assert.equal(fs.existsSync(runtimeCatalog.path), false);
+});
+
 test('Codex template preview builds LLM-specific model catalog for llm service', (t) => {
   const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-llm-catalog-'));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));

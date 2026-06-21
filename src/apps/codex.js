@@ -24,6 +24,12 @@ export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.5';
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
+export const CODEX_FALLBACK_CONTEXT_WINDOW = 272000;
+const CODEX_FALLBACK_REASONING_LEVELS = [
+  { effort: 'low', description: 'Fast responses with lighter reasoning' },
+  { effort: 'medium', description: 'Balances speed and reasoning depth for everyday tasks' },
+  { effort: 'high', description: 'Greater reasoning depth for complex problems' },
+];
 
 export function getCodexPaths(env = process.env) {
   const configDir = env.CODEX_HOME || path.join(os.homedir(), '.codex');
@@ -237,24 +243,80 @@ export function readCodexStatus(paths = getCodexPaths()) {
 
 export function buildCodexModelCatalogFromCache({ paths = getCodexPaths(), models = CODEX_ROUTERLAB_MODELS } = {}) {
   const resolvedPaths = resolveCodexPaths(paths);
-  const template = readCodexModelTemplate(resolvedPaths.modelsCachePath);
-  if (!template) {
-    return null;
-  }
+  const template = readCodexModelTemplate(resolvedPaths.modelsCachePath) ?? buildFallbackCodexModelTemplate();
 
   return {
-    models: models.map((model, index) => {
-      const entry = { ...template };
-      entry.slug = model;
-      entry.display_name = codexModelDisplayName(model);
-      entry.description = entry.display_name;
-      entry.priority = 1000 + index;
-      entry.additional_speed_tiers = [];
-      entry.service_tiers = [];
-      entry.availability_nux = null;
-      entry.upgrade = null;
-      return entry;
-    }),
+    models: models.map((model, index) => buildCodexModelCatalogEntry(template, model, index)),
+  };
+}
+
+function buildCodexModelCatalogEntry(template, model, index) {
+  const entry = structuredClone(template);
+  entry.slug = model;
+  entry.display_name = codexModelDisplayName(model);
+  entry.description = entry.display_name;
+  entry.priority = 1000 + index;
+  entry.additional_speed_tiers = [];
+  entry.service_tiers = [];
+  entry.default_service_tier = null;
+  entry.availability_nux = null;
+  entry.upgrade = null;
+  entry.visibility = 'list';
+  entry.supported_in_api = true;
+  entry.supported_reasoning_levels ??= structuredClone(CODEX_FALLBACK_REASONING_LEVELS);
+  entry.default_reasoning_level ??= 'high';
+  entry.context_window ??= CODEX_FALLBACK_CONTEXT_WINDOW;
+  entry.max_context_window ??= entry.context_window;
+  entry.shell_type ??= 'shell_command';
+  entry.input_modalities ??= ['text', 'image'];
+  entry.supports_parallel_tool_calls ??= true;
+  entry.supports_reasoning_summaries ??= true;
+  entry.default_reasoning_summary ??= 'none';
+  entry.support_verbosity ??= true;
+  entry.default_verbosity ??= 'low';
+  entry.apply_patch_tool_type ??= 'freeform';
+  entry.web_search_tool_type ??= 'text_and_image';
+  entry.truncation_policy ??= { mode: 'tokens', limit: 10000 };
+  entry.supports_search_tool ??= true;
+  entry.supports_image_detail_original ??= true;
+  entry.experimental_supported_tools ??= [];
+  entry.effective_context_window_percent ??= 95;
+  entry.use_responses_lite ??= false;
+  return entry;
+}
+
+function buildFallbackCodexModelTemplate() {
+  return {
+    slug: DEFAULT_CODEX_MODEL,
+    display_name: codexModelDisplayName(DEFAULT_CODEX_MODEL),
+    description: codexModelDisplayName(DEFAULT_CODEX_MODEL),
+    default_reasoning_level: 'high',
+    supported_reasoning_levels: structuredClone(CODEX_FALLBACK_REASONING_LEVELS),
+    shell_type: 'shell_command',
+    visibility: 'list',
+    supported_in_api: true,
+    priority: 1000,
+    additional_speed_tiers: [],
+    service_tiers: [],
+    default_service_tier: null,
+    availability_nux: null,
+    upgrade: null,
+    supports_reasoning_summaries: true,
+    default_reasoning_summary: 'none',
+    support_verbosity: true,
+    default_verbosity: 'low',
+    apply_patch_tool_type: 'freeform',
+    web_search_tool_type: 'text_and_image',
+    truncation_policy: { mode: 'tokens', limit: 10000 },
+    supports_parallel_tool_calls: true,
+    supports_image_detail_original: true,
+    context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
+    max_context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
+    effective_context_window_percent: 95,
+    experimental_supported_tools: [],
+    input_modalities: ['text', 'image'],
+    supports_search_tool: true,
+    use_responses_lite: false,
   };
 }
 

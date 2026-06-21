@@ -56,8 +56,12 @@ function runPowerShell(command, options = {}) {
   return result.stdout.trim();
 }
 
-function getWindowsTokenFile(serviceValue, namespace = SECURE_STORAGE_SERVICE) {
+function getTokenFile(serviceValue, namespace = SECURE_STORAGE_SERVICE) {
   const service = requireServiceConfig(serviceValue);
+  const overrideDir = process.env.WRAPPER_SCIONOS_TOKEN_DIR?.trim();
+  if (overrideDir) {
+    return path.join(overrideDir, namespace, service.secureStorageFileName);
+  }
   return path.join(os.homedir(), `.${namespace}`, service.secureStorageFileName);
 }
 
@@ -69,15 +73,44 @@ function hasNonEmptyFile(filePath) {
   }
 }
 
+function writePlainTokenFile(tokenFile, token) {
+  fs.mkdirSync(path.dirname(tokenFile), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(tokenFile, token, { encoding: 'utf8', mode: 0o600 });
+  try {
+    fs.chmodSync(tokenFile, 0o600);
+  } catch {
+    // Some filesystems ignore POSIX permissions; the write above is still the safest portable fallback.
+  }
+  if (!hasNonEmptyFile(tokenFile)) {
+    throw new Error('Token file was created but no content was written.');
+  }
+}
+
+function readPlainTokenFile(tokenFile) {
+  if (!hasNonEmptyFile(tokenFile)) {
+    return null;
+  }
+  const token = fs.readFileSync(tokenFile, 'utf8').trim();
+  return token || null;
+}
+
+function deletePlainTokenFile(tokenFile) {
+  if (!fs.existsSync(tokenFile)) {
+    return false;
+  }
+  fs.unlinkSync(tokenFile);
+  return true;
+}
+
 export function storeToken(token, serviceValue) {
   const service = requireServiceConfig(serviceValue);
-  const storage = getSecureStorageBackend();
+  const backend = currentTokenBackend();
+  const storage = backend.status();
   if (!storage.supported) {
     throw new Error(storage.reason || 'Secure storage is not available.');
   }
 
-  currentTokenBackend().store(token, service);
-  return storage;
+  return backend.store(token, service) ?? storage;
 }
 
 export function getStoredToken(serviceValue) {
@@ -113,7 +146,7 @@ function readMacOSToken(account, namespace) {
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
 
-function readLinuxToken(account, namespace) {
+function readLinuxSecretServiceToken(account, namespace) {
   const result = runCommand('secret-tool', ['lookup', 'service', namespace, 'account', account]);
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
@@ -137,7 +170,32 @@ export function getStoredTokenStatus(serviceValue) {
 }
 
 function currentTokenBackend() {
-  return TOKEN_BACKENDS[process.platform] ?? UNSUPPORTED_BACKEND;
+  return getTokenBackend(process.platform);
+}
+
+export function getTokenBackend(platform = process.platform) {
+  return TOKEN_BACKENDS[platform] ?? UNSUPPORTED_BACKEND;
+}
+
+function hasSecretTool() {
+  return commandExists('secret-tool');
+}
+
+function linuxSecretServiceStatus() {
+  return { supported: true, backend: 'Linux Secret Service' };
+}
+
+function linuxFileStatus(reason = '`secret-tool` not found; using user-only file storage') {
+  return { supported: true, backend: 'Linux file (0600)', reason };
+}
+
+export function createLinuxTokenBackend({ hasSecretToolCommand = hasSecretTool } = {}) {
+  return {
+    status: () => (hasSecretToolCommand() ? linuxSecretServiceStatus() : linuxFileStatus()),
+    store: (token, service) => storeLinuxToken(token, service, hasSecretToolCommand()),
+    get: (service) => getLinuxToken(service, hasSecretToolCommand()),
+    delete: (service) => deleteLinuxToken(service, hasSecretToolCommand()),
+  };
 }
 
 const TOKEN_BACKENDS = {
@@ -153,16 +211,7 @@ const TOKEN_BACKENDS = {
     get: getMacOSToken,
     delete: deleteMacOSToken,
   },
-  linux: {
-    status: () => (
-      commandExists('secret-tool')
-        ? { supported: true, backend: 'Linux Secret Service' }
-        : { supported: false, backend: 'Linux Secret Service', reason: '`secret-tool` not found' }
-    ),
-    store: storeLinuxToken,
-    get: getLinuxToken,
-    delete: deleteLinuxToken,
-  },
+  linux: createLinuxTokenBackend(),
 };
 
 const UNSUPPORTED_BACKEND = {
@@ -173,7 +222,7 @@ const UNSUPPORTED_BACKEND = {
 };
 
 function storeWindowsToken(token, service) {
-  const tokenFile = getWindowsTokenFile(service.value);
+  const tokenFile = getTokenFile(service.value);
   fs.mkdirSync(path.dirname(tokenFile), { recursive: true });
   const encrypted = runPowerShell(
     '$token = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($token)) { throw "Token input is empty" }; $secure = ConvertTo-SecureString $token -AsPlainText -Force; ConvertFrom-SecureString $secure',
@@ -186,12 +235,12 @@ function storeWindowsToken(token, service) {
 }
 
 function getWindowsToken(service) {
-  const token = readWindowsTokenFile(getWindowsTokenFile(service.value));
-  return token ?? readWindowsTokenFile(getWindowsTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
+  const token = readWindowsTokenFile(getTokenFile(service.value));
+  return token ?? readWindowsTokenFile(getTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
 }
 
 function deleteWindowsToken(service) {
-  const tokenFile = getWindowsTokenFile(service.value);
+  const tokenFile = getTokenFile(service.value);
   if (!fs.existsSync(tokenFile)) {
     return false;
   }
@@ -230,7 +279,7 @@ function deleteMacOSToken(service) {
   ]).status === 0;
 }
 
-function storeLinuxToken(token, service) {
+function storeLinuxSecretServiceToken(token, service) {
   const result = runCommand('secret-tool', [
     'store',
     `--label=${service.secureStorageLabel}`,
@@ -244,17 +293,46 @@ function storeLinuxToken(token, service) {
   }
 }
 
-function getLinuxToken(service) {
-  return readLinuxToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
-    ?? readLinuxToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
+function storeLinuxFileToken(token, service, reason = null) {
+  writePlainTokenFile(getTokenFile(service.value), token);
+  return linuxFileStatus(reason ?? '`secret-tool` not found; using user-only file storage');
 }
 
-function deleteLinuxToken(service) {
-  return runCommand('secret-tool', [
+function getLinuxFileToken(service) {
+  return readPlainTokenFile(getTokenFile(service.value))
+    ?? readPlainTokenFile(getTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
+}
+
+function storeLinuxToken(token, service, secretToolAvailable) {
+  if (secretToolAvailable) {
+    try {
+      storeLinuxSecretServiceToken(token, service);
+      return linuxSecretServiceStatus();
+    } catch (error) {
+      return storeLinuxFileToken(token, service, `Linux Secret Service failed; using user-only file storage: ${error.message}`);
+    }
+  }
+
+  return storeLinuxFileToken(token, service);
+}
+
+function getLinuxToken(service, secretToolAvailable) {
+  const secretServiceToken = secretToolAvailable
+    ? readLinuxSecretServiceToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
+      ?? readLinuxSecretServiceToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE)
+    : null;
+
+  return secretServiceToken ?? getLinuxFileToken(service);
+}
+
+function deleteLinuxToken(service, secretToolAvailable) {
+  const secretDeleted = secretToolAvailable && runCommand('secret-tool', [
     'clear',
     'service',
     SECURE_STORAGE_SERVICE,
     'account',
     service.secureStorageAccount,
   ]).status === 0;
+  const fileDeleted = deletePlainTokenFile(getTokenFile(service.value));
+  return Boolean(secretDeleted || fileDeleted);
 }

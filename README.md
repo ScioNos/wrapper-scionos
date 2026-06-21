@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `3.1.0`.
+Current version: `3.1.1`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -66,6 +66,8 @@ When installed globally, use `wrapper-scionos` or `scionos` instead of `node ind
 
 Tokens are service-scoped. New tokens are stored under `wrapper-scionos`; existing
 `claude-scionos` secure token files or keychain entries are also read as a migration fallback.
+On Linux, the wrapper uses Secret Service through `secret-tool` when available and falls back to a
+user-only `0600` token file when `secret-tool` is missing or unavailable.
 
 ## Claude Code
 
@@ -246,8 +248,8 @@ deepseek-v4-pro
 `codex launch` is non-destructive by default: it starts the official `codex` binary with runtime
 `-c` overrides for `model_providers.custom.base_url` and passes the selected RouterLab token through
 `OPENAI_API_KEY` to the child process. It does not rewrite `config.toml` and does not touch
-`auth.json`. When a local Codex `models_cache.json` is available, the wrapper writes a temporary
-model catalog under the system temp directory for the duration of the Codex process, then removes it.
+`auth.json`. The wrapper writes a temporary RouterLab model catalog under the system temp directory
+for the duration of the Codex process, then removes it.
 
 The persistent `codex apply` flow was removed because replacing the user's Codex `config.toml`
 can overwrite unrelated Codex settings such as MCP, hooks, features, and sandbox preferences.

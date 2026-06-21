@@ -4,19 +4,28 @@ import { deleteStoredToken, getStoredTokenStatus, storeToken } from '../../secur
 import { requireServiceConfig } from '../../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveToken } from '../../apps/claude-code.js';
-import { AUTH_MENU_ITEMS, askMenu, askText } from '../menu.js';
+import { AUTH_MENU_ITEMS, askMenu } from '../menu.js';
 import { print } from './output.js';
 
+export function getAuthMenuContext(options) {
+  const service = requireServiceConfig(options.service);
+  return {
+    service,
+    title: `Auth (${service.label})`,
+    options: { ...options, service: service.value },
+  };
+}
+
 export async function handleAuthMenu(options) {
+  const context = getAuthMenuContext(options);
+
   while (true) {
-    const action = await askMenu('Auth', AUTH_MENU_ITEMS);
+    const action = await askMenu(context.title, AUTH_MENU_ITEMS);
     if (action === 'back') {
       return;
     }
 
-    const authOptions = { ...options };
-    authOptions.service = await askText('RouterLab service', options.service);
-    await handleAuth(action, authOptions);
+    await handleAuth(action, context.options);
   }
 }
 

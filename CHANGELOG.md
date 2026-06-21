@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.1.1 - 2026-06-21
+
+### Fixed
+
+- Made Codex CLI launches always generate a temporary RouterLab model catalog, even when the local Codex `models_cache.json` file does not exist.
+- Changed the interactive Auth menu to use the service selected by `--service` instead of prompting for the service before every action.
+- Added a Linux token-file fallback when Secret Service/`secret-tool` is unavailable.
+
 ## 3.1.0 - 2026-06-17
 
 ### Changed

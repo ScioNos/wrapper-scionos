@@ -245,6 +245,11 @@ test('Codex template preview includes fallback model_catalog_json without local 
   assert.equal(catalog.models[5].display_name, 'Kimi K2.7 Code');
   assert.equal(catalog.models[5].visibility, 'list');
   assert.equal(catalog.models[5].context_window, 272000);
+  assert.equal(typeof catalog.models[5].base_instructions, 'string');
+  assert.equal(catalog.models[5].base_instructions.length > 0, true);
+  assert.equal(typeof catalog.models[5].model_messages.instructions_template, 'string');
+  assert.deepEqual(catalog.models[5].model_messages.instructions_variables, {});
+  assert.equal(typeof catalog.models[5].comp_hash, 'string');
   assert.equal(catalog.models[5].supported_reasoning_levels.some((entry) => entry.effort === 'high'), true);
 
   const preview = buildCodexConfigPreview({
@@ -262,6 +267,8 @@ test('Codex template preview includes fallback model_catalog_json without local 
   assert.deepEqual(runtimeCatalog.models, CODEX_ROUTERLAB_MODELS);
   const written = JSON.parse(fs.readFileSync(runtimeCatalog.path, 'utf8'));
   assert.equal(written.models[5].slug, 'kimi-k2.7-code');
+  assert.equal(typeof written.models[5].base_instructions, 'string');
+  assert.equal(typeof written.models[5].model_messages.instructions_template, 'string');
   cleanupCodexRuntimeModelCatalog(runtimeCatalog);
   assert.equal(fs.existsSync(runtimeCatalog.path), false);
 });

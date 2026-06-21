@@ -25,11 +25,17 @@ export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json'
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
 export const CODEX_FALLBACK_CONTEXT_WINDOW = 272000;
+const CODEX_FALLBACK_COMP_HASH = 'wrapper-scionos-fallback-v1';
+const CODEX_FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
 const CODEX_FALLBACK_REASONING_LEVELS = [
   { effort: 'low', description: 'Fast responses with lighter reasoning' },
   { effort: 'medium', description: 'Balances speed and reasoning depth for everyday tasks' },
   { effort: 'high', description: 'Greater reasoning depth for complex problems' },
 ];
+const CODEX_FALLBACK_MODEL_MESSAGES = {
+  instructions_template: CODEX_FALLBACK_BASE_INSTRUCTIONS,
+  instructions_variables: {},
+};
 
 export function getCodexPaths(env = process.env) {
   const configDir = env.CODEX_HOME || path.join(os.homedir(), '.codex');
@@ -282,6 +288,9 @@ function buildCodexModelCatalogEntry(template, model, index) {
   entry.experimental_supported_tools ??= [];
   entry.effective_context_window_percent ??= 95;
   entry.use_responses_lite ??= false;
+  entry.base_instructions ??= CODEX_FALLBACK_BASE_INSTRUCTIONS;
+  entry.model_messages ??= structuredClone(CODEX_FALLBACK_MODEL_MESSAGES);
+  entry.comp_hash ??= CODEX_FALLBACK_COMP_HASH;
   return entry;
 }
 
@@ -301,6 +310,8 @@ function buildFallbackCodexModelTemplate() {
     default_service_tier: null,
     availability_nux: null,
     upgrade: null,
+    base_instructions: CODEX_FALLBACK_BASE_INSTRUCTIONS,
+    model_messages: structuredClone(CODEX_FALLBACK_MODEL_MESSAGES),
     supports_reasoning_summaries: true,
     default_reasoning_summary: 'none',
     support_verbosity: true,
@@ -312,6 +323,7 @@ function buildFallbackCodexModelTemplate() {
     supports_image_detail_original: true,
     context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
     max_context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
+    comp_hash: CODEX_FALLBACK_COMP_HASH,
     effective_context_window_percent: 95,
     experimental_supported_tools: [],
     input_modalities: ['text', 'image'],

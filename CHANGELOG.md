@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.1.2 - 2026-06-21
+
+### Fixed
+
+- Added required Codex model catalog fallback fields so fresh Debian installs without `models_cache.json` can parse the RouterLab catalog.
+
 ## 3.1.1 - 2026-06-21
 
 ### Fixed

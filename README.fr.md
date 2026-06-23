@@ -2,7 +2,7 @@
 
 Wrapper CLI ScioNos extensible pour les assistants de développement connectés à RouterLab.
 
-Version actuelle : `3.1.2`.
+Version actuelle : `3.2.0`.
 
 Cette version cible Claude Code, Claude Desktop et Codex CLI, sans mélanger toutes les intégrations
 dans un seul gros module.
@@ -142,8 +142,8 @@ node index.js claude-desktop apply-proxy --service routerlab --strategy claude-g
 node index.js claude-desktop proxy --service routerlab
 ```
 
-Le terminal du proxy doit rester ouvert pendant l’utilisation de Claude Desktop. Ce mode utilise le
-même transport proxy long-running que Claude Code et le mode de repli `codex launch --transport proxy`.
+Le terminal du proxy doit rester ouvert pendant l’utilisation de Claude Desktop. Ce mode utilise la
+même infrastructure proxy long-running que Claude Code et Codex utilisent en interne.
 
 Le proxy local expose des ids compatibles Claude Desktop, puis redirige vers les vrais modèles
 RouterLab. Le catalogue Desktop RouterLab par défaut est ordonné ainsi :
@@ -174,8 +174,8 @@ Le support 1M est appliqué par modèle :
 
 ## Codex CLI
 
-Lance le CLI officiel Codex directement vers RouterLab pour la session courante sans réécrire
-`~/.codex/config.toml` et sans proxy local :
+Lance le CLI officiel Codex via le proxy local géré par le wrapper pour la session courante sans réécrire
+`~/.codex/config.toml` :
 
 ```powershell
 node index.js codex launch --service routerlab
@@ -186,11 +186,7 @@ node index.js codex launch --service llm
 scriptés, passe `--model <valeur>` pour choisir le modèle initial ; sinon le modèle par défaut du
 service est utilisé.
 
-Si un problème de streaming long réapparaît, le transport proxy de la v3 reste disponible :
-
-```powershell
-node index.js codex launch --service routerlab --transport proxy
-```
+Pour le debug uniquement, `--direct` contourne le proxy local et pointe Codex directement vers RouterLab.
 
 Le wrapper inclut aussi un générateur de template de configuration Codex CLI :
 
@@ -231,7 +227,7 @@ deepseek-v4-pro
 
 `codex launch` est non destructif par défaut : il démarre le binaire officiel `codex` avec des
 overrides runtime `-c` pour `model_providers.custom.base_url` et transmet le token RouterLab choisi
-via `OPENAI_API_KEY` au process enfant. Il ne réécrit pas `config.toml` et ne touche pas à
+via un `OPENAI_API_KEY` local au process enfant ; le proxy le remplace par le token RouterLab choisi en amont. Il ne réécrit pas `config.toml` et ne touche pas à
 `auth.json`. Le wrapper écrit un catalogue RouterLab temporaire dans le dossier temp système pendant
 l'exécution de Codex, puis le supprime.
 

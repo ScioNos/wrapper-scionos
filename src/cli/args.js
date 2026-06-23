@@ -16,7 +16,7 @@ export function parseOptions(argv) {
     token: null,
     host: '127.0.0.1',
     port: 15721,
-    transport: 'direct',
+    transport: 'proxy',
     passthrough: [],
   };
 

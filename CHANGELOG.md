@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.2.0 - 2026-06-23
+
+### Added
+
+- Added a Codex Responses-to-Chat bridge for RouterLab LLM models that do not reliably support the Responses API: `glm-5.2`, `qwen3.7-max`, `MiniMax-M3`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, and `glm-5.1`.
+- Added streaming Responses event conversion, usage propagation, error normalization, and Codex-compatible reasoning/thinking option mapping for bridged Chat Completions upstreams.
+
+### Changed
+
+- Changed `codex launch` to use the wrapper-managed local proxy by default, matching the Claude Code launch flow.
+- Kept `--direct` and `--transport direct|proxy` as compatibility/debug paths while removing `--transport proxy` from normal user guidance.
+- Package version promoted from `3.1.2` to `3.2.0`.
+
 ## 3.1.2 - 2026-06-21
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `3.1.2`.
+Current version: `3.2.0`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -154,7 +154,7 @@ node index.js claude-desktop proxy --service routerlab
 ```
 
 The proxy terminal must stay open while Claude Desktop uses mapped models. This mode uses the same
-long-running proxy transport as Claude Code and the `codex launch --transport proxy` fallback.
+long-running proxy infrastructure that Claude Code and Codex use internally.
 
 With `claude-desktop apply` and no strategy, Claude Desktop reads the model catalog from
 RouterLab directly. Some non-Claude-family model ids can be hidden by Claude Desktop even when
@@ -191,8 +191,8 @@ get 1M variants, while GPT 5.4 and GPT 5.5 do.
 
 ## Codex CLI
 
-Launch the official Codex CLI directly to RouterLab for the current session without rewriting
-`~/.codex/config.toml` and without a local proxy:
+Launch the official Codex CLI through the wrapper-managed local proxy for the current session without rewriting
+`~/.codex/config.toml`:
 
 ```powershell
 node index.js codex launch --service routerlab
@@ -202,11 +202,7 @@ node index.js codex launch --service llm
 `codex launch` starts Codex with the RouterLab model catalog for the selected service. For scripted
 launches, pass `--model <value>` to choose the initial model; otherwise the service default is used.
 
-If a long streaming issue reappears, the v3 proxy transport remains available:
-
-```powershell
-node index.js codex launch --service routerlab --transport proxy
-```
+For debugging only, `--direct` bypasses the local proxy and points Codex straight at RouterLab.
 
 The wrapper also includes a Codex CLI config template generator:
 
@@ -247,7 +243,7 @@ deepseek-v4-pro
 
 `codex launch` is non-destructive by default: it starts the official `codex` binary with runtime
 `-c` overrides for `model_providers.custom.base_url` and passes the selected RouterLab token through
-`OPENAI_API_KEY` to the child process. It does not rewrite `config.toml` and does not touch
+a local `OPENAI_API_KEY` to the child process; the proxy swaps it for the selected RouterLab token upstream. It does not rewrite `config.toml` and does not touch
 `auth.json`. The wrapper writes a temporary RouterLab model catalog under the system temp directory
 for the duration of the Codex process, then removes it.
 

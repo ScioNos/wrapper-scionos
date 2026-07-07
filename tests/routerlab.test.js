@@ -1,13 +1,67 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chooseSubagentModel } from '../src/apps/claude-code.js';
-import { requireServiceConfig } from '../src/routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken } from '../src/routerlab/services.js';
 import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyDisplayName, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 
 test('RouterLab services expose the expected endpoints', () => {
   assert.equal(requireServiceConfig('routerlab').baseUrl, 'https://api.routerlab.ch');
   assert.equal(requireServiceConfig('llm').baseUrl, 'https://llm-api.routerlab.ch');
+});
+
+test('service environment tokens prefer RouterLab names with Anthropic legacy fallback', () => {
+  assert.deepEqual(resolveServiceEnvToken('routerlab', {
+    ROUTERLAB_API_KEY: 'routerlab-token',
+    ANTHROPIC_AUTH_TOKEN: 'legacy-token',
+  }), {
+    token: 'routerlab-token',
+    source: 'env',
+    envKey: 'ROUTERLAB_API_KEY',
+  });
+  assert.deepEqual(resolveServiceEnvToken('llm', {
+    ROUTERLAB_LLM_API_KEY: 'llm-token',
+    ROUTERLAB_API_KEY: 'routerlab-token',
+    ANTHROPIC_AUTH_TOKEN: 'legacy-token',
+  }), {
+    token: 'llm-token',
+    source: 'env',
+    envKey: 'ROUTERLAB_LLM_API_KEY',
+  });
+  assert.deepEqual(resolveServiceEnvToken('routerlab', {
+    ANTHROPIC_AUTH_TOKEN: 'legacy-token',
+  }), {
+    token: 'legacy-token',
+    source: 'legacy-env',
+    envKey: 'ANTHROPIC_AUTH_TOKEN',
+  });
+});
+
+test('service base URL overrides prefer RouterLab names with Anthropic legacy fallback', () => {
+  assert.deepEqual(resolveServiceBaseUrlWithSource('routerlab', {
+    ROUTERLAB_BASE_URL: 'https://custom-routerlab.example',
+    ANTHROPIC_BASE_URL: 'https://legacy.example',
+  }), {
+    baseUrl: 'https://custom-routerlab.example',
+    source: 'env',
+    envKey: 'ROUTERLAB_BASE_URL',
+  });
+  assert.deepEqual(resolveServiceBaseUrlWithSource('llm', {
+    ROUTERLAB_LLM_BASE_URL: 'https://custom-llm.example',
+    ROUTERLAB_BASE_URL: 'https://custom-routerlab.example',
+    ANTHROPIC_BASE_URL: 'https://legacy.example',
+  }), {
+    baseUrl: 'https://custom-llm.example',
+    source: 'env',
+    envKey: 'ROUTERLAB_LLM_BASE_URL',
+  });
+  assert.deepEqual(resolveServiceBaseUrlWithSource('llm', {
+    ANTHROPIC_BASE_URL: 'https://legacy.example',
+  }), {
+    baseUrl: 'https://legacy.example',
+    source: 'legacy-env',
+    envKey: 'ANTHROPIC_BASE_URL',
+  });
 });
 
 test('Claude Code strategy mapping is service-aware', () => {

@@ -1,4 +1,4 @@
-import { requireServiceConfig } from '../routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrl } from '../routerlab/services.js';
 import {
   createLongRunningLlmProxy,
   forwardLongRunningLlmRequest,
@@ -15,7 +15,8 @@ export function createClaudeDesktopProxy({
   routerlabToken,
   gatewayToken = 'scionos-local',
 }) {
-  const service = requireServiceConfig(serviceValue);
+  const serviceConfig = requireServiceConfig(serviceValue);
+  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
   const routes = strategyValues
     ? modelRoutesForDesktopMapping(service.value, strategyValues)
     : modelRoutesForProxyStrategy(strategyValue, service.value);

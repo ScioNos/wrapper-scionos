@@ -2,7 +2,7 @@
 
 Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants.
 
-Current version: `3.2.0`.
+Current version: `3.2.1`.
 
 This release targets Claude Code, Claude Desktop, and Codex CLI without coupling every client
 integration into one large module.
@@ -18,15 +18,20 @@ _[Lire en français](./README.fr.md)_
 
 ## Quick Start
 
-From the project folder:
+Without a global install:
 
 ```powershell
-cd D:\Serveurs\Projet_ScioNos\Wrapper-ScioNos
-npm install
-node index.js
+npx wrapper-scionos@latest
 ```
 
-`node index.js` opens an interactive menu with:
+Or with a global install:
+
+```powershell
+npm install -g wrapper-scionos
+wrapper-scionos
+```
+
+`wrapper-scionos` opens an interactive menu with:
 
 - Claude Code
 - Claude Desktop
@@ -37,27 +42,28 @@ node index.js
 ## Commands
 
 ```powershell
-node index.js
-node index.js --service llm
-node index.js claude-code --strategy aws -- -p "Summarize this repo"
-node index.js auth login
-node index.js auth status --service llm
-node index.js auth test --service llm
-node index.js doctor
-node index.js strategies --service routerlab
-node index.js claude-desktop status
-node index.js claude-desktop apply --service llm --strategy claude --dry-run
-node index.js claude-desktop apply --service llm --strategy claude --yes
-node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
-node index.js claude-desktop proxy --service routerlab
-node index.js claude-desktop proxy --service llm
-node index.js codex launch --service routerlab
-node index.js codex launch --service llm
-node index.js codex template --service routerlab
-node index.js codex restore --yes
+wrapper-scionos
+wrapper-scionos --service llm
+wrapper-scionos claude-code --strategy aws -- -p "Summarize this repo"
+wrapper-scionos auth login
+wrapper-scionos auth status --service llm
+wrapper-scionos auth test --service llm
+wrapper-scionos doctor
+wrapper-scionos strategies --service routerlab
+wrapper-scionos claude-desktop status
+wrapper-scionos claude-desktop apply --service llm --strategy claude --dry-run
+wrapper-scionos claude-desktop apply --service llm --strategy claude --yes
+wrapper-scionos claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
+wrapper-scionos claude-desktop proxy --service routerlab
+wrapper-scionos claude-desktop proxy --service llm
+wrapper-scionos codex launch --service routerlab
+wrapper-scionos codex launch --service llm
+wrapper-scionos codex template --service routerlab
+wrapper-scionos codex restore --yes
 ```
 
-When installed globally, use `wrapper-scionos` or `scionos` instead of `node index.js`.
+If you do not want to install the package globally, replace `wrapper-scionos` with
+`npx wrapper-scionos@latest` in the examples.
 
 ## RouterLab services
 
@@ -69,27 +75,43 @@ Tokens are service-scoped. New tokens are stored under `wrapper-scionos`; existi
 On Linux, the wrapper uses Secret Service through `secret-tool` when available and falls back to a
 user-only `0600` token file when `secret-tool` is missing or unavailable.
 
+Supported user-facing environment variables:
+
+```text
+ROUTERLAB_API_KEY              Token for --service routerlab
+ROUTERLAB_LLM_API_KEY          Token for --service llm
+ROUTERLAB_BASE_URL             API URL for --service routerlab
+ROUTERLAB_LLM_BASE_URL         API URL for --service llm
+WRAPPER_SCIONOS_ROUTERLAB_TOKEN      Explicit wrapper token alias
+WRAPPER_SCIONOS_LLM_TOKEN            Explicit wrapper token alias
+WRAPPER_SCIONOS_ROUTERLAB_BASE_URL   Explicit wrapper URL alias
+WRAPPER_SCIONOS_LLM_BASE_URL         Explicit wrapper URL alias
+```
+
+`ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` are still read as legacy fallbacks so existing
+installations keep working, but the RouterLab names are preferred.
+
 ## Claude Code
 
 Launch through the wrapper's local resilient proxy to RouterLab:
 
 ```powershell
-node index.js claude-code --service routerlab --strategy aws
+wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
 With Claude Code arguments:
 
 ```powershell
-node index.js claude-code --strategy aws -- -p "Summarize this project"
+wrapper-scionos claude-code --strategy aws -- -p "Summarize this project"
 ```
 
 RouterLab LLM-specific strategies include:
 
 ```powershell
-node index.js claude-code --service llm --strategy glm-5.2
-node index.js claude-code --service llm --strategy claude-qwen3.7-max
-node index.js claude-code --service llm --strategy claude-MiniMax-M3
-node index.js claude-code --service llm --strategy deepseek-v4
+wrapper-scionos claude-code --service llm --strategy glm-5.2
+wrapper-scionos claude-code --service llm --strategy claude-qwen3.7-max
+wrapper-scionos claude-code --service llm --strategy claude-MiniMax-M3
+wrapper-scionos claude-code --service llm --strategy deepseek-v4
 ```
 
 In the `--service llm` menu, the order is Claude, OpenAI GPT, `glm-5.2`, `qwen3.7-max`,
@@ -109,9 +131,9 @@ The wrapper starts a local long-running proxy for Claude Code launches and confi
 - `ANTHROPIC_BASE_URL`
 - `ANTHROPIC_AUTH_TOKEN`
 
-`ANTHROPIC_BASE_URL` points to the local proxy, while the proxy forwards to the selected RouterLab
-service with the stored RouterLab token. This avoids body timeout crashes during long thinking,
-tool, and subagent pauses.
+These names are still required inside the Claude Code child process. As a wrapper user, prefer the
+RouterLab variables above or `wrapper-scionos auth login`; the wrapper translates them to the
+Anthropic variables expected by Claude Code and forwards to RouterLab through the local proxy.
 
 Claude Code launches also receive temporary child-process environment:
 
@@ -137,20 +159,20 @@ The wrapper supports:
 Restore official Claude Desktop mode:
 
 ```powershell
-node index.js claude-desktop restore-official --yes
+wrapper-scionos claude-desktop restore-official --yes
 ```
 
 Direct profile configuration:
 
 ```powershell
-node index.js claude-desktop apply --service routerlab --yes
+wrapper-scionos claude-desktop apply --service routerlab --yes
 ```
 
 For strategies that Claude Desktop hides from the model menu, use local proxy mode:
 
 ```powershell
-node index.js claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
-node index.js claude-desktop proxy --service routerlab
+wrapper-scionos claude-desktop apply-proxy --service routerlab --strategy claude-gpt --yes
+wrapper-scionos claude-desktop proxy --service routerlab
 ```
 
 The proxy terminal must stay open while Claude Desktop uses mapped models. This mode uses the same
@@ -195,8 +217,8 @@ Launch the official Codex CLI through the wrapper-managed local proxy for the cu
 `~/.codex/config.toml`:
 
 ```powershell
-node index.js codex launch --service routerlab
-node index.js codex launch --service llm
+wrapper-scionos codex launch --service routerlab
+wrapper-scionos codex launch --service llm
 ```
 
 `codex launch` starts Codex with the RouterLab model catalog for the selected service. For scripted
@@ -207,14 +229,14 @@ For debugging only, `--direct` bypasses the local proxy and points Codex straigh
 The wrapper also includes a Codex CLI config template generator:
 
 ```powershell
-node index.js codex template --service routerlab
+wrapper-scionos codex template --service routerlab
 ```
 
 If you previously used an older wrapper version to persistently rewrite Codex config, you can
 restore the saved backup:
 
 ```powershell
-node index.js codex restore --yes
+wrapper-scionos codex restore --yes
 ```
 
 RouterLab Codex CLI models are offered in this order:

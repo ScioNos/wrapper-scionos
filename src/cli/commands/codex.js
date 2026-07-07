@@ -1,5 +1,5 @@
-import { requireServiceConfig } from '../../routerlab/services.js';
-import { resolveToken } from '../../apps/claude-code.js';
+import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } from '../../routerlab/services.js';
+import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import { DEFAULT_LLM_PROXY_GATEWAY_TOKEN, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platform/llm-proxy.js';
 import {
   buildCodexAuth,
@@ -17,9 +17,17 @@ import {
 import { print } from './output.js';
 
 export async function launchCodexForService(options) {
-  const service = requireServiceConfig(options.service);
+  const serviceConfig = requireServiceConfig(options.service);
+  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
   const model = options.model ?? defaultCodexModelForService(service.value);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const envToken = resolveServiceEnvToken(service.value, process.env);
+  const resolvedToken = options.token
+    ? { token: options.token, source: 'option', envTokenPresent: Boolean(envToken.token), envTokenKey: envToken.envKey, storedTokenPresent: false }
+    : await resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt, preferStored: true });
+  if (!options.noPrompt && resolvedToken.source === 'secure-storage' && resolvedToken.envTokenPresent) {
+    console.log(`WARN Using stored ${service.label} token for Codex; ${resolvedToken.envTokenKey} is set but ignored. Pass --token to override.`);
+  }
+  const token = resolvedToken.token;
   if (options.transport === 'direct') {
     await launchCodexDirect({ service, model, token, options });
     return;
@@ -73,7 +81,8 @@ export async function handleCodex(action, options) {
     throw new Error(`Unknown codex action "${action}".`);
   }
 
-  const service = requireServiceConfig(options.service);
+  const serviceConfig = requireServiceConfig(options.service);
+  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
   const model = options.model ?? defaultCodexModelForService(service.value);
   if (action === 'status') {
     print(readCodexStatus(), options);

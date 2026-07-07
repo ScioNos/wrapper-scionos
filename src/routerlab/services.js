@@ -1,5 +1,7 @@
 export const DEFAULT_SERVICE = 'routerlab';
 export const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
+export const LEGACY_TOKEN_ENV_KEY = 'ANTHROPIC_AUTH_TOKEN';
+export const LEGACY_BASE_URL_ENV_KEY = 'ANTHROPIC_BASE_URL';
 
 export const SERVICES = {
   routerlab: {
@@ -11,6 +13,8 @@ export const SERVICES = {
     secureStorageLabel: 'RouterLab Token',
     secureStorageFileName: 'routerlab-token.secure.txt',
     legacySecureStorageFileName: 'routerlab-token.secure.txt',
+    tokenEnvKeys: ['ROUTERLAB_API_KEY', 'WRAPPER_SCIONOS_ROUTERLAB_TOKEN'],
+    baseUrlEnvKeys: ['ROUTERLAB_BASE_URL', 'WRAPPER_SCIONOS_ROUTERLAB_BASE_URL'],
     strategyValues: [
       'default',
       'aws',
@@ -29,6 +33,8 @@ export const SERVICES = {
     secureStorageLabel: 'RouterLab LLM Token',
     secureStorageFileName: 'routerlab-llm-token.secure.txt',
     legacySecureStorageFileName: 'routerlab-llm-token.secure.txt',
+    tokenEnvKeys: ['ROUTERLAB_LLM_API_KEY', 'WRAPPER_SCIONOS_LLM_TOKEN'],
+    baseUrlEnvKeys: ['ROUTERLAB_LLM_BASE_URL', 'WRAPPER_SCIONOS_LLM_BASE_URL'],
     strategyValues: [
       'claude',
       'claude-gpt',
@@ -57,5 +63,45 @@ export function requireServiceConfig(serviceValue = DEFAULT_SERVICE) {
 }
 
 export function resolveServiceBaseUrl(serviceValue = DEFAULT_SERVICE, env = {}) {
-  return env.ANTHROPIC_BASE_URL?.trim() || requireServiceConfig(serviceValue).baseUrl;
+  return resolveServiceBaseUrlWithSource(serviceValue, env).baseUrl;
+}
+
+export function resolveServiceBaseUrlWithSource(serviceValue = DEFAULT_SERVICE, env = {}) {
+  const service = requireServiceConfig(serviceValue);
+  const serviceOverride = firstEnvValue(env, service.baseUrlEnvKeys ?? []);
+  if (serviceOverride) {
+    return { baseUrl: serviceOverride.value, source: 'env', envKey: serviceOverride.key };
+  }
+
+  const legacyOverride = firstEnvValue(env, [LEGACY_BASE_URL_ENV_KEY]);
+  if (legacyOverride) {
+    return { baseUrl: legacyOverride.value, source: 'legacy-env', envKey: legacyOverride.key };
+  }
+
+  return { baseUrl: service.baseUrl, source: 'default', envKey: null };
+}
+
+export function resolveServiceEnvToken(serviceValue = DEFAULT_SERVICE, env = {}) {
+  const service = requireServiceConfig(serviceValue);
+  const serviceToken = firstEnvValue(env, service.tokenEnvKeys ?? []);
+  if (serviceToken) {
+    return { token: serviceToken.value, source: 'env', envKey: serviceToken.key };
+  }
+
+  const legacyToken = firstEnvValue(env, [LEGACY_TOKEN_ENV_KEY]);
+  if (legacyToken) {
+    return { token: legacyToken.value, source: 'legacy-env', envKey: legacyToken.key };
+  }
+
+  return { token: null, source: null, envKey: null };
+}
+
+function firstEnvValue(env, keys) {
+  for (const key of keys) {
+    const value = env[key]?.trim();
+    if (value) {
+      return { key, value };
+    }
+  }
+  return null;
 }

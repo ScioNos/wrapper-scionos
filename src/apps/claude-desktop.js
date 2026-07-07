@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { requireServiceConfig } from '../routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrl } from '../routerlab/services.js';
 import { findStrategy } from '../routerlab/strategies.js';
 import {
   DESKTOP_MAPPING_STRATEGIES,
@@ -195,7 +195,8 @@ export function readClaudeDesktopStatus() {
 }
 
 export function applyDirectClaudeDesktop({ serviceValue, strategyValue = 'default', token, dryRun = true }) {
-  const service = requireServiceConfig(serviceValue);
+  const serviceConfig = requireServiceConfig(serviceValue);
+  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
   const paths = getClaudeDesktopPaths();
   const modelSpecs = strategyValue === 'default' ? [] : modelSpecsForDirectStrategy(strategyValue, service.value);
   const profile = buildGatewayProfile({

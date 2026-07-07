@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.2.1 - 2026-07-07
+
+### Added
+
+- Added RouterLab-specific environment variables for tokens and base URLs: `ROUTERLAB_API_KEY`, `ROUTERLAB_LLM_API_KEY`, `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, plus explicit `WRAPPER_SCIONOS_*` aliases.
+
+### Changed
+
+- Kept `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` as legacy fallbacks while preferring RouterLab-specific environment variables.
+- Changed Codex token resolution to prefer the wrapper-stored service token over legacy environment tokens, avoiding stale `ANTHROPIC_AUTH_TOKEN` values during proxied Codex launches.
+- Improved Auth and Doctor diagnostics to show token source and environment key information.
+
 ## 3.2.0 - 2026-06-23
 
 ### Added

@@ -152,12 +152,12 @@ export function chatCompletionToResponses(chatResponse, context = {}) {
   };
 }
 
-export function chatErrorToResponsesError(status, body) {
+export function chatErrorToResponsesError(status, body, context = {}) {
   const value = typeof body === 'string' ? parseJsonOrText(body) : body;
   const error = extractError(value);
   return {
     error: {
-      message: error.message || `Upstream chat request failed with HTTP ${status}`,
+      message: buildUpstreamErrorMessage(status, error.message, context),
       type: error.type || 'upstream_error',
       code: error.code ?? null,
       param: error.param ?? null,
@@ -619,6 +619,37 @@ function parseJsonOrText(text) {
   } catch {
     return truncateRawError(text);
   }
+}
+
+function buildUpstreamErrorMessage(status, upstreamMessage, context = {}) {
+  const requestLabel = context.requestLabel ?? 'Upstream chat request';
+  const parts = [`${requestLabel} failed with HTTP ${status}.`];
+  if (context.serviceValue) {
+    parts.push(`Service: ${context.serviceValue}.`);
+  }
+  if (context.model) {
+    parts.push(`Model: ${context.model}.`);
+  }
+  if (context.upstreamUrl) {
+    parts.push(`Upstream URL: ${context.upstreamUrl}.`);
+  }
+  if (upstreamMessage) {
+    parts.push(`Upstream message: ${String(upstreamMessage)}`);
+  }
+  if (status === 401 || status === 403) {
+    parts.push(authFailureHint(context.serviceValue));
+  }
+  return parts.join(' ');
+}
+
+function authFailureHint(serviceValue) {
+  const serviceFlag = serviceValue ? `--service ${serviceValue}` : '--service <routerlab|llm>';
+  return [
+    'This is an authorization or model-access denial from the upstream API, not a local proxy permission error.',
+    'For Codex, a stored secure-storage token takes precedence over environment variables.',
+    `Check the token with \`wrapper-scionos auth status ${serviceFlag}\` and \`wrapper-scionos auth test ${serviceFlag}\`,`,
+    `replace it with \`wrapper-scionos auth login ${serviceFlag}\`, or pass \`--token\` to test a known-good token.`,
+  ].join(' ');
 }
 
 function truncateRawError(text) {

@@ -64,6 +64,9 @@ export function createLongRunningLlmProxy({
         routerlabToken,
         body: bodyText,
         upstreamAuth,
+        errorContext: codexBridgeServiceValue
+          ? buildCodexResponsesErrorContext(req, bodyText, codexBridgeServiceValue)
+          : null,
       });
     } catch (error) {
       if (!res.headersSent) {
@@ -118,8 +121,10 @@ export async function forwardLongRunningLlmRequest(req, res, {
   routerlabToken,
   body,
   upstreamAuth = 'both',
+  errorContext = null,
 }) {
-  const upstream = await requestLongRunningHttp(buildUpstreamUrl(req, targetBaseUrl), {
+  const upstreamUrl = buildUpstreamUrl(req, targetBaseUrl);
+  const upstream = await requestLongRunningHttp(upstreamUrl, {
     method: req.method,
     headers: forwardHeaders(req.headers, {
       routerlabToken,
@@ -127,6 +132,16 @@ export async function forwardLongRunningLlmRequest(req, res, {
     }),
     body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
   });
+
+  const status = upstream.statusCode ?? 502;
+  if (errorContext && (status < 200 || status >= 300)) {
+    const errorBody = await readStreamText(upstream);
+    writeJson(res, chatErrorToResponsesError(status, errorBody, {
+      ...errorContext,
+      upstreamUrl: upstreamUrl.href,
+    }), status);
+    return;
+  }
 
   await writeLongRunningHttpResponse(res, upstream);
 }
@@ -153,7 +168,8 @@ async function maybeHandleCodexResponsesBridge(req, res, {
   }
 
   const chatBody = responsesToChatCompletions(body);
-  const upstream = await requestLongRunningHttp(buildChatCompletionsUrl(req, targetBaseUrl), {
+  const upstreamUrl = buildChatCompletionsUrl(req, targetBaseUrl);
+  const upstream = await requestLongRunningHttp(upstreamUrl, {
     method: req.method,
     headers: forwardHeaders(req.headers, {
       routerlabToken,
@@ -165,7 +181,12 @@ async function maybeHandleCodexResponsesBridge(req, res, {
   const status = upstream.statusCode ?? 502;
   if (status < 200 || status >= 300) {
     const errorBody = await readStreamText(upstream);
-    writeJson(res, chatErrorToResponsesError(status, errorBody), status);
+    writeJson(res, chatErrorToResponsesError(status, errorBody, {
+      requestLabel: 'Codex Responses bridge request',
+      serviceValue,
+      model: body.model,
+      upstreamUrl: upstreamUrl.href,
+    }), status);
     return true;
   }
 
@@ -196,6 +217,27 @@ async function maybeHandleCodexResponsesBridge(req, res, {
   writeJson(res, chatCompletionToResponses(chatResponse, { model: body.model }), status);
   return true;
 }
+
+function buildCodexResponsesErrorContext(req, bodyText, serviceValue) {
+  if (!isCodexResponsesEndpoint(req.url)) {
+    return null;
+  }
+  return {
+    requestLabel: 'Codex Responses request',
+    serviceValue,
+    model: modelFromRequestBody(bodyText),
+  };
+}
+
+function modelFromRequestBody(bodyText) {
+  try {
+    const body = bodyText ? JSON.parse(bodyText) : {};
+    return typeof body?.model === 'string' ? body.model : null;
+  } catch {
+    return null;
+  }
+}
+
 export function configureLongRunningHttpServer(server) {
   server.requestTimeout = 0;
   server.timeout = 0;

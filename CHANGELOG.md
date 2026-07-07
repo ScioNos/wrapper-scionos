@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 3.2.2 - 2026-07-07
+
+### Fixed
+
+- Improved Codex upstream 401/403 diagnostics for RouterLab Responses requests, including service, model, upstream URL, and token-source guidance.
+- Enriched passthrough GPT `/v1/responses` errors as well as bridged Chat Completions errors, so RouterLab `https://api.routerlab.ch` authorization failures are no longer reported as opaque local proxy failures.
+
 ## 3.2.1 - 2026-07-07
 
 ### Added

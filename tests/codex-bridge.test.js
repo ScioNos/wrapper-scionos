@@ -56,6 +56,23 @@ test('Chat errors normalize to Responses error envelope and truncate raw text', 
   assert.equal(error.error.message.includes('(truncated)'), true);
 });
 
+test('Chat errors include Codex context and auth guidance for upstream 403', () => {
+  const error = chatErrorToResponsesError(403, { error: { message: 'model access denied', type: 'forbidden' } }, {
+    requestLabel: 'Codex Responses request',
+    serviceValue: 'llm',
+    model: 'gpt-5.5',
+    upstreamUrl: 'https://llm-api.routerlab.ch/v1/responses',
+  });
+
+  assert.equal(error.error.type, 'forbidden');
+  assert.match(error.error.message, /Codex Responses request failed with HTTP 403/);
+  assert.match(error.error.message, /Service: llm/);
+  assert.match(error.error.message, /Model: gpt-5\.5/);
+  assert.match(error.error.message, /Upstream URL: https:\/\/llm-api\.routerlab\.ch\/v1\/responses/);
+  assert.match(error.error.message, /secure-storage token takes precedence/);
+  assert.match(error.error.message, /wrapper-scionos auth test --service llm/);
+});
+
 test('Codex bridge maps reasoning options like cc-switch for bridged Chat upstreams', () => {
   const deepseek = responsesToChatCompletions({
     model: 'deepseek-v4-pro',

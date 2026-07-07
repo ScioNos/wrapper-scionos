@@ -202,3 +202,48 @@ test('shared long-running LLM proxy keeps GPT Codex models on Responses passthro
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
+
+test('shared long-running LLM proxy enriches Codex passthrough upstream auth errors', async () => {
+  const upstream = http.createServer((req, res) => {
+    res.writeHead(403, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: 'model access denied', type: 'forbidden' } }));
+  });
+
+  await new Promise((resolve, reject) => {
+    upstream.once('error', reject);
+    upstream.listen(0, '127.0.0.1', () => {
+      upstream.off('error', reject);
+      resolve();
+    });
+  });
+
+  const upstreamAddress = upstream.address();
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`,
+    routerlabToken: 'real-routerlab-token',
+    upstreamAuth: 'openai',
+    codexBridgeServiceValue: 'llm',
+  });
+
+  try {
+    const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer scionos-local',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'gpt-5.5', input: 'ping' }),
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.type, 'forbidden');
+    assert.match(payload.error.message, /Codex Responses request failed with HTTP 403/);
+    assert.match(payload.error.message, /Model: gpt-5\.5/);
+    assert.match(payload.error.message, /Upstream URL: http:\/\/127\.0\.0\.1:\d+\/v1\/responses/);
+    assert.match(payload.error.message, /secure-storage token takes precedence/);
+  } finally {
+    await stopLongRunningLlmProxy(proxy);
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});

@@ -3,44 +3,53 @@ import { stdin as input, stdout as output } from 'node:process';
 import { select } from '@inquirer/prompts';
 import chalk from 'chalk';
 
+const HOME_ROUTE_ID = 'home';
+
 export const MAIN_MENU_ITEMS = [
   {
     key: '1',
     value: 'claude-code',
     label: 'Claude Code',
-    description: 'Launch Claude Code through RouterLab.',
+    description: 'Start a coding session through RouterLab.',
   },
   {
     key: '2',
     value: 'claude-desktop',
     label: 'Claude Desktop',
-    description: 'Inspect or configure Claude Desktop.',
+    description: 'Configure and run the local Desktop mapping.',
   },
   {
     key: '3',
     value: 'codex',
     label: 'Codex CLI',
-    description: 'Launch Codex CLI through RouterLab.',
+    description: 'Start a Codex session through RouterLab.',
   },
   {
     key: '4',
     value: 'auth',
-    label: 'Auth',
-    description: 'Manage RouterLab tokens.',
+    label: 'Account & access',
+    description: 'Manage and validate your RouterLab token.',
   },
   {
     key: '5',
-    value: 'doctor',
-    label: 'Doctor',
-    description: 'Diagnose local setup.',
+    value: 'tools',
+    label: 'Tools & diagnostics',
+    description: 'Inspect strategies or troubleshoot this installation.',
   },
   {
     key: '0',
     value: 'quit',
-    label: 'Quit',
-    description: 'Exit without changing anything.',
+    label: 'Exit',
+    description: 'Close ScioNos Wrapper.',
   },
 ];
+
+const HOME_MENU_BACK_ITEM = {
+  key: '0',
+  value: 'back',
+  label: '← Back to home',
+  description: 'Return to the main menu.',
+};
 
 export const CLAUDE_DESKTOP_MENU_ITEMS = [
   {
@@ -61,12 +70,7 @@ export const CLAUDE_DESKTOP_MENU_ITEMS = [
     label: 'Status',
     description: 'Show Claude Desktop configuration status.',
   },
-  {
-    key: '0',
-    value: 'back',
-    label: 'Back',
-    description: 'Return to the main menu.',
-  },
+  HOME_MENU_BACK_ITEM,
 ];
 
 export const AUTH_MENU_ITEMS = [
@@ -94,14 +98,54 @@ export const AUTH_MENU_ITEMS = [
     label: 'Logout',
     description: 'Delete the stored token.',
   },
-  {
-    key: '0',
-    value: 'back',
-    label: 'Back',
-    description: 'Return to the main menu.',
-  },
+  HOME_MENU_BACK_ITEM,
 ];
 
+export const TOOLS_MENU_ITEMS = [
+  {
+    key: '1',
+    value: 'strategies',
+    label: 'Available strategies',
+    description: 'Show the strategies available for this service.',
+  },
+  {
+    key: '2',
+    value: 'doctor',
+    label: 'Run diagnostics',
+    description: 'Check the local installation and configuration.',
+  },
+  HOME_MENU_BACK_ITEM,
+];
+
+export const MENU_ROUTES = Object.freeze({
+  [HOME_ROUTE_ID]: Object.freeze({ id: HOME_ROUTE_ID, parent: null, title: 'ScioNos Wrapper', message: 'Choose where you want to go:', items: MAIN_MENU_ITEMS }),
+  desktop: Object.freeze({ id: 'desktop', parent: HOME_ROUTE_ID, title: 'Claude Desktop', message: 'Choose a Claude Desktop action:', items: CLAUDE_DESKTOP_MENU_ITEMS }),
+  account: Object.freeze({ id: 'account', parent: HOME_ROUTE_ID, title: 'Account & access', message: 'Choose an account action:', items: AUTH_MENU_ITEMS }),
+  tools: Object.freeze({ id: 'tools', parent: HOME_ROUTE_ID, title: 'Tools & diagnostics', message: 'Choose a tool:', items: TOOLS_MENU_ITEMS }),
+});
+
+const ROUTE_TARGETS = Object.freeze({ 'claude-desktop': 'desktop', auth: 'account', tools: 'tools' });
+
+export function resolveNavigation(routeId, action) {
+  const route = MENU_ROUTES[routeId];
+  if (!route) throw new Error(`Unknown menu route: ${routeId}`);
+  if (action === 'quit' && routeId === HOME_ROUTE_ID) return { kind: 'exit' };
+  if (action === 'back') return route.parent ? { kind: 'navigate', routeId: route.parent } : { kind: 'exit' };
+  const target = ROUTE_TARGETS[action];
+  if (target && routeId === HOME_ROUTE_ID) return { kind: 'navigate', routeId: target };
+  return { kind: 'action', action };
+}
+
+export function formatBreadcrumb(routeId) {
+  const labels = [];
+  let route = MENU_ROUTES[routeId];
+  if (!route) throw new Error(`Unknown menu route: ${routeId}`);
+  while (route) {
+    labels.unshift(route.title);
+    route = route.parent ? MENU_ROUTES[route.parent] : null;
+  }
+  return labels.join('  ›  ');
+}
 const BANNER_WIDTH = 58;
 const LINUX_CLAUDE_DESKTOP_LABEL = 'aaddrick/claude-desktop-debian';
 const LINUX_CLAUDE_DESKTOP_URL = 'https://github.com/aaddrick/claude-desktop-debian';

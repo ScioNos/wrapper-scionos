@@ -13,7 +13,7 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'aws',
     'claude-gpt',
     'claude-kimi-k2.7-code',
-    'glm-5.1',
+    'glm-5.2',
   ],
   llm: [
     'claude',
@@ -26,9 +26,9 @@ export const DESKTOP_MAPPING_STRATEGIES = {
 };
 
 const DEFAULT_NATIVE_STRATEGY_MODELS = [
-  { role: 'opus', model: 'claude-opus-4-7' },
-  { role: 'sonnet', model: 'claude-sonnet-4-6' },
-  { role: 'haiku', model: 'claude-haiku-4-5-20251001' },
+  { role: 'opus', model: 'claude-opus-4-8' },
+  { role: 'sonnet', model: 'claude-sonnet-5' },
+  { role: 'haiku', model: 'claude-fable-5' },
 ];
 
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
@@ -38,6 +38,14 @@ const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
 };
 
 export const MODEL_ROUTE_METADATA = {
+  'claude-fable-5': {
+    desktopRouteId: 'claude-fable-5',
+    label: 'claude-fable-5',
+  },
+  'claude-sonnet-5': {
+    desktopRouteId: 'claude-sonnet-5',
+    label: 'claude-sonnet-5',
+  },
   'claude-haiku-4-5-20251001': {
     desktopRouteId: 'claude-haiku-4-5',
     label: 'claude-haiku-4-5',
@@ -74,7 +82,19 @@ export const MODEL_ROUTE_METADATA = {
     codexModel: 'gpt-5.5',
     codexDisplayName: 'GPT 5.5',
   },
+  'gpt-5.5': {
+    desktopRouteId: 'claude-5.5',
+    label: 'gpt-5.5',
+    codexModel: 'gpt-5.5',
+    codexDisplayName: 'GPT 5.5',
+  },
   'claude-gpt-5.4': {
+    desktopRouteId: 'claude-5.4',
+    label: 'gpt-5.4',
+    codexModel: 'gpt-5.4',
+    codexDisplayName: 'GPT 5.4',
+  },
+  'gpt-5.4': {
     desktopRouteId: 'claude-5.4',
     label: 'gpt-5.4',
     codexModel: 'gpt-5.4',
@@ -87,7 +107,48 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'GPT 5.4 mini',
     supports1m: false,
   },
+  'gpt-5.4-mini': {
+    desktopRouteId: 'claude-5.4-mini',
+    label: 'gpt-5.4-mini',
+    codexModel: 'gpt-5.4-mini',
+    codexDisplayName: 'GPT 5.4 mini',
+    supports1m: false,
+  },
+  'gpt-5.6-sol': {
+    desktopRouteId: 'claude-5.6-sol',
+    label: 'gpt-5.6-sol',
+    codexModel: 'gpt-5.6-sol',
+    codexDisplayName: 'GPT 5.6 Sol',
+  },  'gpt-5.6-sol-pro': {
+    desktopRouteId: 'claude-5.6-sol-pro',
+    label: 'gpt-5.6-sol-pro',
+    codexModel: 'gpt-5.6-sol-pro',
+    codexDisplayName: 'GPT 5.6 Sol Pro',
+  },
+  'gpt-5.6-terra': {
+    desktopRouteId: 'claude-5.6-terra',
+    label: 'gpt-5.6-terra',
+    codexModel: 'gpt-5.6-terra',
+    codexDisplayName: 'GPT 5.6 Terra',
+  },  'gpt-5.6-terra-pro': {
+    desktopRouteId: 'claude-5.6-terra-pro',
+    label: 'gpt-5.6-terra-pro',
+    codexModel: 'gpt-5.6-terra-pro',
+    codexDisplayName: 'GPT 5.6 Terra Pro',
+  },
+  'gpt-5.6-luna': {
+    desktopRouteId: 'claude-5.6-luna',
+    label: 'gpt-5.6-luna',
+    codexModel: 'gpt-5.6-luna',
+    codexDisplayName: 'GPT 5.6 Luna',
+  },
   'claude-deepseek-v4-pro': {
+    desktopRouteId: 'claude-deev4-pro',
+    label: 'deepseek-v4-pro',
+    codexModel: 'deepseek-v4-pro',
+    codexDisplayName: 'DeepSeek V4 Pro',
+  },
+  'deepseek-v4-pro': {
     desktopRouteId: 'claude-deev4-pro',
     label: 'deepseek-v4-pro',
     codexModel: 'deepseek-v4-pro',
@@ -99,13 +160,31 @@ export const MODEL_ROUTE_METADATA = {
     codexModel: 'deepseek-v4-flash',
     codexDisplayName: 'DeepSeek V4 Flash',
   },
+  'deepseek-v4-flash': {
+    desktopRouteId: 'claude-deev4-flash',
+    label: 'deepseek-v4-flash',
+    codexModel: 'deepseek-v4-flash',
+    codexDisplayName: 'DeepSeek V4 Flash',
+  },
   'claude-MiniMax-M3': {
     desktopRouteId: 'claude-max-m3',
     label: 'MiniMax-M3',
     codexModel: 'MiniMax-M3',
     codexDisplayName: 'MiniMax M3',
   },
+  'MiniMax-M3': {
+    desktopRouteId: 'claude-max-m3',
+    label: 'MiniMax-M3',
+    codexModel: 'MiniMax-M3',
+    codexDisplayName: 'MiniMax M3',
+  },
   'claude-qwen3.7-max': {
+    desktopRouteId: 'claude-wen3.7-max',
+    label: 'qwen3.7-max',
+    codexModel: 'qwen3.7-max',
+    codexDisplayName: 'Qwen 3.7 Max',
+  },
+  'qwen3.7-max': {
     desktopRouteId: 'claude-wen3.7-max',
     label: 'qwen3.7-max',
     codexModel: 'qwen3.7-max',
@@ -124,6 +203,13 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'Kimi K2.7 Code',
     supports1m: false,
   },
+  'kimi-k2.7': {
+    desktopRouteId: 'claude-kim2.7',
+    label: 'kimi-k2.7',
+    codexModel: 'kimi-k2.7',
+    codexDisplayName: 'Kimi K2.7',
+    supports1m: false,
+  },
   'claude-glm-5.1': {
     desktopRouteId: 'claude-lm5.1',
     label: 'glm-5.1',
@@ -138,15 +224,27 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'GLM 5.2',
     supports1m: false,
   },
+  'glm-5.2': {
+    desktopRouteId: 'claude-lm5.2',
+    label: 'glm-5.2',
+    codexModel: 'glm-5.2',
+    codexDisplayName: 'GLM 5.2',
+    supports1m: false,
+  },
 };
 
 export const DESKTOP_MODEL_ORDER = [
   'claude-opus-4-8',
+  'claude-sonnet-5',
+  'claude-fable-5',
   'claude-sonnet-4-6',
   'claude-haiku-4-5',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
   'aws-claude-haiku-4-5',
+  'claude-5.6-sol',
+  'claude-5.6-terra',
+  'claude-5.6-luna',
   'claude-5.5',
   'claude-5.4',
   'claude-5.4-mini',
@@ -156,15 +254,21 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-max-m3',
   'claude-deev4-pro',
   'claude-deev4-flash',
+  'claude-kim2.7',
   'claude-kim2.7-code',
   'claude-lm5.1',
 ];
 
-const CODEX_DISPLAY_NAMES = new Map(
-  Object.values(MODEL_ROUTE_METADATA)
+const CODEX_DISPLAY_NAMES = new Map([
+  ...Object.values(MODEL_ROUTE_METADATA)
     .filter((entry) => entry.codexModel)
     .map((entry) => [entry.codexModel, entry.codexDisplayName ?? entry.label ?? entry.codexModel]),
-);
+  ['gpt-5.6-terra', 'GPT 5.6 Terra'],
+  ['gpt-5.6-sol', 'GPT 5.6 Sol'],
+  ['gpt-5.6-luna', 'GPT 5.6 Luna'],
+  ['gpt-5.6-terra-pro', 'GPT 5.6 Terra Pro'],
+  ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
+]);
 
 export function getStrategyModels(strategyValue, serviceValue) {
   const env = getStrategyEnvironment(strategyValue, serviceValue);
@@ -256,7 +360,8 @@ export function sortDesktopRoutes(routes) {
 
 export function isClaudeFamilyModel(model) {
   const normalized = model.toLowerCase();
-  return normalized.startsWith('claude-haiku-')
+  return normalized.startsWith('claude-fable-')
+    || normalized.startsWith('claude-haiku-')
     || normalized.startsWith('claude-sonnet-')
     || normalized.startsWith('claude-opus-')
     || normalized.startsWith('aws-claude-')

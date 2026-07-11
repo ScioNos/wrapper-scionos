@@ -6,27 +6,26 @@ import { CODEX_LLM_MODELS, CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexC
 
 test('Codex template uses provider-scoped model provider config', () => {
   assert.deepEqual(CODEX_ROUTERLAB_MODELS, [
-    'gpt-5.5',
-    'gpt-5.4',
-    'gpt-5.4-mini',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-5.6-luna',
     'deepseek-v4-pro',
-    'deepseek-v4-flash',
     'kimi-k2.7-code',
-    'glm-5.1',
+    'glm-5.2',
   ]);
   assert.deepEqual(CODEX_LLM_MODELS, [
-    'gpt-5.5',
-    'gpt-5.4',
-    'gpt-5.4-mini',
+    'gpt-5.6-sol-pro',
+    'gpt-5.6-terra-pro',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
     'glm-5.2',
     'qwen3.7-max',
     'MiniMax-M3',
-    'deepseek-v4-pro',
   ]);
   assert.deepEqual(codexModelsForService('routerlab'), CODEX_ROUTERLAB_MODELS);
   assert.deepEqual(codexModelsForService('llm'), CODEX_LLM_MODELS);
-  assert.equal(defaultCodexModelForService('routerlab'), 'gpt-5.5');
-  assert.equal(defaultCodexModelForService('llm'), 'gpt-5.5');
+  assert.equal(defaultCodexModelForService('routerlab'), 'gpt-5.6-sol');
+  assert.equal(defaultCodexModelForService('llm'), 'gpt-5.6-sol-pro');
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
@@ -45,22 +44,19 @@ test('Codex runtime launch args configure provider without writing config', () =
   const args = buildCodexRuntimeArgs({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     modelCatalogPath: '/tmp/wrapper-scionos-model-catalog.json',
   });
 
-  assert.equal(args.filter((arg) => arg === '-c').length, 11);
+  assert.equal(args.filter((arg) => arg === '-c').length, 7);
   assert.ok(args.includes('model_provider="custom"'));
-  assert.ok(args.includes('model="gpt-5.5"'));
-  assert.ok(args.includes('model_reasoning_effort="high"'));
-  assert.ok(args.includes('disable_response_storage=true'));
-  assert.ok(args.includes('sandbox_mode="workspace-write"'));
-  assert.ok(args.includes('approval_policy="on-request"'));
+  assert.ok(args.includes('model="gpt-5.6-sol"'));
   assert.ok(args.includes('model_catalog_json="/tmp/wrapper-scionos-model-catalog.json"'));
   assert.ok(args.includes('model_providers.custom.name="routerlab"'));
   assert.ok(args.includes('model_providers.custom.base_url="https://api.routerlab.ch/v1"'));
   assert.ok(args.includes('model_providers.custom.wire_api="responses"'));
   assert.ok(args.includes('model_providers.custom.env_key="OPENAI_API_KEY"'));
+  assert.equal(args.some((arg) => arg.startsWith('web_search=')), false);
 });
 
 test('Codex launch args do not touch existing config files', (t) => {
@@ -95,7 +91,7 @@ test('Codex config preview stays pure without touching auth state', (t) => {
   const preview = buildCodexConfigPreview({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     paths,
   });
   assert.equal(preview.dryRun, true);
@@ -105,7 +101,7 @@ test('Codex config preview stays pure without touching auth state', (t) => {
   const compatibilityPreview = applyCodexConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     paths,
     dryRun: false,
   });
@@ -174,7 +170,7 @@ test('Codex status reports summary without raw config content', (t) => {
   fs.writeFileSync(paths.configPath, buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
   }), 'utf8');
 
   const status = readCodexStatus(paths);
@@ -197,8 +193,8 @@ test('Codex template preview includes model_catalog_json when Codex model cache 
   };
   fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
     models: [{
-      slug: 'gpt-5.5',
-      display_name: 'GPT 5.5',
+      slug: 'gpt-5.6-sol',
+      display_name: 'GPT 5.6 Sol',
       model_messages: { instructions_template: 'template' },
       base_instructions: 'base',
       context_window: 272000,
@@ -212,17 +208,17 @@ test('Codex template preview includes model_catalog_json when Codex model cache 
   assert.equal(catalog.models[3].display_name, 'DeepSeek V4 Pro');
   assert.deepEqual(catalog.models[3].additional_speed_tiers, []);
   assert.equal(catalog.models[3].availability_nux, null);
-  assert.deepEqual(catalog.models[3].model_messages, { instructions_template: 'template' });
+  assert.match(catalog.models[3].model_messages.instructions_template, /You are Codex/);
 
   const preview = buildCodexConfigPreview({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     paths,
     dryRun: false,
   });
   assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
-  assert.equal(preview.catalog.models[5], 'kimi-k2.7-code');
+  assert.equal(preview.catalog.models[4], 'kimi-k2.7-code');
   assert.match(preview.config, /model_catalog_json = /);
   assert.equal(fs.existsSync(paths.configPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
@@ -241,34 +237,43 @@ test('Codex template preview includes fallback model_catalog_json without local 
 
   const catalog = buildCodexModelCatalogFromCache({ paths });
   assert.deepEqual(catalog.models.map((entry) => entry.slug), CODEX_ROUTERLAB_MODELS);
-  assert.equal(catalog.models[5].slug, 'kimi-k2.7-code');
-  assert.equal(catalog.models[5].display_name, 'Kimi K2.7 Code');
-  assert.equal(catalog.models[5].visibility, 'list');
-  assert.equal(catalog.models[5].context_window, 272000);
-  assert.equal(typeof catalog.models[5].base_instructions, 'string');
-  assert.equal(catalog.models[5].base_instructions.length > 0, true);
-  assert.equal(typeof catalog.models[5].model_messages.instructions_template, 'string');
-  assert.deepEqual(catalog.models[5].model_messages.instructions_variables, {});
-  assert.equal(typeof catalog.models[5].comp_hash, 'string');
-  assert.equal(catalog.models[5].supported_reasoning_levels.some((entry) => entry.effort === 'high'), true);
+  assert.equal(catalog.models[0].slug, 'gpt-5.6-sol');
+  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol');
+  assert.equal(catalog.models[0].supported_in_api, true);
+  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.equal(catalog.models[2].display_name, 'GPT 5.6 Luna');
+  assert.equal(catalog.models[4].slug, 'kimi-k2.7-code');
+  assert.equal(catalog.models[4].display_name, 'Kimi K2.7 Code');
+  assert.equal(catalog.models[4].visibility, 'list');
+  assert.equal(catalog.models[4].context_window, 128000);
+  assert.equal(typeof catalog.models[4].base_instructions, 'string');
+  assert.equal(catalog.models[4].base_instructions.length > 0, true);
+  assert.equal(typeof catalog.models[4].model_messages.instructions_template, 'string');
+  assert.deepEqual(catalog.models[4].model_messages.instructions_variables, {});
+  assert.equal(typeof catalog.models[4].comp_hash, 'string');
+  assert.deepEqual(catalog.models[4].input_modalities, ['text']);
+  assert.equal(catalog.models[4].supports_parallel_tool_calls, false);
+  assert.equal(catalog.models[4].apply_patch_tool_type, 'freeform');
+  assert.equal(catalog.models[4].web_search_tool_type, 'text_and_image');
+  assert.equal(catalog.models[4].supports_search_tool, false);
 
   const preview = buildCodexConfigPreview({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     paths,
     dryRun: false,
   });
   assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
-  assert.equal(preview.catalog.models[5], 'kimi-k2.7-code');
+  assert.equal(preview.catalog.models[4], 'kimi-k2.7-code');
   assert.match(preview.config, /model_catalog_json = /);
 
   const runtimeCatalog = writeCodexRuntimeModelCatalog({ paths, tmpDir: tempDir });
   assert.deepEqual(runtimeCatalog.models, CODEX_ROUTERLAB_MODELS);
   const written = JSON.parse(fs.readFileSync(runtimeCatalog.path, 'utf8'));
-  assert.equal(written.models[5].slug, 'kimi-k2.7-code');
-  assert.equal(typeof written.models[5].base_instructions, 'string');
-  assert.equal(typeof written.models[5].model_messages.instructions_template, 'string');
+  assert.equal(written.models[4].slug, 'kimi-k2.7-code');
+  assert.equal(typeof written.models[4].base_instructions, 'string');
+  assert.equal(typeof written.models[4].model_messages.instructions_template, 'string');
   cleanupCodexRuntimeModelCatalog(runtimeCatalog);
   assert.equal(fs.existsSync(runtimeCatalog.path), false);
 });
@@ -285,8 +290,8 @@ test('Codex template preview builds LLM-specific model catalog for llm service',
   };
   fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
     models: [{
-      slug: 'gpt-5.5',
-      display_name: 'GPT 5.5',
+      slug: 'gpt-5.6-sol-pro',
+      display_name: 'GPT 5.6 Sol Pro',
       context_window: 272000,
     }],
   }), 'utf8');
@@ -299,14 +304,22 @@ test('Codex template preview builds LLM-specific model catalog for llm service',
     paths,
     dryRun: false,
   });
-  assert.match(preview.config, /model = "gpt-5\.5"/);
+  assert.match(preview.config, /model = "gpt-5\.6-sol-pro"/);
   assert.deepEqual(preview.catalog.models, CODEX_LLM_MODELS);
-  const catalog = buildCodexModelCatalogFromCache({ paths, models: CODEX_LLM_MODELS });
-  assert.equal(catalog.models[0].display_name, 'GPT 5.5');
-  assert.equal(catalog.models[3].display_name, 'GLM 5.2');
-  assert.equal(catalog.models[4].display_name, 'Qwen 3.7 Max');
-  assert.equal(catalog.models[5].display_name, 'MiniMax M3');
-  assert.equal(catalog.models[6].display_name, 'DeepSeek V4 Pro');
+  const catalog = buildCodexModelCatalogFromCache({
+    paths,
+    models: CODEX_LLM_MODELS,
+    serviceValue: 'llm',
+  });
+  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol Pro');
+  assert.equal(catalog.models[0].default_reasoning_level, 'xhigh');
+  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.equal(catalog.models[0].supported_in_api, true);
+  assert.equal(catalog.models[1].display_name, 'GPT 5.6 Terra Pro');
+  assert.equal(catalog.models[1].supported_in_api, true);
+  assert.equal(catalog.models[4].display_name, 'GLM 5.2');
+  assert.equal(catalog.models[5].display_name, 'Qwen 3.7 Max');
+  assert.equal(catalog.models[6].display_name, 'MiniMax M3');
   assert.equal(fs.existsSync(paths.configPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
 });

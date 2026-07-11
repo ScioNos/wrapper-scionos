@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { DESKTOP_MAPPING_STRATEGIES } from '../src/apps/claude-desktop.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
+import { upstreamResponsesError } from '../src/platform/responses-errors.js';
 
 test('Claude Desktop proxy exposes mapped model list', async () => {
   const { server } = createClaudeDesktopProxy({
@@ -11,6 +13,7 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     strategyValue: 'claude-gpt',
     strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
     routerlabToken: 'valid-token-with-enough-length',
+    gatewayToken: 'generated-local-test-token',
   });
 
   await new Promise((resolve, reject) => {
@@ -23,17 +26,18 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
 
   try {
     const address = server.address();
-    const response = await fetch(`http://127.0.0.1:${address.port}/v1/models`);
+    const response = await fetch(`http://127.0.0.1:${address.port}/v1/models`, {
+      headers: { authorization: 'Bearer generated-local-test-token' },
+    });
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.data.some((model) => model.id === 'claude-opus-4-8'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-4-6'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-haiku-4-5' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-fable-5'), false);
+    assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-fable-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-5.4-mini'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-kim2.7-code' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-lm5.1' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-kim2.7' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-lm5.2' && !model.supports1m), true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -69,7 +73,7 @@ test('shared long-running LLM proxy swaps local Codex token for upstream OpenAI 
     const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer scionos-local',
+        authorization: `Bearer ${proxy.gatewayToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({ model: 'gpt-5.5' }),
@@ -86,79 +90,60 @@ test('shared long-running LLM proxy swaps local Codex token for upstream OpenAI 
   }
 });
 
-test('shared long-running LLM proxy bridges Codex Responses models through Chat Completions', async () => {
-  let captured = null;
+test('shared long-running proxy keeps every RouterLab model on native Responses', async () => {
+  const captured = [];
   const upstream = http.createServer((req, res) => {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
     req.on('end', () => {
-      captured = {
-        url: req.url,
-        authorization: req.headers.authorization,
-        apiKey: req.headers['x-api-key'] ?? null,
-        body: JSON.parse(Buffer.concat(chunks).toString('utf8')),
-      };
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({
-        id: 'chatcmpl-test',
-        object: 'chat.completion',
-        created: 123,
-        model: captured.body.model,
-        choices: [{
-          index: 0,
-          message: { role: 'assistant', content: 'bridged ok' },
-          finish_reason: 'stop',
-        }],
-        usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5 },
-      }));
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      captured.push({ url: req.url, authorization: req.headers.authorization, body });
+      if (body.stream) {
+        const event = `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', model: body.model, store: body.store })}\n\n`;
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.end(event);
+      } else {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ object: 'response', model: body.model, store: body.store }));
+      }
     });
   });
-
-  await new Promise((resolve, reject) => {
-    upstream.once('error', reject);
-    upstream.listen(0, '127.0.0.1', () => {
-      upstream.off('error', reject);
-      resolve();
-    });
-  });
-
-  const upstreamAddress = upstream.address();
-  const upstreamBaseUrl = `http://127.0.0.1:${upstreamAddress.port}`;
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const proxy = await startLongRunningLlmProxy({
-    targetBaseUrl: upstreamBaseUrl,
+    targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexBridgeServiceValue: 'llm',
+    codexServiceValue: 'routerlab',
   });
 
   try {
-    const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
-      method: 'POST',
-      headers: {
-        authorization: 'Bearer scionos-local',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ model: 'glm-5.2', input: 'ping' }),
-    });
-    const payload = await response.json();
-
-    assert.equal(response.status, 200);
-    assert.equal(captured.url, '/v1/chat/completions');
-    assert.equal(captured.authorization, 'Bearer real-routerlab-token');
-    assert.equal(captured.apiKey, null);
-    assert.equal(captured.body.model, 'glm-5.2');
-    assert.equal(captured.body.messages.at(-1).content, 'ping');
-    assert.equal(payload.object, 'response');
-    assert.equal(payload.model, 'glm-5.2');
-    assert.equal(payload.output[0].content[0].text, 'bridged ok');
-    assert.equal(payload.usage.total_tokens, 5);
+    const models = ['gpt-5.6-sol', 'glm-5.2', 'qwen3.7-max', 'MiniMax-M3', 'deepseek-v4-pro', 'kimi-k2.7-code'];
+    for (const model of models) {
+      for (const stream of [false, true]) {
+        const response = await fetch(proxy.baseUrl + '/v1/responses?trace=' + encodeURIComponent(model), {
+          method: 'POST',
+          headers: { authorization: 'Bearer ' + proxy.gatewayToken, 'content-type': 'application/json' },
+          body: JSON.stringify({ model, input: 'ping', stream, store: true }),
+        });
+        assert.equal(response.status, 200);
+        if (stream) {
+          assert.equal(await response.text(), `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', model, store: false })}\n\n`);
+        } else {
+          assert.deepEqual(await response.json(), { object: 'response', model, store: false });
+        }
+      }
+    }
+    assert.deepEqual(captured.map((entry) => entry.body.model), models.flatMap((model) => [model, model]));
+    assert.deepEqual(captured.map((entry) => entry.body.stream), models.flatMap(() => [false, true]));
+    assert.equal(captured.every((entry) => entry.url.startsWith('/v1/responses?trace=')), true);
+    assert.equal(captured.every((entry) => entry.authorization === 'Bearer real-routerlab-token'), true);
+    assert.equal(captured.every((entry) => entry.body.store === false), true);
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
-
-test('shared long-running LLM proxy keeps GPT Codex models on Responses passthrough', async () => {
+test('shared long-running LLM proxy keeps LiteLLM open-source models on Responses passthrough', async () => {
   let captured = null;
   const upstream = http.createServer((req, res) => {
     captured = { url: req.url, authorization: req.headers.authorization };
@@ -179,17 +164,17 @@ test('shared long-running LLM proxy keeps GPT Codex models on Responses passthro
     targetBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexBridgeServiceValue: 'llm',
+    codexServiceValue: 'llm',
   });
 
   try {
     const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer scionos-local',
+        authorization: `Bearer ${proxy.gatewayToken}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ model: 'gpt-5.5', input: 'ping' }),
+      body: JSON.stringify({ model: 'glm-5.2', input: 'ping' }),
     });
     const payload = await response.json();
 
@@ -222,14 +207,14 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
     targetBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexBridgeServiceValue: 'llm',
+    codexServiceValue: 'llm',
   });
 
   try {
     const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer scionos-local',
+        authorization: `Bearer ${proxy.gatewayToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({ model: 'gpt-5.5', input: 'ping' }),
@@ -246,4 +231,97 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));
   }
+});
+
+test('proxy preserves compressed response headers and decodes compressed errors', async () => {
+  let fail = false;
+  let encoding = 'gzip';
+  const upstream = http.createServer((req, res) => {
+    const payload = fail
+      ? JSON.stringify({ error: { message: 'compressed denial', type: 'forbidden' } })
+      : JSON.stringify({ ok: true });
+    const body = encoding === 'br' ? zlib.brotliCompressSync(payload) : zlib.gzipSync(payload);
+    res.writeHead(fail ? 403 : 200, {
+      'content-type': 'application/json',
+      'content-encoding': encoding,
+      'content-length': body.length,
+    });
+    res.end(body);
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
+    routerlabToken: 'real-routerlab-token',
+    upstreamAuth: 'openai',
+    codexServiceValue: 'routerlab',
+  });
+  try {
+    const raw = await new Promise((resolve, reject) => {
+      http.get(proxy.baseUrl + '/v1/responses', {
+        headers: { authorization: 'Bearer ' + proxy.gatewayToken, 'accept-encoding': 'gzip' },
+      }, (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => resolve({ headers: response.headers, body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+    assert.equal(raw.headers['content-encoding'], 'gzip');
+    assert.deepEqual(JSON.parse(zlib.gunzipSync(raw.body)), { ok: true });
+
+    encoding = 'br';
+    const brotli = await new Promise((resolve, reject) => {
+      http.get(proxy.baseUrl + '/v1/responses', {
+        headers: { authorization: 'Bearer ' + proxy.gatewayToken, 'accept-encoding': 'br' },
+      }, (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => resolve({ headers: response.headers, body: Buffer.concat(chunks) }));
+      }).on('error', reject);
+    });
+    assert.equal(brotli.headers['content-encoding'], 'br');
+    assert.deepEqual(JSON.parse(zlib.brotliDecompressSync(brotli.body)), { ok: true });
+
+    fail = true;
+    const response = await fetch(proxy.baseUrl + '/v1/responses', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + proxy.gatewayToken, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'glm-5.2' }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.type, 'forbidden');
+    assert.match(payload.error.message, /compressed denial/);
+  } finally {
+    await stopLongRunningLlmProxy(proxy);
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+test('Responses error normalization preserves structured fields and contextual auth guidance', () => {
+  const direct = upstreamResponsesError(400, JSON.stringify({ error: { message: 'bad request', type: 'invalid_request_error', code: 'bad_input', param: 'model' } }));
+  assert.deepEqual(direct.error, {
+    message: 'Upstream Responses request failed with HTTP 400. Upstream message: bad request',
+    type: 'invalid_request_error', code: 'bad_input', param: 'model',
+  });
+
+  const base = upstreamResponsesError(403, { base_resp: { status_msg: 'denied', status_code: 403 } }, {
+    requestLabel: 'Codex Responses request', serviceValue: 'llm', model: 'glm-5.2', upstreamUrl: 'https://llm-api.routerlab.ch/v1/responses',
+  });
+  assert.equal(base.error.type, 'upstream_error');
+  assert.equal(base.error.code, 403);
+  assert.match(base.error.message, /Service: llm/);
+  assert.match(base.error.message, /Model: glm-5\.2/);
+  assert.match(base.error.message, /secure-storage token takes precedence/);
+
+  const fallback = upstreamResponsesError(500, { detail: 'gateway unavailable', type: 'gateway_error', code: 'upstream_down', param: 'request' });
+  assert.deepEqual(fallback.error, {
+    message: 'Upstream Responses request failed with HTTP 500. Upstream message: gateway unavailable',
+    type: 'gateway_error', code: 'upstream_down', param: 'request',
+  });
+  assert.match(upstreamResponsesError(401, 'plain failure').error.message, /--service <routerlab\|llm>/);
+  assert.equal(upstreamResponsesError(502, { message: 'object message' }).error.type, 'upstream_error');
+  assert.match(upstreamResponsesError(502, { base_resp: { message: 'fallback message' } }).error.message, /fallback message/);
+  assert.match(upstreamResponsesError(502, {}).error.message, /\{\}/);
+  assert.match(upstreamResponsesError(502, null).error.message, /Unknown upstream error/);
+  const long = 'x'.repeat(1024 * 1024 + 1);
+  assert.match(upstreamResponsesError(502, long).error.message, /\.\.\.\(truncated\)/);
 });

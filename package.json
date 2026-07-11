@@ -1,6 +1,6 @@
 {
   "name": "wrapper-scionos",
-  "version": "3.2.2",
+  "version": "4.0.0",
   "description": "Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants",
   "type": "module",
   "main": "index.js",
@@ -19,7 +19,9 @@
   ],
   "scripts": {
     "test": "node --test",
-    "start": "node index.js"
+    "start": "node index.js",
+    "test:coverage": "node --test --test-isolation=none --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=80",
+    "release:check": "npm test && npm run test:coverage && npm audit && npm pack --dry-run"
   },
   "keywords": [
     "scionos",
@@ -32,10 +34,18 @@
   "author": "ScioNos",
   "license": "MIT",
   "engines": {
-    "node": ">=22"
+    "node": "^22.13.0 || >=23.5.0"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.5.2",
     "chalk": "^5.6.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ScioNos/wrapper-scionos.git"
+  },
+  "homepage": "https://github.com/ScioNos/wrapper-scionos#readme",
+  "bugs": {
+    "url": "https://github.com/ScioNos/wrapper-scionos/issues"
   }
 }

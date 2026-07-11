@@ -1,12 +1,13 @@
 import { launchClaudeCode } from '../../apps/claude-code.js';
 
 export async function handleClaudeCode(options, version = null, claudeArgs = options.passthrough) {
-  await launchClaudeCode({
+  return launchClaudeCode({
     serviceValue: options.service,
     strategyValue: options.strategy,
-    subagentModel: options.subagentModel,
+    token: options.token,
     noPrompt: options.noPrompt,
     claudeArgs,
     version,
+    allowBack: options.allowBack ?? false,
   });
 }

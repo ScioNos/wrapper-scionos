@@ -74,18 +74,31 @@ function hasNonEmptyFile(filePath) {
 }
 
 function writePlainTokenFile(tokenFile, token) {
-  fs.mkdirSync(path.dirname(tokenFile), { recursive: true, mode: 0o700 });
-  fs.writeFileSync(tokenFile, token, { encoding: 'utf8', mode: 0o600 });
+  const directory = path.dirname(tokenFile);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
   try {
-    fs.chmodSync(tokenFile, 0o600);
-  } catch {
-    // Some filesystems ignore POSIX permissions; the write above is still the safest portable fallback.
-  }
-  if (!hasNonEmptyFile(tokenFile)) {
-    throw new Error('Token file was created but no content was written.');
+    if (process.platform !== 'win32') fs.chmodSync(directory, 0o700);
+    fs.writeFileSync(tokenFile, token, { encoding: 'utf8', mode: 0o600 });
+    if (process.platform !== 'win32') {
+      fs.chmodSync(tokenFile, 0o600);
+      assertPrivateMode(directory, 0o700, 'token directory');
+      assertPrivateMode(tokenFile, 0o600, 'token file');
+    }
+    if (!hasNonEmptyFile(tokenFile)) {
+      throw new Error('Token file was created but no content was written.');
+    }
+  } catch (error) {
+    fs.rmSync(tokenFile, { force: true });
+    throw error;
   }
 }
 
+function assertPrivateMode(filePath, expectedMode, label) {
+  const actualMode = fs.statSync(filePath).mode & 0o777;
+  if (actualMode !== expectedMode) {
+    throw new Error('Refusing insecure ' + label + ' ' + filePath + ': expected mode ' + expectedMode.toString(8) + ', found ' + actualMode.toString(8) + '.');
+  }
+}
 function readPlainTokenFile(tokenFile) {
   if (!hasNonEmptyFile(tokenFile)) {
     return null;
@@ -186,7 +199,7 @@ function linuxSecretServiceStatus() {
 }
 
 function linuxFileStatus(reason = '`secret-tool` not found; using user-only file storage') {
-  return { supported: true, backend: 'Linux file (0600)', reason };
+  return { supported: true, backend: 'Linux user-only file', reason };
 }
 
 export function createLinuxTokenBackend({ hasSecretToolCommand = hasSecretTool } = {}) {
@@ -240,12 +253,14 @@ function getWindowsToken(service) {
 }
 
 function deleteWindowsToken(service) {
-  const tokenFile = getTokenFile(service.value);
-  if (!fs.existsSync(tokenFile)) {
-    return false;
-  }
-  fs.unlinkSync(tokenFile);
-  return true;
+  return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
+    .map((namespace) => getTokenFile(service.value, namespace))
+    .map((tokenFile) => {
+      if (!fs.existsSync(tokenFile)) return false;
+      fs.unlinkSync(tokenFile);
+      return true;
+    })
+    .some(Boolean);
 }
 
 function storeMacOSToken(token, service) {
@@ -257,8 +272,7 @@ function storeMacOSToken(token, service) {
     '-s',
     SECURE_STORAGE_SERVICE,
     '-w',
-    token,
-  ]);
+  ], { input: token });
   if (result.status !== 0) {
     throw new Error((result.stderr || result.stdout || 'Unable to store token in Keychain').trim());
   }
@@ -270,13 +284,11 @@ function getMacOSToken(service) {
 }
 
 function deleteMacOSToken(service) {
-  return runCommand('security', [
-    'delete-generic-password',
-    '-a',
-    service.secureStorageAccount,
-    '-s',
-    SECURE_STORAGE_SERVICE,
-  ]).status === 0;
+  return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
+    .map((namespace) => runCommand('security', [
+      'delete-generic-password', '-a', service.secureStorageAccount, '-s', namespace,
+    ]).status === 0)
+    .some(Boolean);
 }
 
 function storeLinuxSecretServiceToken(token, service) {
@@ -326,13 +338,13 @@ function getLinuxToken(service, secretToolAvailable) {
 }
 
 function deleteLinuxToken(service, secretToolAvailable) {
-  const secretDeleted = secretToolAvailable && runCommand('secret-tool', [
-    'clear',
-    'service',
-    SECURE_STORAGE_SERVICE,
-    'account',
-    service.secureStorageAccount,
-  ]).status === 0;
-  const fileDeleted = deletePlainTokenFile(getTokenFile(service.value));
+  const secretDeleted = secretToolAvailable && [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
+    .map((namespace) => runCommand('secret-tool', [
+      'clear', 'service', namespace, 'account', service.secureStorageAccount,
+    ]).status === 0)
+    .some(Boolean);
+  const fileDeleted = [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
+    .map((namespace) => deletePlainTokenFile(getTokenFile(service.value, namespace)))
+    .some(Boolean);
   return Boolean(secretDeleted || fileDeleted);
 }

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        node: [22.13.0, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:coverage
+      - run: npm audit
+      - run: npm pack --dry-run
+      - name: Packed CLI smoke for RouterLab and LLM
+        shell: bash
+        run: |
+          TARBALL=$(npm pack --silent)
+          PREFIX="$RUNNER_TEMP/wrapper-scionos-install"
+          npm install --prefix "$PREFIX" "./$TARBALL"
+          "$PREFIX/node_modules/.bin/wrapper-scionos" --version
+          "$PREFIX/node_modules/.bin/wrapper-scionos" --service llm --version
+          "$PREFIX/node_modules/.bin/wrapper-scionos" --service llm doctor --json
+          "$PREFIX/node_modules/.bin/wrapper-scionos" doctor --service llm --json
+          "$PREFIX/node_modules/.bin/scionos" --service routerlab --version
+          npx --yes --package "./$TARBALL" wrapper-scionos --version
+          npx --yes --package "./$TARBALL" wrapper-scionos --service llm --version
+          npx --yes --package "./$TARBALL" scionos --service routerlab --version

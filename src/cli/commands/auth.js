@@ -1,5 +1,4 @@
-import { createInterface } from 'node:readline/promises';
-import { stdin as input, stdout as output } from 'node:process';
+import { password } from '@inquirer/prompts';
 import { deleteStoredToken, getStoredTokenStatus, storeToken } from '../../security/token-store.js';
 import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } from '../../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
@@ -9,47 +8,43 @@ import { print } from './output.js';
 
 export function getAuthMenuContext(options) {
   const service = requireServiceConfig(options.service);
-  return {
-    service,
-    title: `Auth (${service.label})`,
-    options: { ...options, service: service.value },
-  };
+  return { service, title: 'Auth (' + service.label + ')', options: { ...options, service: service.value } };
 }
 
-export async function handleAuthMenu(options) {
-  const context = getAuthMenuContext(options);
-
-  while (true) {
-    const action = await askMenu(context.title, AUTH_MENU_ITEMS);
-    if (action === 'back') {
-      return;
-    }
-
-    await handleAuth(action, context.options);
-  }
-}
 
 export async function handleAuth(action, options) {
   const service = requireServiceConfig(options.service);
   if (action === 'login' || action === 'change') {
-    const token = options.token ?? await promptSecret(`${service.label} token: `);
-    const format = validateTokenFormat(token);
-    if (!format.valid) {
-      throw new Error(format.message);
+    if (options.dryRun) {
+      const format = options.token ? validateTokenFormat(options.token) : null;
+      if (format && !format.valid) throw new Error(format.message);
+      const status = getStoredTokenStatus(service.value);
+      print({
+        dryRun: true, service: service.value, backend: status.backend,
+        storageSupported: status.supported, tokenProvided: Boolean(options.token),
+        wouldReplace: status.stored,
+      }, options);
+      return;
     }
+    const token = options.token ?? await password({ message: service.label + ' token:' });
+    const format = validateTokenFormat(token);
+    if (!format.valid) throw new Error(format.message);
     const storage = storeToken(token.trim(), service.value);
-    console.log(`Stored ${service.label} token with ${storage.backend}.`);
+    print({ stored: true, service: service.value, backend: storage.backend }, options);
     return;
   }
-
   if (action === 'logout') {
+    if (options.dryRun) {
+      const status = getStoredTokenStatus(service.value);
+      print({ dryRun: true, service: service.value, wouldDelete: status.stored, backend: status.backend }, options);
+      return;
+    }
     const deleted = deleteStoredToken(service.value);
-    console.log(deleted ? `Deleted ${service.label} token.` : `No ${service.label} token found.`);
+    print({ deleted, service: service.value, legacyEntriesIncluded: deleted }, options);
     return;
   }
-
   if (action === 'test') {
-    const resolved = await resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt });
+    const resolved = await resolveOptionFirstToken(service, options);
     const result = await fetchModels(resolved.token, {
       serviceValue: service.value,
       baseUrl: resolveServiceBaseUrl(service.value, process.env),
@@ -57,7 +52,6 @@ export async function handleAuth(action, options) {
     print({ tokenSource: resolved.source, ...result }, options);
     return;
   }
-
   const status = getStoredTokenStatus(service.value);
   const envToken = resolveServiceEnvToken(service.value, process.env);
   print({
@@ -70,11 +64,11 @@ export async function handleAuth(action, options) {
   }, options);
 }
 
-async function promptSecret(message) {
-  const rl = createInterface({ input, output });
-  try {
-    return await rl.question(message);
-  } finally {
-    rl.close();
+async function resolveOptionFirstToken(service, options) {
+  if (options.token) {
+    const format = validateTokenFormat(options.token);
+    if (!format.valid) throw new Error(format.message);
+    return { token: options.token.trim(), source: 'option' };
   }
+  return resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt });
 }

@@ -1,3 +1,5 @@
+import { warnDeprecationOnce } from '../cli/deprecations.js';
+
 export const DEFAULT_SERVICE = 'routerlab';
 export const DEFAULT_ANTHROPIC_VERSION = '2023-06-01';
 export const LEGACY_TOKEN_ENV_KEY = 'ANTHROPIC_AUTH_TOKEN';
@@ -21,7 +23,7 @@ export const SERVICES = {
       'claude-gpt',
       'deepseek-v4',
       'claude-kimi-k2.7-code',
-      'glm-5.1',
+      'glm-5.2',
     ],
   },
   llm: {
@@ -75,6 +77,7 @@ export function resolveServiceBaseUrlWithSource(serviceValue = DEFAULT_SERVICE, 
 
   const legacyOverride = firstEnvValue(env, [LEGACY_BASE_URL_ENV_KEY]);
   if (legacyOverride) {
+    if (env === process.env) warnDeprecationOnce('env:ANTHROPIC_BASE_URL', 'ANTHROPIC_BASE_URL is deprecated; use the RouterLab service-specific base URL variable.');
     return { baseUrl: legacyOverride.value, source: 'legacy-env', envKey: legacyOverride.key };
   }
 
@@ -90,6 +93,7 @@ export function resolveServiceEnvToken(serviceValue = DEFAULT_SERVICE, env = {})
 
   const legacyToken = firstEnvValue(env, [LEGACY_TOKEN_ENV_KEY]);
   if (legacyToken) {
+    if (env === process.env) warnDeprecationOnce('env:ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_AUTH_TOKEN is deprecated; use the RouterLab service-specific token variable.');
     return { token: legacyToken.value, source: 'legacy-env', envKey: legacyToken.key };
   }
 

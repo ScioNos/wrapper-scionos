@@ -25,52 +25,55 @@ export function detectOS() {
 }
 
 export function findExecutable(command, candidates = []) {
-  for (const candidate of candidates.filter(Boolean)) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  const lookup = process.platform === 'win32' ? 'where.exe' : 'which';
-  const result = spawnSync(lookup, [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-  if (result.status !== 0) {
-    return null;
-  }
-  return result.stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line && fs.existsSync(line)) ?? null;
+  return findExecutables(command, candidates)[0] ?? null;
 }
 
 export function findWindowsExecutable(command, candidates = []) {
-  if (process.platform !== 'win32') {
-    return findExecutable(command, candidates);
-  }
-
-  const expandedCandidates = candidates.flatMap((candidate) => expandWindowsExecutableCandidate(candidate));
-  const fromCandidates = expandedCandidates.find((candidate) => fs.existsSync(candidate));
-  if (fromCandidates) {
-    return fromCandidates;
-  }
-
-  const result = spawnSync('where.exe', [command], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-  if (result.status !== 0) {
-    return null;
-  }
-
-  const matches = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && fs.existsSync(line));
-  return matches.find(isWindowsExecutableShim) ?? matches[0] ?? null;
+  return findExecutables(command, candidates, { preferWindowsShim: true })[0] ?? null;
 }
 
-function expandWindowsExecutableCandidate(candidate) {
-  if (!candidate) {
-    return [];
+function findExecutables(command, candidates = [], { preferWindowsShim = false } = {}) {
+  const values = [];
+  const add = (candidate) => {
+    if (!candidate) return;
+    const key = process.platform === 'win32' ? candidate.toLowerCase() : candidate;
+    if (!values.some((entry) => entry.key === key) && isExecutableFile(candidate)) {
+      values.push({ key, path: candidate });
+    }
+  };
+
+  for (const candidate of candidates.filter(Boolean)) {
+    for (const expanded of expandExecutableCandidate(candidate, preferWindowsShim)) add(expanded);
   }
-  if (path.extname(candidate)) {
-    return [candidate];
-  }
-  return ['.cmd', '.bat', '.exe', ''].map((extension) => `${candidate}${extension}`);
+
+  const pathEntries = String(process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  const pathCandidates = path.isAbsolute(command)
+    ? expandExecutableCandidate(command, preferWindowsShim)
+    : pathEntries.flatMap((directory) => expandExecutableCandidate(path.join(directory, command), preferWindowsShim));
+  for (const candidate of pathCandidates) add(candidate);
+  return values.map((entry) => entry.path);
 }
 
-function isWindowsExecutableShim(filePath) {
-  return /\.(cmd|bat|exe)$/i.test(filePath);
+function expandExecutableCandidate(candidate, preferWindowsShim) {
+  if (process.platform !== 'win32' || path.extname(candidate)) return [candidate];
+  const pathExt = String(process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((extension) => extension.trim().toLowerCase())
+    .filter(Boolean);
+  const preferred = preferWindowsShim
+    ? ['.cmd', '.bat', '.exe', ...pathExt, '']
+    : [...pathExt, ''];
+  return [...new Set(preferred)].map((extension) => candidate + extension);
+}
+
+function isExecutableFile(filePath) {
+  try {
+    if (!fs.statSync(filePath).isFile()) return false;
+    if (process.platform !== 'win32') fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function detectCli({
@@ -79,14 +82,20 @@ export function detectCli({
   configPath = null,
   preferWindowsShim = false,
 } = {}) {
-  const find = preferWindowsShim ? findWindowsExecutable : findExecutable;
-  const cliPath = find(command, candidates);
+  const cliCandidates = findExecutables(command, candidates, { preferWindowsShim });
+  let cliPath = null;
   let version = null;
-  if (cliPath) {
-    const invocation = buildInteractiveCliInvocation(cliPath, ['--version']);
-    const result = spawnSync(invocation.command, invocation.args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  for (const candidate of cliCandidates) {
+    const invocation = buildInteractiveCliInvocation(candidate, ['--version']);
+    const result = spawnSync(invocation.command, invocation.args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(invocation.spawnOptions ?? {}),
+    });
     if (result.status === 0) {
-      version = result.stdout.trim();
+      cliPath = candidate;
+      version = (result.stdout || result.stderr || '').trim() || null;
+      break;
     }
   }
 
@@ -100,7 +109,6 @@ export function detectCli({
   }
   return detected;
 }
-
 export function detectClaudeCode() {
   const home = os.homedir();
   const candidates = process.platform === 'win32'
@@ -121,6 +129,22 @@ export function detectClaudeCode() {
   });
 }
 
+export const MINIMUM_CODEX_VERSION = '0.144.1';
+
+export function isCodexVersionSupported(version, minimum = MINIMUM_CODEX_VERSION) {
+  const actual = String(version ?? '').match(/(\d+)\.(\d+)\.(\d+)/);
+  const required = String(minimum).match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!actual || !required) {
+    return false;
+  }
+  for (let index = 1; index <= 3; index += 1) {
+    const delta = Number(actual[index]) - Number(required[index]);
+    if (delta !== 0) {
+      return delta > 0;
+    }
+  }
+  return true;
+}
 export function detectCodexCli() {
   const home = os.homedir();
   const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
@@ -141,10 +165,11 @@ export function detectCodexCli() {
     candidates,
     preferWindowsShim: true,
   });
+  detected.minimumVersion = MINIMUM_CODEX_VERSION;
+  detected.versionSupported = detected.installed && isCodexVersionSupported(detected.version);
   if (process.platform === 'win32' && detected.installed) {
     return {
       ...detected,
-      cliPath: 'codex',
       resolvedCliPath: detected.cliPath,
     };
   }

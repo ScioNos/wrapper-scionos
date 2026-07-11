@@ -2,12 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## 4.0.0 - 2026-07-11
+
+### Added
+
+- Native `/v1/responses` transport for every RouterLab and RouterLab LLM model, in streaming and non-streaming modes, with no protocol-conversion fallback.
+- Dynamic normalized model capabilities with a conservative 128k text-only fallback.
+- Random per-profile Claude Desktop proxy credentials, authenticated model catalog, exact-origin CORS allowlists, request limits, abort propagation, and automatic legacy-secret migration.
+- Node.js and Codex CLI minimum-version checks, stale catalog cleanup, 3.x migration guide, and cross-platform release workflow.
+- Stable one-document JSON output, per-command CLI validation, versioned Claude Desktop mapping metadata, compressed request decoding, and the scionos binary alias.
+- Strict Linux/macOS 0700 configuration directories and verified 0600 credential JSON/token files, plus fail-closed atomic rollback.
+
+### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
+- Restored the Codex proxy as the default transport and retained --direct for diagnostics.
+- Preserved active Codex sandbox, approval, reasoning, feature, MCP, hook, authentication, and web-search policy; search capability is exposed only from explicit model metadata.
+- Made --token effective for Claude Code and masked interactive login.
+- Sent macOS Keychain secrets by stdin and made logout remove current and legacy namespaces on all platforms.
+- Centralized CLI command and option metadata, accepted global options before or after commands, and restricted authenticated HTTP listeners to loopback with credentials protected on disk.
+- Restored stored Claude Desktop service, strategies, host, and port on proxy restart; exact allowed CORS preflights are handled before auth while all GET/POST routes remain authenticated.
+- Preserved compressed passthrough response encoding/length, decoded intercepted compressed errors within the 64 MiB limit, and accepted gzip, deflate, Brotli, and conditional zstd request bodies.
+- Made auth test and strategies honor --token before environment/storage and made Auth dry-run non-mutating.
+- Fixed Windows npm `.cmd` argument quoting so Codex TOML overrides retain quotes without leaking caret characters.
+- Fixed the RouterLab LLM Claude Code subagent identifier from sonnet-4-6 to claude-sonnet-4-6; RouterLab keeps aws-claude-haiku-4-5-20251001, and the interactive/CLI override remains removed.
+- Marked the RouterLab LLM Claude strategy as maintenance-only so it remains visible but cannot be selected.
+- Removed the `claude-` prefix from non-Claude RouterLab LLM upstream model ids such as `gpt-5.5`, `glm-5.2`, `qwen3.7-max`, `MiniMax-M3`, and `deepseek-v4-pro`.
+- Replaced the RouterLab Codex CLI catalog with `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, and `glm-5.2`; `gpt-5.6-sol` is now the default.
+- Updated RouterLab Claude Code routing to force Claude Fable 5, Sonnet 5, and Opus 4.8 for the default strategy; RouterLab uses GPT 5.6 Sol/Terra/Luna, while LLM OpenAI uses Sol Pro/Sol/Terra Pro; and single-model DeepSeek V4 Pro, GLM 5.2, and Kimi K2.7 strategies.
+- Reordered the LLM Codex catalogue to GPT 5.6 Sol Pro, Terra Pro, Sol, Terra, GLM 5.2, Qwen 3.7 Max, and MiniMax M3; removed GPT 5.5 and obsolete API-unavailable notices.
+
+### Deprecated
+
+- --proxy, --transport, --list-strategies, auth change, claude-desktop apply, ANTHROPIC_AUTH_TOKEN, and ANTHROPIC_BASE_URL remain accepted during 4.x with one warning per process on stderr. Direct Desktop mode stores its RouterLab token in clear text and is removable in 5.0; apply-proxy is recommended.
+
 ## 3.2.2 - 2026-07-07
 
 ### Fixed
 
 - Improved Codex upstream 401/403 diagnostics for RouterLab Responses requests, including service, model, upstream URL, and token-source guidance.
-- Enriched passthrough GPT `/v1/responses` errors as well as bridged Chat Completions errors, so RouterLab `https://api.routerlab.ch` authorization failures are no longer reported as opaque local proxy failures.
+- Enriched RouterLab `/v1/responses` authorization errors so failures from `https://api.routerlab.ch` are no longer reported as opaque local proxy failures.
 
 ## 3.2.1 - 2026-07-07
 
@@ -17,6 +52,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - Kept `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` as legacy fallbacks while preferring RouterLab-specific environment variables.
 - Changed Codex token resolution to prefer the wrapper-stored service token over legacy environment tokens, avoiding stale `ANTHROPIC_AUTH_TOKEN` values during proxied Codex launches.
 - Improved Auth and Doctor diagnostics to show token source and environment key information.
@@ -25,10 +62,12 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added a Codex Responses-to-Chat bridge for RouterLab LLM models that do not reliably support the Responses API: `glm-5.2`, `qwen3.7-max`, `MiniMax-M3`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, and `glm-5.1`.
-- Added streaming Responses event conversion, usage propagation, error normalization, and Codex-compatible reasoning/thinking option mapping for bridged Chat Completions upstreams.
+- Expanded Codex compatibility to `glm-5.2`, `qwen3.7-max`, `MiniMax-M3`, `deepseek-v4-pro`, `deepseek-v4-flash`, `kimi-k2.7-code`, and `glm-5.1`.
+- Added normalized streaming lifecycle, usage propagation, error handling, and Codex-compatible reasoning options for those models.
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - Changed `codex launch` to use the wrapper-managed local proxy by default, matching the Claude Code launch flow.
 - Kept `--direct` and `--transport direct|proxy` as compatibility/debug paths while removing `--transport proxy` from normal user guidance.
@@ -52,6 +91,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - Changed Codex CLI launches to connect directly to RouterLab by default with runtime `-c` provider overrides and `OPENAI_API_KEY`.
 - Kept the v3 Codex proxy path as an explicit `--transport proxy` fallback.
 - Updated the RouterLab LLM strategy catalog to remove OpenAI GPT special price, replace `glm-5.1` with `glm-5.2`, and route GLM through `claude-glm-5.2`.
@@ -68,6 +109,8 @@ All notable changes to this project will be documented in this file.
 - Added resilient stream forwarding for Claude Code, Claude Desktop proxy mode, and Codex CLI launches.
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - Claude Code and Codex CLI launches now route through the local long-running proxy before RouterLab.
 - Claude Desktop proxy mode now reuses the shared long-running proxy transport.
@@ -92,6 +135,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - Changed `applyCodexConfig` into a compatibility preview path that no longer writes persistent Codex files.
 - Changed Windows Codex launching to call `codex` through PATH, matching the user terminal and avoiding absolute npm shim path issues.
 - Changed Codex runtime provider overrides to use dotted `-c` keys so Codex parses `model_providers.custom` as a provider struct.
@@ -108,6 +153,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - Made the interactive Codex CLI menu default to safe launch, with persistent `Apply Config` moved under Advanced.
 - Codex runtime launch now uses `workspace-write` sandboxing and `on-request` approvals for the child process.
 - Removed blank separator rows from interactive select menus.
@@ -123,6 +170,8 @@ All notable changes to this project will be documented in this file.
 - Added RouterLab LLM-specific Codex model catalog: `MiniMax-M3`, `deepseek-v4-pro`, `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.5`, `qwen3.7-max`, and `glm-5.1`.
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - Simplified the Codex CLI interactive menu by removing `Choose Default Model`.
 - Codex custom provider config now uses `env_key = "OPENAI_API_KEY"` instead of Codex OpenAI/ChatGPT auth, while preserving `auth.json`.
@@ -145,6 +194,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - `claude-desktop proxy --service llm` and `claude-desktop apply-proxy --service llm` now use the same full Desktop LLM mapping as the interactive Start Local Mapping flow when no explicit `--strategy` is provided.
 - Claude Desktop LLM model route ids now use Desktop-safe aliases with clean display labels, such as `gpt-5.5`, `deepseek-v4-pro`, `MiniMax-M3`, `qwen3.7-max`, and `glm-5.1`.
 - RouterLab LLM native Claude mapping now uses `claude-opus-4-8`, `claude-sonnet-4-6`, and `claude-haiku-4-5-20251001`.
@@ -154,6 +205,8 @@ All notable changes to this project will be documented in this file.
 ## 1.1.2 - 2026-06-03
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - RouterLab LLM Claude Code strategy `claude-qwen3.7-max` is now shown as `qwen3.7-max` in guided launch displays.
 - Claude Code launches now receive temporary child-process environment `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`.
@@ -167,6 +220,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
+
 - Package version promoted from `1.1.0` to `1.1.1`.
 
 ## 1.1.0 - 2026-06-03
@@ -177,6 +232,8 @@ All notable changes to this project will be documented in this file.
 - RouterLab LLM Claude Code strategy `claude-qwen3.7-max`, with `claude-qwen3.6-flash` for subagents.
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - RouterLab LLM Claude strategy now launches Claude Code in native mode without forcing default model environment variables.
 - RouterLab LLM MiniMax strategy now uses only `claude-MiniMax-M3`; the previous `minimax-m2.7` strategy name is no longer accepted.
@@ -192,6 +249,8 @@ All notable changes to this project will be documented in this file.
 - Codex CLI `model_catalog_json` generation via `wrapper-scionos-model-catalog.json` when a local Codex `models_cache.json` is available.
 
 ### Changed
+
+- Rebuilt interactive navigation around one route registry with consistent back-to-home actions, breadcrumbs, and centralized action dispatch.
 
 - Main menu entry renamed from `Codex` to `Codex CLI`.
 - Package version promoted from `0.9.0-beta.1` to `1.0.0`.

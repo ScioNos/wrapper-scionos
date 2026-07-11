@@ -1,54 +1,85 @@
 import { spawn } from 'node:child_process';
 
-export async function runInteractiveCli(command, args = [], { env = process.env } = {}) {
+export async function runInteractiveCli(command, args = [], { env = process.env, signalGraceMs = 5000, signalSource = process } = {}) {
   const invocation = buildInteractiveCliInvocation(command, args);
   const child = spawn(invocation.command, invocation.args, {
     stdio: 'inherit',
     env,
+    detached: process.platform !== 'win32',
+    ...(invocation.spawnOptions ?? {}),
   });
 
-  const exitCode = await new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      if (typeof code === 'number') {
-        resolve(code);
-      } else {
-        resolve(signal === 'SIGINT' ? 130 : 1);
-      }
-    });
-  });
+  let receivedSignal = null;
+  let forceTimer = null;
+  const forwardSignal = (signal) => {
+    if (receivedSignal || child.exitCode !== null) return;
+    receivedSignal = signal;
+    terminateChildTree(child, signal);
+    forceTimer = setTimeout(() => terminateChildTree(child, 'SIGKILL'), signalGraceMs);
+    forceTimer.unref?.();
+  };
+  const onSigint = () => forwardSignal('SIGINT');
+  const onSigterm = () => forwardSignal('SIGTERM');
+  signalSource.on('SIGINT', onSigint);
+  signalSource.on('SIGTERM', onSigterm);
+
+  let exitCode;
+  try {
+    try {
+      exitCode = await new Promise((resolve, reject) => {
+        child.once('error', reject);
+        child.once('exit', (code, signal) => {
+          if (typeof code === 'number') resolve(code);
+          else resolve(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1);
+        });
+      });
+    } catch (error) {
+      if (!receivedSignal) throw error;
+    }
+    if (receivedSignal === 'SIGINT') exitCode = 130;
+    if (receivedSignal === 'SIGTERM') exitCode = 143;
+  } finally {
+    if (forceTimer) clearTimeout(forceTimer);
+    signalSource.off('SIGINT', onSigint);
+    signalSource.off('SIGTERM', onSigterm);
+  }
 
   process.exitCode = exitCode;
   return exitCode;
 }
 
+function terminateChildTree(child, signal) {
+  if (!child?.pid || child.exitCode !== null) return;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.on('error', () => {});
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // The process may already have exited.
+    }
+  }
+}
 export function buildInteractiveCliInvocation(command, args = [], {
   platform = process.platform,
   comSpec = process.env.ComSpec,
 } = {}) {
-  if (shouldUseWindowsPowerShell(command, platform)) {
-    return {
-      command: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-Command', buildWindowsPowerShellCommandLine(command, args)],
-    };
-  }
-
-  if (shouldUseWindowsCommandShell(command, platform)) {
+  if (isWindowsExecutableShim(command, platform)) {
     return {
       command: comSpec || 'cmd.exe',
       args: ['/d', '/s', '/c', buildWindowsCommandLine(command, args)],
+      spawnOptions: { windowsVerbatimArguments: true },
     };
   }
-
-  return { command, args };
-}
-
-export function buildWindowsPowerShellCommandLine(command, args = []) {
-  return `& ${[command, ...args].map(quotePowerShellLiteral).join(' ')}`;
-}
-
-export function quotePowerShellLiteral(value) {
-  return `'${String(value).replace(/'/g, "''")}'`;
+  return { command, args, spawnOptions: {} };
 }
 
 export function buildWindowsCommandLine(command, args = []) {
@@ -57,31 +88,11 @@ export function buildWindowsCommandLine(command, args = []) {
 
 export function quoteWindowsCmdArg(value) {
   const text = String(value);
-  if (text.length === 0) {
-    return '""';
-  }
-
-  const escaped = text
-    .replace(/%/g, '%%')
-    .replace(/(["^&|<>()])/g, '^$1');
+  if (text.length === 0) return '""';
+  const escaped = text.replace(/%/g, '%%');
   return `"${escaped}"`;
 }
 
 export function isWindowsExecutableShim(filePath, platform = process.platform) {
   return platform === 'win32' && /\.(cmd|bat)$/i.test(filePath);
-}
-
-function shouldUseWindowsCommandShell(command, platform) {
-  if (platform !== 'win32') {
-    return false;
-  }
-  return isWindowsExecutableShim(command, platform);
-}
-
-function shouldUseWindowsPowerShell(command, platform) {
-  return platform === 'win32' && !hasExecutableExtension(command);
-}
-
-function hasExecutableExtension(command) {
-  return /\.[a-z0-9]+$/i.test(command);
 }

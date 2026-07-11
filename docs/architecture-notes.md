@@ -1,118 +1,45 @@
 # Architecture Notes
 
-This project starts from a narrow goal: provide a clean ScioNos CLI wrapper for
-RouterLab-backed coding assistants, then grow through explicit app adapters.
+## Boundaries
 
-## Core Scope
+The package is split into client adapters under src/apps, CLI parsing and commands under src/cli, transport and process code under src/platform, RouterLab normalization under src/routerlab, and service-scoped credential storage under src/security.
 
-Keep shared behavior in small modules:
+The command registry and common option definitions are the source for parser behavior, generated help, and CLI tests. Interactive navigation is driven by one route registry with explicit parents, a shared home action, and breadcrumbs; command handlers do not own menu loops. Each command/action owns an allowlist of options and positional arguments. Usage errors are separated from runtime failures with exit codes 2 and 1. Machine output is a single success/error envelope; interactive launchers reject JSON.
 
-- RouterLab service targets: `https://api.routerlab.ch` and `https://llm-api.routerlab.ch`
-- service-scoped token storage
-- `/v1/models` validation before strategy availability decisions
-- Claude Code environment mapping through:
-  - `ANTHROPIC_BASE_URL`
-  - `ANTHROPIC_AUTH_TOKEN`
-  - `ANTHROPIC_DEFAULT_OPUS_MODEL`
-  - `ANTHROPIC_DEFAULT_SONNET_MODEL`
-  - `ANTHROPIC_DEFAULT_HAIKU_MODEL`
-  - `CLAUDE_CODE_SUBAGENT_MODEL`
-- `doctor`, `auth`, and strategy listing workflows
-- compatibility mode where regular Claude Code arguments are forwarded
+## Local transport security
 
-## App Boundaries
+All HTTP listeners are loopback-only. A proxy credential is generated from 32 random bytes and must authenticate every route. Claude Desktop stores that credential in its managed profile; legacy scionos-local profiles are replaced atomically. On Linux/macOS, configuration directories are verified as 0700 and every credential-bearing JSON as 0600. Profile writes occur only after the token is resolved and the listener is active; failure closes the listener and preserves the previous profile. Profiles and status output redact credentials.
 
-Each supported client gets its own adapter under `src/apps`.
+No CORS origin is allowed by default. Exact origins are opt-in and wildcard responses are forbidden. A matching OPTIONS preflight is answered before authentication with 204 and no resource data; every GET/POST route remains authenticated.
 
-Current adapters:
+Request bodies are capped at 64 MiB in compressed and decompressed form. Identity, gzip, deflate, and Brotli are decoded into buffers; zstd is conditional on the Node runtime. Rewritten requests drop content-encoding and content-length. Unsupported encodings return 415, malformed compression or JSON returns 400, headers have 30 seconds and bodies 120 seconds to arrive. Generations have no total timeout. Client disconnects abort upstream work.
 
-- `claude-code.js`: launches Claude Code with RouterLab environment variables
-- `claude-desktop.js`: writes a direct Claude Desktop 3P profile on Windows/macOS/Linux
-- `codex.js`: launches Codex with runtime provider overrides and generates non-persistent config templates
+## Codex lifecycle
 
-Shared modules stay independent:
+Codex CLI 0.144.1 or newer is invoked through the resolved executable or Windows shim. The same invocation builder is used for version detection and interactive launch.
 
-- `src/routerlab`: services, strategies, shared model metadata, model validation
-- `src/security`: secure token storage
-- `src/platform`: local tool detection, OS detection, process launching
-- `src/cli`: command parsing, command registry, and per-command handlers
+The default path is a session-local Responses proxy. The direct path is diagnostic only. Codex presence/version is checked before token resolution, network discovery, proxy startup, or catalog creation. Runtime overrides are limited to provider identity, base URL, model, wire API, token environment key, and temporary model catalog. User sandbox, approvals, reasoning effort, features, MCP settings, hooks, auth files, web-search mode, and other active policy remain untouched. supports_search_tool is true only for explicit RouterLab model metadata.
 
-## Claude Desktop Rules
+Cleanup surrounds the entire token/network/proxy/catalog/argument/child lifecycle with nullable resources. The active catalog and proxy are removed after normal exit, creation failure, launch error, SIGINT, or SIGTERM. Catalogs older than 24 hours are removed before a new one is created.
 
-Claude Desktop is a separate target from Claude Code.
+## Native Responses transport
 
-Claude Desktop 3P configuration lives under:
+Every model exposed by the RouterLab and RouterLab LLM services is forwarded to `/v1/responses` without semantic conversion, for both streaming and non-streaming requests. Codex receives `wire_api="responses"`. RouterLab owns the model-specific compatibility contract; no protocol-conversion fallback or model classification remains in the wrapper.
 
-- Windows: `%LOCALAPPDATA%\Claude` and `%LOCALAPPDATA%\Claude-3p`
-- macOS: `~/Library/Application Support/Claude` and `~/Library/Application Support/Claude-3p`
-- Linux (`claude-desktop-debian`): `${XDG_CONFIG_HOME:-~/.config}/Claude` and `${XDG_CONFIG_HOME:-~/.config}/Claude-3p`
+The proxy authenticates its local client, replaces the local credential with the service-scoped upstream token, and forces `store: false` in rewritten Responses JSON. Only rewritten request bodies lose `content-encoding` and `content-length`; true hop-by-hop headers and every header named by `Connection` are removed in both directions. Unmodified upstream responses retain `Content-Encoding` and `Content-Length`. Intercepted gzip, deflate, Brotli, or zstd errors are decoded with the decompressed-size limit before Responses-compatible normalization and contextual 401/403 diagnostics.
 
-3P profiles use:
+Custom HTTP(S) service bases retain their pathname. Appending `/v1/responses` to `/gateway` yields `/gateway/v1/responses`; a base already ending in `/v1` is deduplicated. Client query strings are retained.
 
-- `deploymentMode = "3p"`
-- `configLibrary/_meta.json`
-- a stable profile JSON containing `inferenceGatewayBaseUrl`, bearer auth, and optional `inferenceModels`
+## Model catalog
 
-Direct mode can let Claude Desktop read the RouterLab catalog. Claude Desktop may still hide
-model ids that do not look like recognized Claude families.
+RouterLab model metadata is normalized into context, modalities, reasoning, parallel function-call, freeform, hosted-tool, and search capabilities. The wrapper never clones an arbitrary Codex models_cache.json entry.
 
-Local proxy mode exposes valid Desktop route ids and forwards requests to the selected RouterLab
-strategy models. This is needed for routes such as `claude-gpt-*` that can be hidden in the
-Desktop menu.
+Missing or insufficient metadata uses a conservative manifest: 128k, text only, sequential function tools, medium reasoning, and no unverified vision, search, hosted tools, freeform, or parallel calls.
 
-## Codex Rules
+## Credential storage
 
-Codex CLI support should preserve user login material.
+Preferred service environment variables use RouterLab names. Anthropic token and base URL names are 4.x compatibility fallbacks with one stderr warning per process.
 
-The default Codex CLI launch path should be direct and non-destructive: pass runtime `-c`
-overrides for the custom provider base URL and the selected RouterLab token through the child
-process environment instead of rewriting `~/.codex/config.toml`.
+Interactive login is masked. Auth dry-runs never prompt or mutate. auth test and strategies resolve command token, environment, then storage; Codex deliberately resolves command token, storage, then environment. macOS Keychain storage sends the secret on stdin. Logout removes both wrapper-scionos and claude-scionos entries on Windows, macOS, and Linux.
 
-Keep proxy launch support as an explicit fallback transport for long stream issues, not as the
-default Codex path.
-
-When Codex needs the RouterLab model list, generate a temporary `model_catalog_json` file under the
-system temp directory and pass it with a runtime `-c` override. Remove that file after the Codex
-process exits.
-
-The wrapper no longer offers persistent provider switching because rewriting
-`~/.codex/config.toml` can overwrite unrelated Codex settings. Restore support remains only as a
-recovery path for users who previously wrote a wrapper-generated config.
-
-## Initial Structure
-
-```text
-index.js
-src/
-  apps/
-    claude-code.js
-    claude-desktop-proxy.js
-    claude-desktop.js
-    codex.js
-  cli/
-    args.js
-    commands/
-    main.js
-  platform/
-    detect.js
-    process.js
-  routerlab/
-    models.js
-    services.js
-    strategies.js
-    strategy-models.js
-  security/
-    token-store.js
-tests/
-  claude-code.test.js
-  claude-desktop.test.js
-  cli.test.js
-  codex.test.js
-  proxy.test.js
-  routerlab.test.js
-```
-
-## Next Steps
-
-1. Add import helpers for existing ScioNos wrapper configurations.
-2. Add release packaging after the CLI surface stabilizes.
+Claude Desktop _meta.json owns a schema-versioned wrapperScionos block with mode, service, strategy/strategies, and base URL. Direct profile mode is deprecated for 4.x and stores the RouterLab token in clear text; proxy mode is recommended and stores only the local credential. Proxy startup restores those values when no explicit profile option is supplied. Profile and metadata writes share atomic rollback; legacy profiles recover loopback host and port from inferenceGatewayBaseUrl.

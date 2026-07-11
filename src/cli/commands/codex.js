@@ -1,7 +1,9 @@
 import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } from '../../routerlab/services.js';
+import { fetchModels } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
-import { DEFAULT_LLM_PROXY_GATEWAY_TOKEN, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platform/llm-proxy.js';
+import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platform/llm-proxy.js';
 import {
+  assertCodexCliAvailable,
   buildCodexAuth,
   buildCodexConfigPreview,
   buildCodexRuntimeArgs,
@@ -17,99 +19,85 @@ import {
 import { print } from './output.js';
 
 export async function launchCodexForService(options) {
-  const serviceConfig = requireServiceConfig(options.service);
-  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
-  const model = options.model ?? defaultCodexModelForService(service.value);
-  const envToken = resolveServiceEnvToken(service.value, process.env);
-  const resolvedToken = options.token
-    ? { token: options.token, source: 'option', envTokenPresent: Boolean(envToken.token), envTokenKey: envToken.envKey, storedTokenPresent: false }
-    : await resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt, preferStored: true });
-  if (!options.noPrompt && resolvedToken.source === 'secure-storage' && resolvedToken.envTokenPresent) {
-    console.log(`WARN Using stored ${service.label} token for Codex; ${resolvedToken.envTokenKey} is set but ignored. Pass --token to override.`);
-  }
-  const token = resolvedToken.token;
-  if (options.transport === 'direct') {
-    await launchCodexDirect({ service, model, token, options });
-    return;
-  }
-
-  await launchCodexViaProxy({ service, model, token, options });
-}
-
-async function launchCodexDirect({ service, model, token, options }) {
-  const catalog = writeCodexRuntimeModelCatalog({ serviceValue: service.value });
-  const codexArgs = buildCodexRuntimeArgs({
-    providerName: service.value,
-    baseUrl: `${service.baseUrl}/v1`,
-    model,
-    modelCatalogPath: catalog?.path ?? null,
-  });
+  assertCodexCliAvailable();
+  let proxy = null;
+  let catalog = null;
   try {
-    await launchCodex({ apiKey: token, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
-  } finally {
-    cleanupCodexRuntimeModelCatalog(catalog);
-  }
-}
+    const serviceConfig = requireServiceConfig(options.service);
+    const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
+    const model = options.model ?? defaultCodexModelForService(service.value);
+    const envToken = resolveServiceEnvToken(service.value, process.env);
+    const resolvedToken = options.token
+      ? { token: options.token, source: 'option', envTokenPresent: Boolean(envToken.token), envTokenKey: envToken.envKey, storedTokenPresent: false }
+      : await resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt, preferStored: true });
+    if (!options.noPrompt && resolvedToken.source === 'secure-storage' && resolvedToken.envTokenPresent) {
+      console.error('WARN Using stored ' + service.label + ' token for Codex; ' + resolvedToken.envTokenKey + ' is set but ignored. Pass --token to override.');
+    }
+    const modelResult = await fetchModels(resolvedToken.token, {
+      serviceValue: service.value,
+      baseUrl: service.baseUrl,
+      timeoutMs: 10000,
+    });
+    const modelMetadata = modelResult.valid ? modelResult.modelMetadata : [];
+    if (!modelResult.valid && !options.noPrompt) {
+      console.error('WARN Model metadata unavailable; using the conservative local Codex catalog.');
+    }
 
-async function launchCodexViaProxy({ service, model, token, options }) {
-  const proxy = await startLongRunningLlmProxy({
-    targetBaseUrl: service.baseUrl,
-    routerlabToken: token,
-    upstreamAuth: 'openai',
-    codexBridgeServiceValue: service.value,
-  });
-  const catalog = writeCodexRuntimeModelCatalog({ serviceValue: service.value });
-  const codexArgs = buildCodexRuntimeArgs({
-    providerName: service.value,
-    baseUrl: `${proxy.baseUrl}/v1`,
-    model,
-    modelCatalogPath: catalog?.path ?? null,
-  });
-  try {
-    await launchCodex({ apiKey: DEFAULT_LLM_PROXY_GATEWAY_TOKEN, codexArgs: [...codexArgs, ...options.passthrough.slice(1)] });
+    let baseUrl = service.baseUrl;
+    let apiKey = resolvedToken.token;
+    if (options.transport !== 'direct') {
+      proxy = await startLongRunningLlmProxy({
+        targetBaseUrl: service.baseUrl,
+        routerlabToken: resolvedToken.token,
+        upstreamAuth: 'openai',
+        codexServiceValue: service.value,
+      });
+      baseUrl = proxy.baseUrl;
+      apiKey = proxy.gatewayToken;
+    }
+
+    catalog = writeCodexRuntimeModelCatalog({ serviceValue: service.value, modelMetadata });
+    const codexArgs = buildCodexRuntimeArgs({
+      providerName: service.value,
+      baseUrl: baseUrl + '/v1',
+      model,
+      modelCatalogPath: catalog?.path ?? null,
+    });
+    await launchCodex({ apiKey, codexArgs: [...codexArgs, ...(options.forwarded ?? [])] });
   } finally {
-    cleanupCodexRuntimeModelCatalog(catalog);
-    await stopLongRunningLlmProxy(proxy);
+    try {
+      cleanupCodexRuntimeModelCatalog(catalog);
+    } finally {
+      await stopLongRunningLlmProxy(proxy);
+    }
   }
 }
 
 export async function handleCodex(action, options) {
-  if (action === 'apply') {
-    throw new Error('codex apply was removed because persistent Codex config rewrites are too risky. Use "codex launch" instead; use "codex restore" only to undo an existing wrapper config.');
-  }
-  if (action !== 'launch' && action !== 'template' && action !== 'restore' && action !== 'status') {
-    throw new Error(`Unknown codex action "${action}".`);
-  }
-
-  const serviceConfig = requireServiceConfig(options.service);
-  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
-  const model = options.model ?? defaultCodexModelForService(service.value);
   if (action === 'status') {
     print(readCodexStatus(), options);
-    return;
-  }
-  if (action === 'launch') {
-    await launchCodexForService(options);
     return;
   }
   if (action === 'restore') {
     print(restoreCodexConfig({ dryRun: !options.yes }), options);
     return;
   }
+  if (action === 'launch') {
+    await launchCodexForService(options);
+    return;
+  }
 
+  const serviceConfig = requireServiceConfig(options.service);
+  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
+  const model = options.model ?? defaultCodexModelForService(service.value);
   const paths = getCodexPaths();
   const preview = buildCodexConfigPreview({
     providerName: service.value,
-    baseUrl: `${service.baseUrl}/v1`,
+    serviceValue: service.value,
+    baseUrl: service.baseUrl + '/v1',
     model,
     paths,
     modelCatalogModels: codexModelsForService(service.value),
   });
-
-  print({
-    paths,
-    auth: buildCodexAuth(''),
-    config: preview.config,
-    catalog: preview.catalog,
-  }, options);
+  print({ paths, auth: buildCodexAuth(''), config: preview.config, catalog: preview.catalog }, options);
 }

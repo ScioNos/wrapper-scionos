@@ -1,40 +1,17 @@
 import { password, select, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { detectClaudeCode } from '../platform/detect.js';
-import { DEFAULT_LLM_PROXY_GATEWAY_TOKEN, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
+import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } from '../routerlab/services.js';
-import { allowsSubagentModelOverride, assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 
 export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
   CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
 };
-
-export const SUBAGENT_MODEL_CHOICES = [
-  {
-    name: 'Strategy default',
-    value: 'default',
-    description: 'Use the subagent model defined by the selected strategy.',
-  },
-  {
-    name: 'Claude Haiku',
-    value: 'haiku',
-    description: 'Force Claude Code subagents to claude-haiku-4-5-20251001.',
-  },
-  {
-    name: 'GPT 5.4 mini',
-    value: 'gpt-5.4-mini',
-    description: 'Force Claude Code subagents to gpt-5.4-mini.',
-  },
-  {
-    name: 'DeepSeek V4 flash',
-    value: 'claude-deepseek-v4-flash',
-    description: 'Force Claude Code subagents to claude-deepseek-v4-flash.',
-  },
-];
 
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
   return {
@@ -119,6 +96,7 @@ export async function chooseStrategy({
   noPrompt = false,
   preferredStrategy = null,
   modelIds = [],
+  allowBack = false,
 } = {}) {
   const service = requireServiceConfig(serviceValue);
   const finalizeChoice = (selected) => {
@@ -126,13 +104,6 @@ export async function chooseStrategy({
     if (!resolvedStrategy) {
       const launchReadiness = assessStrategyLaunch(selected, modelIds, service.value);
       throw new Error(`Strategy "${selected}" cannot support the default Claude Code launch on ${service.availabilityLabel}. ${launchReadiness.note}`);
-    }
-
-    if (hasVerifiedModelIds(modelIds)) {
-      const availability = assessStrategy(selected, modelIds, service.value);
-      if (availability.level === 'partial') {
-        console.log(chalk.yellow(`WARN Strategy "${selected}" is only partially available on ${service.availabilityLabel}.`));
-      }
     }
 
     return resolvedStrategy;
@@ -150,56 +121,71 @@ export async function chooseStrategy({
 
   const strategies = getServiceStrategies(service.value);
   if (noPrompt || strategies.length === 1) {
-    return finalizeChoice(strategies[0].value);
+    const defaultStrategy = strategies.find((strategy) => (
+      assessStrategyLaunch(strategy.value, modelIds, service.value).ready
+    ));
+    if (!defaultStrategy) {
+      throw new Error(`No launchable strategy is available on ${service.availabilityLabel}.`);
+    }
+    return finalizeChoice(defaultStrategy.value);
   }
 
-  const choices = getStrategyChoices(modelIds, service.value).map((choice) => {
-    const launchReadiness = assessStrategyLaunch(choice.value, modelIds, service.value);
-    const disabled = hasVerifiedModelIds(modelIds) && !launchReadiness.ready ? launchReadiness.note : false;
-    return {
-      ...choice,
-      disabled,
-      name: `${getStrategyIndicator(choice.value, modelIds, service.value)} ${choice.name}`,
-      short: choice.name,
-    };
-  });
+  const choices = buildStrategyPromptChoices(modelIds, service.value);
+  const promptChoices = allowBack
+    ? [...choices, {
+      name: '← Back to home',
+      value: 'back',
+      description: 'Return to the main menu without launching Claude Code.',
+      short: 'Back to home',
+    }]
+    : choices;
 
-  if (hasVerifiedModelIds(modelIds) && choices.every((choice) => choice.disabled)) {
+  if (choices.every((choice) => choice.disabled)) {
     throw new Error(`No launchable strategy is available on ${service.availabilityLabel}.`);
   }
 
   return select({
     message: 'Select Model Strategy:',
-    choices: withSeparators(choices),
-    pageSize: choices.length + Math.max(choices.length - 1, 0),
-  }).then(finalizeChoice);
+    choices: withSeparators(promptChoices),
+    pageSize: promptChoices.length + Math.max(promptChoices.length - 1, 0),
+  }).then((selected) => selected === 'back' ? null : finalizeChoice(selected));
+}
+
+export function buildGuidedStrategyPromptChoices(modelIds, serviceValue, allowBack = false) {
+  const choices = buildStrategyPromptChoices(modelIds, serviceValue);
+  if (!allowBack) return choices;
+  return [...choices, {
+    name: '← Back to home',
+    value: 'back',
+    description: 'Return to the main menu without launching Claude Code.',
+    short: 'Back to home',
+  }];
+}
+export function buildStrategyPromptChoices(modelIds, serviceValue) {
+  return getStrategyChoices(modelIds, serviceValue).map((choice) => {
+    const launchReadiness = assessStrategyLaunch(choice.value, modelIds, serviceValue);
+    const disabled = !launchReadiness.ready
+      && (choice.availability.level === 'unavailable' || hasVerifiedModelIds(modelIds))
+      ? launchReadiness.note
+      : false;
+    return {
+      ...choice,
+      disabled,
+      name: getStrategyIndicator(choice.value, modelIds, serviceValue) + ' ' + choice.name,
+      short: choice.name,
+    };
+  });
 }
 
 export async function chooseSubagentModel({
   serviceValue,
   strategyValue,
-  noPrompt = false,
-  preferredSubagentModel = 'default',
 } = {}) {
-  if (strategyValue && serviceValue && !allowsSubagentModelOverride(strategyValue, serviceValue)) {
-    return 'strategy default';
-  }
-
-  if (preferredSubagentModel && preferredSubagentModel !== 'default') {
-    return preferredSubagentModel;
-  }
-
-  if (noPrompt) {
-    return preferredSubagentModel || 'default';
-  }
-
-  return select({
-    message: 'Select Subagent Model:',
-    choices: SUBAGENT_MODEL_CHOICES,
-  });
+  return getClaudeCodeStrategyEnvironment(strategyValue, serviceValue).CLAUDE_CODE_SUBAGENT_MODEL
+    ?? 'strategy default';
 }
 
-export async function launchClaudeCode({ serviceValue, strategyValue, subagentModel, noPrompt, claudeArgs, version = null }) {
+export async function launchClaudeCode({ serviceValue, strategyValue, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false }) {
   const serviceConfig = requireServiceConfig(serviceValue);
   const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
   if (!noPrompt) {
@@ -211,7 +197,11 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     throw new Error('Claude Code CLI not found. Install @anthropic-ai/claude-code first.');
   }
 
-  const token = await resolveToken({ serviceValue: service.value, noPrompt });
+  const token = tokenOverride?.trim() || await resolveToken({ serviceValue: service.value, noPrompt });
+  const tokenFormat = validateTokenFormat(token);
+  if (!tokenFormat.valid) {
+    throw new Error(tokenFormat.message);
+  }
   const validation = await fetchModels(token, { serviceValue: service.value, baseUrl: service.baseUrl });
   const modelIds = validation.valid ? validation.models : [];
   if (!validation.valid && !noPrompt) {
@@ -224,12 +214,12 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     noPrompt,
     preferredStrategy: strategyValue,
     modelIds,
+    allowBack,
   });
+  if (selectedStrategy === null) return { kind: 'back' };
   const selectedSubagentModel = await chooseSubagentModel({
     serviceValue: service.value,
     strategyValue: selectedStrategy,
-    noPrompt,
-    preferredSubagentModel: subagentModel,
   });
 
   const proxy = await startLongRunningLlmProxy({
@@ -238,9 +228,7 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
     upstreamAuth: 'anthropic',
   });
   const proxiedService = { ...service, baseUrl: proxy.baseUrl };
-  const env = buildClaudeCodeEnvironment(DEFAULT_LLM_PROXY_GATEWAY_TOKEN, proxiedService, selectedStrategy, {
-    subagentModel: selectedSubagentModel,
-  });
+  const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy);
   const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
 
   if (!noPrompt) {
@@ -255,6 +243,7 @@ export async function launchClaudeCode({ serviceValue, strategyValue, subagentMo
 
   try {
     await runInteractiveCli(claude.cliPath, claudeArgs, { env });
+    return { kind: 'launched' };
   } finally {
     await stopLongRunningLlmProxy(proxy);
   }
@@ -313,10 +302,13 @@ function withSeparators(choices) {
 }
 
 function getStrategyIndicator(strategyValue, modelIds, serviceValue) {
+  const launchReadiness = assessStrategyLaunch(strategyValue, modelIds, serviceValue);
+  if (!launchReadiness.ready && launchReadiness.availability.level === 'unavailable') {
+    return chalk.red('●');
+  }
   if (!hasVerifiedModelIds(modelIds)) {
     return chalk.gray('●');
   }
 
-  const launchReadiness = assessStrategyLaunch(strategyValue, modelIds, serviceValue);
   return launchReadiness.ready ? chalk.green('●') : chalk.red('●');
 }

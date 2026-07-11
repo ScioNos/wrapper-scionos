@@ -1,19 +1,90 @@
 import { DEFAULT_ANTHROPIC_VERSION, resolveServiceBaseUrl } from './services.js';
 
-export function extractModelIds(payload) {
+function firstFiniteNumber(...values) {
+  return values.find((value) => Number.isFinite(value) && value > 0);
+}
+
+function normalizeModalities(entry = {}) {
+  const raw = entry.input_modalities ?? entry.modalities?.input ?? entry.modalities;
+  if (!Array.isArray(raw)) {
+    return ['text'];
+  }
+  const values = raw.map((value) => String(value).toLowerCase()).filter(Boolean);
+  return values.length > 0 ? [...new Set(values)] : ['text'];
+}
+
+function explicitBoolean(entry, ...keys) {
+  for (const key of keys) {
+    const value = key.split('.').reduce((current, segment) => current?.[segment], entry);
+    if (typeof value === 'boolean') {
+      return value;
+    }
+  }
+  return false;
+}
+
+function normalizeModelEntry(entry) {
+  const source = typeof entry === 'string' ? { id: entry } : entry ?? {};
+  const id = source.id ?? source.name;
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id: String(id),
+    contextWindow: firstFiniteNumber(
+      source.context_window,
+      source.context_length,
+      source.max_context_tokens,
+      source.max_input_tokens,
+      source.limits?.context_window,
+    ) ?? 128000,
+    inputModalities: normalizeModalities(source),
+    supportsReasoning: explicitBoolean(source, 'supports_reasoning', 'capabilities.reasoning'),
+    supportsParallelToolCalls: explicitBoolean(
+      source,
+      'supports_parallel_tool_calls',
+      'capabilities.parallel_tool_calls',
+    ),
+    supportsFunctionTools: explicitBoolean(
+      source,
+      'supports_function_tools',
+      'capabilities.function_tools',
+      'capabilities.tools',
+    ),
+    supportsFreeformTools: explicitBoolean(
+      source,
+      'supports_freeform_tools',
+      'capabilities.freeform_tools',
+    ),
+    supportsHostedTools: explicitBoolean(
+      source,
+      'supports_hosted_tools',
+      'capabilities.hosted_tools',
+    ),
+    supportsSearch: explicitBoolean(source, 'supports_search', 'capabilities.search'),
+    raw: source,
+  };
+}
+
+export function extractModelMetadata(payload) {
   if (!payload) {
     return [];
   }
-  if (Array.isArray(payload)) {
-    return payload.map((entry) => entry?.id ?? entry?.name ?? entry).filter(Boolean);
-  }
-  if (Array.isArray(payload.data)) {
-    return payload.data.map((entry) => entry?.id ?? entry?.name ?? entry).filter(Boolean);
-  }
-  if (Array.isArray(payload.models)) {
-    return payload.models.map((entry) => entry?.id ?? entry?.name ?? entry).filter(Boolean);
-  }
-  return [];
+
+  const entries = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload.data)
+      ? payload.data
+      : Array.isArray(payload.models)
+        ? payload.models
+        : [];
+
+  return entries.map(normalizeModelEntry).filter(Boolean);
+}
+
+export function extractModelIds(payload) {
+  return extractModelMetadata(payload).map((model) => model.id);
 }
 
 export async function fetchModels(apiKey, options = {}) {
@@ -26,9 +97,10 @@ export async function fetchModels(apiKey, options = {}) {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
   try {
-    const response = await fetch(`${baseUrl}/v1/models`, {
+    const response = await fetch(`${normalizedBaseUrl}/v1/models`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
@@ -45,11 +117,18 @@ export async function fetchModels(apiKey, options = {}) {
         return { valid: false, reason: 'invalid_response', message: 'Model list response is not valid JSON' };
       }
 
-      const models = extractModelIds(payload);
+      const modelMetadata = extractModelMetadata(payload);
+      const models = modelMetadata.map((model) => model.id);
       if (models.length === 0) {
-        return { valid: false, reason: 'models_unavailable', message: 'Model list response did not include any model ids', models };
+        return {
+          valid: false,
+          reason: 'models_unavailable',
+          message: 'Model list response did not include any model ids',
+          models,
+          modelMetadata,
+        };
       }
-      return { valid: true, models, modelsVerified: true };
+      return { valid: true, models, modelMetadata, modelsVerified: true };
     }
 
     if (response.status === 401 || response.status === 403) {

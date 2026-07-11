@@ -2,36 +2,57 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { detectCodexCli } from '../platform/detect.js';
+import { detectCodexCli, MINIMUM_CODEX_VERSION } from '../platform/detect.js';
 import { runInteractiveCli } from '../platform/process.js';
-import { codexModelDisplayName, codexModelsFromClaudeCodeStrategies } from '../routerlab/strategy-models.js';
+import { codexModelDisplayName } from '../routerlab/strategy-models.js';
 
 export { codexModelDisplayName };
 
-export const CODEX_ROUTERLAB_MODELS = codexModelsFromClaudeCodeStrategies('routerlab');
+export const CODEX_ROUTERLAB_MODELS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'deepseek-v4-pro',
+  'kimi-k2.7-code',
+  'glm-5.2',
+];
 export const CODEX_LLM_MODELS = [
-  'gpt-5.5',
-  'gpt-5.4',
-  'gpt-5.4-mini',
+  'gpt-5.6-sol-pro',
+  'gpt-5.6-terra-pro',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
   'glm-5.2',
   'qwen3.7-max',
   'MiniMax-M3',
-  'deepseek-v4-pro',
 ];
 
 export const DEFAULT_CODEX_MODEL = CODEX_ROUTERLAB_MODELS[0];
-export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.5';
+export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.6-sol-pro';
+export const CODEX_LLM_MODEL_NOTICES = new Map();
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
-export const CODEX_FALLBACK_CONTEXT_WINDOW = 272000;
-const CODEX_FALLBACK_COMP_HASH = 'wrapper-scionos-fallback-v1';
+export const CODEX_FALLBACK_CONTEXT_WINDOW = 128000;
+const CODEX_FALLBACK_COMP_HASH = 'wrapper-scionos-fallback-v4';
 const CODEX_FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
 const CODEX_FALLBACK_REASONING_LEVELS = [
   { effort: 'low', description: 'Fast responses with lighter reasoning' },
   { effort: 'medium', description: 'Balances speed and reasoning depth for everyday tasks' },
   { effort: 'high', description: 'Greater reasoning depth for complex problems' },
 ];
+const CODEX_GPT56_REASONING_LEVELS = [
+  ...CODEX_FALLBACK_REASONING_LEVELS,
+  { effort: 'xhigh', description: 'Extra high reasoning depth for complex problems' },
+  { effort: 'max', description: 'Maximum reasoning depth for the hardest problems' },
+  { effort: 'ultra', description: 'Maximum reasoning with automatic task delegation' },
+];
+const CODEX_REASONING_PROFILES = new Map([
+  ['gpt-5.6-terra', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+  ['gpt-5.6-sol', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+  ['gpt-5.6-luna', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+  ['gpt-5.6-terra-pro', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+  ['gpt-5.6-sol-pro', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+]);
 const CODEX_FALLBACK_MODEL_MESSAGES = {
   instructions_template: CODEX_FALLBACK_BASE_INSTRUCTIONS,
   instructions_variables: {},
@@ -59,8 +80,6 @@ export function buildCodexThirdPartyConfig({
   return [
     'model_provider = "custom"',
     `model = ${q(model)}`,
-    'model_reasoning_effort = "high"',
-    'disable_response_storage = true',
     ...(modelCatalogPath ? [`model_catalog_json = ${q(modelCatalogPath)}`] : []),
     '',
     '[model_providers.custom]',
@@ -81,10 +100,6 @@ export function buildCodexRuntimeArgs({
   const overrides = [
     `model_provider=${q('custom')}`,
     `model=${q(model)}`,
-    `model_reasoning_effort=${q('high')}`,
-    'disable_response_storage=true',
-    `sandbox_mode=${q('workspace-write')}`,
-    `approval_policy=${q('on-request')}`,
     ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
     `model_providers.custom.name=${q(providerName)}`,
     `model_providers.custom.base_url=${q(baseUrl)}`,
@@ -111,9 +126,16 @@ export function writeCodexRuntimeModelCatalog({
   serviceValue = 'routerlab',
   paths = getCodexPaths(),
   tmpDir = os.tmpdir(),
+  modelMetadata = [],
 } = {}) {
+  cleanupStaleCodexRuntimeModelCatalogs({ tmpDir });
   const models = codexModelsForService(serviceValue);
-  const catalog = buildCodexModelCatalogFromCache({ paths, models });
+  const catalog = buildCodexModelCatalogFromCache({
+    paths,
+    models,
+    modelMetadata,
+    serviceValue,
+  });
   if (!catalog) {
     return null;
   }
@@ -138,13 +160,18 @@ export function cleanupCodexRuntimeModelCatalog(catalog) {
 
 export function buildCodexConfigPreview({
   providerName = 'routerlab',
+  serviceValue = providerName,
   baseUrl,
   model = DEFAULT_CODEX_MODEL,
   paths = getCodexPaths(),
   modelCatalogModels = CODEX_ROUTERLAB_MODELS,
 } = {}) {
   const resolvedPaths = resolveCodexPaths(paths);
-  const catalog = buildCodexModelCatalogFromCache({ paths: resolvedPaths, models: modelCatalogModels });
+  const catalog = buildCodexModelCatalogFromCache({
+    paths: resolvedPaths,
+    models: modelCatalogModels,
+    serviceValue,
+  });
   const config = buildCodexThirdPartyConfig({
     providerName,
     baseUrl,
@@ -219,12 +246,19 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
   };
 }
 
-export async function launchCodex({ apiKey = null, codexArgs = [] } = {}) {
+export function assertCodexCliAvailable() {
   const codex = detectCodexCli();
   if (!codex.installed) {
     throw new Error('Codex CLI not found. Install the official Codex CLI first.');
   }
+  if (!codex.versionSupported) {
+    throw new Error('Codex CLI ' + MINIMUM_CODEX_VERSION + ' or newer is required (detected: ' + (codex.version ?? 'unknown') + ').');
+  }
+  return codex;
+}
 
+export async function launchCodex({ apiKey = null, codexArgs = [] } = {}) {
+  const codex = assertCodexCliAvailable();
   await runInteractiveCli(codex.cliPath, codexArgs, {
     env: {
       ...process.env,
@@ -247,91 +281,112 @@ export function readCodexStatus(paths = getCodexPaths()) {
   };
 }
 
-export function buildCodexModelCatalogFromCache({ paths = getCodexPaths(), models = CODEX_ROUTERLAB_MODELS } = {}) {
-  const resolvedPaths = resolveCodexPaths(paths);
-  const template = readCodexModelTemplate(resolvedPaths.modelsCachePath) ?? buildFallbackCodexModelTemplate();
-
+export function buildCodexModelCatalogFromCache({
+  paths = getCodexPaths(),
+  models = CODEX_ROUTERLAB_MODELS,
+  modelMetadata = [],
+  serviceValue = 'routerlab',
+} = {}) {
+  // The Codex cache schema is not stable. Use only normalized upstream metadata.
+  resolveCodexPaths(paths);
+  const metadataById = new Map(modelMetadata.map((entry) => [entry.id, entry]));
   return {
-    models: models.map((model, index) => buildCodexModelCatalogEntry(template, model, index)),
+    models: models.map((model, index) => buildCodexModelCatalogEntry(
+      model,
+      index,
+      metadataById.get(model),
+      serviceValue,
+    )),
   };
 }
 
-function buildCodexModelCatalogEntry(template, model, index) {
-  const entry = structuredClone(template);
-  entry.slug = model;
-  entry.display_name = codexModelDisplayName(model);
-  entry.description = entry.display_name;
-  entry.priority = 1000 + index;
-  entry.additional_speed_tiers = [];
-  entry.service_tiers = [];
-  entry.default_service_tier = null;
-  entry.availability_nux = null;
-  entry.upgrade = null;
-  entry.visibility = 'list';
-  entry.supported_in_api = true;
-  entry.supported_reasoning_levels ??= structuredClone(CODEX_FALLBACK_REASONING_LEVELS);
-  entry.default_reasoning_level ??= 'high';
-  entry.context_window ??= CODEX_FALLBACK_CONTEXT_WINDOW;
-  entry.max_context_window ??= entry.context_window;
-  entry.shell_type ??= 'shell_command';
-  entry.input_modalities ??= ['text', 'image'];
-  entry.supports_parallel_tool_calls ??= true;
-  entry.supports_reasoning_summaries ??= true;
-  entry.default_reasoning_summary ??= 'none';
-  entry.support_verbosity ??= true;
-  entry.default_verbosity ??= 'low';
-  entry.apply_patch_tool_type ??= 'freeform';
-  entry.web_search_tool_type ??= 'text_and_image';
-  entry.truncation_policy ??= { mode: 'tokens', limit: 10000 };
-  entry.supports_search_tool ??= true;
-  entry.supports_image_detail_original ??= true;
-  entry.experimental_supported_tools ??= [];
-  entry.effective_context_window_percent ??= 95;
-  entry.use_responses_lite ??= false;
-  entry.base_instructions ??= CODEX_FALLBACK_BASE_INSTRUCTIONS;
-  entry.model_messages ??= structuredClone(CODEX_FALLBACK_MODEL_MESSAGES);
-  entry.comp_hash ??= CODEX_FALLBACK_COMP_HASH;
-  return entry;
-}
+function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue = 'routerlab') {
+  const contextWindow = metadata.contextWindow ?? CODEX_FALLBACK_CONTEXT_WINDOW;
+  const inputModalities = metadata.inputModalities?.includes('image') ? ['text', 'image'] : ['text'];
+  const supportsReasoning = metadata.supportsReasoning === true;
+  const reasoningProfile = CODEX_REASONING_PROFILES.get(model);
+  const unavailableNotice = serviceValue === 'llm'
+    ? CODEX_LLM_MODEL_NOTICES.get(model) ?? null
+    : null;
+  const displayName = unavailableNotice ? '🔴 ' + codexModelDisplayName(model) : codexModelDisplayName(model);
 
-function buildFallbackCodexModelTemplate() {
   return {
-    slug: DEFAULT_CODEX_MODEL,
-    display_name: codexModelDisplayName(DEFAULT_CODEX_MODEL),
-    description: codexModelDisplayName(DEFAULT_CODEX_MODEL),
-    default_reasoning_level: 'high',
-    supported_reasoning_levels: structuredClone(CODEX_FALLBACK_REASONING_LEVELS),
+    slug: model,
+    display_name: displayName,
+    description: unavailableNotice ?? displayName,
+    default_reasoning_level: reasoningProfile?.defaultLevel ?? 'medium',
+    supported_reasoning_levels: reasoningProfile?.levels
+      ? structuredClone(reasoningProfile.levels)
+      : supportsReasoning
+        ? structuredClone(CODEX_FALLBACK_REASONING_LEVELS)
+        : [{ effort: 'medium', description: 'Conservative default reasoning effort' }],
     shell_type: 'shell_command',
     visibility: 'list',
-    supported_in_api: true,
-    priority: 1000,
+    supported_in_api: !unavailableNotice,
+    priority: 1000 + index,
     additional_speed_tiers: [],
     service_tiers: [],
     default_service_tier: null,
-    availability_nux: null,
+    availability_nux: unavailableNotice ? { message: '🔴 ' + unavailableNotice } : null,
     upgrade: null,
     base_instructions: CODEX_FALLBACK_BASE_INSTRUCTIONS,
     model_messages: structuredClone(CODEX_FALLBACK_MODEL_MESSAGES),
-    supports_reasoning_summaries: true,
+    supports_reasoning_summaries: supportsReasoning || Boolean(reasoningProfile),
     default_reasoning_summary: 'none',
-    support_verbosity: true,
-    default_verbosity: 'low',
+    support_verbosity: false,
+    default_verbosity: null,
     apply_patch_tool_type: 'freeform',
     web_search_tool_type: 'text_and_image',
     truncation_policy: { mode: 'tokens', limit: 10000 },
-    supports_parallel_tool_calls: true,
-    supports_image_detail_original: true,
-    context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
-    max_context_window: CODEX_FALLBACK_CONTEXT_WINDOW,
+    supports_parallel_tool_calls: metadata.supportsParallelToolCalls === true,
+    supports_image_detail_original: inputModalities.includes('image'),
+    context_window: contextWindow,
+    max_context_window: contextWindow,
     comp_hash: CODEX_FALLBACK_COMP_HASH,
     effective_context_window_percent: 95,
     experimental_supported_tools: [],
-    input_modalities: ['text', 'image'],
-    supports_search_tool: true,
+    input_modalities: inputModalities,
+    supports_search_tool: metadata.supportsSearch === true,
     use_responses_lite: false,
   };
 }
 
+export function cleanupStaleCodexRuntimeModelCatalogs({
+  tmpDir = os.tmpdir(),
+  maxAgeMs = 24 * 60 * 60 * 1000,
+  now = Date.now(),
+} = {}) {
+  const catalogDir = path.join(tmpDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
+  let entries;
+  try {
+    entries = fs.readdirSync(catalogDir, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return 0;
+    }
+    throw error;
+  }
+
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(CODEX_MODEL_CATALOG_FILENAME)) {
+      continue;
+    }
+    const filePath = path.join(catalogDir, entry.name);
+    try {
+      const stat = fs.statSync(filePath);
+      if (now - stat.mtimeMs > maxAgeMs) {
+        fs.rmSync(filePath, { force: true });
+        removed += 1;
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+  return removed;
+}
 function resolveCodexPaths(paths) {
   const defaults = getCodexPaths();
   const configPath = paths.configPath ?? defaults.configPath;

@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { getAuthMenuContext } from '../src/cli/commands/auth.js';
 import { parseOptions } from '../src/cli/args.js';
-import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, formatBanner, formatMenu, formatSelectChoice, resolveMenuChoice } from '../src/cli/menu.js';
+import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, resolveMenuChoice, resolveNavigation } from '../src/cli/menu.js';
 
 test('default menu exposes Claude Code and Claude Desktop', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
-  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'Auth', 'Doctor', 'Quit']);
+  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '1').value, 'claude-code');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '3').value, 'codex');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'doctor');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'tools');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop').value, 'claude-desktop');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Code/);
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
@@ -23,13 +23,13 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',
     value: 'claude-code',
-    description: 'Launch Claude Code through RouterLab.',
+    description: 'Start a coding session through RouterLab.',
     short: 'Claude Code',
   });
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[2]), {
     name: 'Codex CLI',
     value: 'codex',
-    description: 'Launch Codex CLI through RouterLab.',
+    description: 'Start a Codex session through RouterLab.',
     short: 'Codex CLI',
   });
 });
@@ -65,11 +65,33 @@ test('Claude Desktop menu keeps only the simple customer actions', () => {
 });
 
 test('interactive select menus stay compact without separator rows', () => {
-  for (const items of [MAIN_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, AUTH_MENU_ITEMS]) {
+  for (const items of [MAIN_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, AUTH_MENU_ITEMS, TOOLS_MENU_ITEMS]) {
     assert.equal(items.some((item) => !item.label || !item.value), false);
   }
 });
 
+test('every submenu ends with the same route back to the home screen', () => {
+  for (const items of [CLAUDE_DESKTOP_MENU_ITEMS, AUTH_MENU_ITEMS, TOOLS_MENU_ITEMS]) {
+    const back = items.at(-1);
+    assert.equal(back.value, 'back');
+    assert.equal(back.key, '0');
+    assert.equal(back.label, '← Back to home');
+    assert.match(back.description, /main menu/);
+  }
+  assert.equal(MAIN_MENU_ITEMS.some((item) => item.value === 'back'), false);
+  assert.equal(MAIN_MENU_ITEMS.at(-1).value, 'quit');
+});
+
+test('the interactive navigation model has predictable parents and actions', () => {
+  assert.deepEqual(Object.keys(MENU_ROUTES), ['home', 'desktop', 'account', 'tools']);
+  assert.deepEqual(resolveNavigation('home', 'claude-desktop'), { kind: 'navigate', routeId: 'desktop' });
+  assert.deepEqual(resolveNavigation('home', 'auth'), { kind: 'navigate', routeId: 'account' });
+  assert.deepEqual(resolveNavigation('desktop', 'back'), { kind: 'navigate', routeId: 'home' });
+  assert.deepEqual(resolveNavigation('account', 'status'), { kind: 'action', action: 'status' });
+  assert.deepEqual(resolveNavigation('home', 'quit'), { kind: 'exit' });
+  assert.equal(formatBreadcrumb('home'), 'ScioNos Wrapper');
+  assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop');
+});
 test('auth menu uses the command-selected service', () => {
   const routerlab = getAuthMenuContext(parseOptions([]));
   assert.equal(routerlab.service.value, 'routerlab');

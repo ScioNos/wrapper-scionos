@@ -4,7 +4,7 @@ import { detectClaudeCode } from '../platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
-import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } from '../routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, validateServiceBaseUrl } from '../routerlab/services.js';
 import { assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
 import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
@@ -43,10 +43,17 @@ export function selectTokenCandidate({
     : { token: normalizedStoredToken, source: normalizedStoredToken ? 'secure-storage' : null };
 }
 
-export async function resolveTokenWithSource({ serviceValue, noPrompt = false, preferStored = false } = {}) {
+export async function resolveTokenWithSource(
+  { serviceValue, noPrompt = false, preferStored = false } = {},
+  {
+    passwordFn = password,
+    getStoredTokenFn = getStoredToken,
+    resolveServiceEnvTokenFn = resolveServiceEnvToken,
+  } = {},
+) {
   const service = requireServiceConfig(serviceValue);
-  const envToken = resolveServiceEnvToken(service.value, process.env);
-  const storedToken = getStoredToken(service.value);
+  const envToken = resolveServiceEnvTokenFn(service.value, process.env);
+  const storedToken = getStoredTokenFn(service.value);
   const resolved = selectTokenCandidate({
     envToken: envToken.token,
     envSource: envToken.source ?? 'env',
@@ -72,7 +79,7 @@ export async function resolveTokenWithSource({ serviceValue, noPrompt = false, p
     throw new Error(`A ${service.label} token is required in --no-prompt mode. Set ${service.tokenEnvKeys[0]} or run auth login first.`);
   }
 
-  const answer = await password({ message: `${service.label} token:` });
+  const answer = await passwordFn({ message: `${service.label} token:` });
   const format = validateTokenFormat(answer);
   if (!format.valid) {
     throw new Error(format.message);
@@ -86,9 +93,52 @@ export async function resolveTokenWithSource({ serviceValue, noPrompt = false, p
   };
 }
 
-export async function resolveToken(options = {}) {
-  const resolved = await resolveTokenWithSource(options);
+export async function resolveToken(options = {}, dependencies = {}) {
+  const resolved = await resolveTokenWithSource(options, dependencies);
   return resolved.token;
+}
+
+export function warnClaudeCodeBaseUrlOverride(service, resolution) {
+  if (resolution.source !== 'env' && resolution.source !== 'legacy-env') return;
+  const legacy = resolution.source === 'legacy-env' ? 'deprecated ' : '';
+  console.error(chalk.yellow(
+    `WARN Claude Code is using ${legacy}${resolution.envKey} for the ${service.label} endpoint: ${resolution.baseUrl}`,
+  ));
+}
+
+export function formatClaudeCodeTokenConflictWarning(service, resolvedToken) {
+  if (!resolvedToken.envTokenPresent || !resolvedToken.storedTokenPresent) return;
+  if (resolvedToken.source !== 'env' && resolvedToken.source !== 'legacy-env') return;
+  const source = resolvedToken.envTokenKey ?? 'an environment variable';
+  return `WARN Claude Code is using ${source}; a stored ${service.label} token is present and ignored. Pass --token to override explicitly.`;
+}
+
+export function warnClaudeCodeTokenConflict(service, resolvedToken) {
+  const warning = formatClaudeCodeTokenConflictWarning(service, resolvedToken);
+  if (warning) console.error(chalk.yellow(warning));
+}
+
+export function describeClaudeCodeTokenSource(resolvedToken) {
+  if (resolvedToken.source === 'option') return '--token';
+  if (resolvedToken.source === 'secure-storage') return 'secure storage';
+  if (resolvedToken.source === 'prompt') return 'the interactive prompt';
+  if (resolvedToken.source === 'env' || resolvedToken.source === 'legacy-env') {
+    return resolvedToken.envTokenKey ? `environment variable ${resolvedToken.envTokenKey}` : 'the environment';
+  }
+  return 'the configured token source';
+}
+
+export function claudeCodeAuthenticationError(validation, service, resolvedToken) {
+  const status = validation.status ?? 401;
+  const serviceFlag = `--service ${service.value}`;
+  const error = new Error([
+    `${service.label} rejected the Claude Code token from ${describeClaudeCodeTokenSource(resolvedToken)} with HTTP ${status}.`,
+    `Check it with "wrapper-scionos auth status ${serviceFlag}" and "wrapper-scionos auth test ${serviceFlag}",`,
+    `then replace it with "wrapper-scionos auth login ${serviceFlag}" or pass --token.`,
+  ].join(' '));
+  error.code = 'auth_failed';
+  error.statusCode = status;
+  return error;
 }
 
 export async function chooseStrategy({
@@ -97,6 +147,7 @@ export async function chooseStrategy({
   preferredStrategy = null,
   modelIds = [],
   allowBack = false,
+  selectFn = select,
 } = {}) {
   const service = requireServiceConfig(serviceValue);
   const finalizeChoice = (selected) => {
@@ -144,7 +195,7 @@ export async function chooseStrategy({
     throw new Error(`No launchable strategy is available on ${service.availabilityLabel}.`);
   }
 
-  return select({
+  return selectFn({
     message: 'Select Model Strategy:',
     choices: withSeparators(promptChoices),
     pageSize: promptChoices.length + Math.max(promptChoices.length - 1, 0),
@@ -185,24 +236,46 @@ export async function chooseSubagentModel({
     ?? 'strategy default';
 }
 
-export async function launchClaudeCode({ serviceValue, strategyValue, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false }) {
+export async function launchClaudeCode(
+  { serviceValue, strategyValue, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false },
+  { detectClaudeCodeFn = detectClaudeCode } = {},
+) {
   const serviceConfig = requireServiceConfig(serviceValue);
-  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
+  const baseUrlResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
+  const service = {
+    ...serviceConfig,
+    baseUrl: validateServiceBaseUrl(baseUrlResolution.baseUrl, serviceConfig.value),
+  };
+  warnClaudeCodeBaseUrlOverride(service, baseUrlResolution);
   if (!noPrompt) {
     console.log(formatClaudeCodeIntro(version));
   }
 
-  const claude = detectClaudeCode();
+  const claude = detectClaudeCodeFn();
   if (!claude.installed) {
     throw new Error('Claude Code CLI not found. Install @anthropic-ai/claude-code first.');
   }
 
-  const token = tokenOverride?.trim() || await resolveToken({ serviceValue: service.value, noPrompt });
+  const override = tokenOverride?.trim();
+  const resolvedToken = override
+    ? {
+        token: override,
+        source: 'option',
+        envTokenPresent: false,
+        envTokenKey: null,
+        storedTokenPresent: false,
+      }
+    : await resolveTokenWithSource({ serviceValue: service.value, noPrompt });
+  warnClaudeCodeTokenConflict(service, resolvedToken);
+  const token = resolvedToken.token;
   const tokenFormat = validateTokenFormat(token);
   if (!tokenFormat.valid) {
     throw new Error(tokenFormat.message);
   }
   const validation = await fetchModels(token, { serviceValue: service.value, baseUrl: service.baseUrl });
+  if (!validation.valid && validation.reason === 'auth_failed') {
+    throw claudeCodeAuthenticationError(validation, service, resolvedToken);
+  }
   const modelIds = validation.valid ? validation.models : [];
   if (!validation.valid && !noPrompt) {
     const detail = validation.message || validation.reason || 'model availability could not be verified';
@@ -222,30 +295,31 @@ export async function launchClaudeCode({ serviceValue, strategyValue, token: tok
     strategyValue: selectedStrategy,
   });
 
-  const proxy = await startLongRunningLlmProxy({
-    targetBaseUrl: service.baseUrl,
-    routerlabToken: token,
-    upstreamAuth: 'anthropic',
-  });
-  const proxiedService = { ...service, baseUrl: proxy.baseUrl };
-  const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy);
-  const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
-
-  if (!noPrompt) {
-    console.log(formatLaunchSummary({
-      service,
-      strategy: selectedStrategyName,
-      subagentModel: selectedSubagentModel,
-      endpoint: `${proxy.baseUrl} -> ${service.baseUrl}`,
-    }));
-    console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
-  }
-
+  let proxy = null;
   try {
+    proxy = await startLongRunningLlmProxy({
+      targetBaseUrl: service.baseUrl,
+      routerlabToken: token,
+      upstreamAuth: 'anthropic',
+    });
+    const proxiedService = { ...service, baseUrl: proxy.baseUrl };
+    const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy);
+    const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
+
+    if (!noPrompt) {
+      console.log(formatLaunchSummary({
+        service,
+        strategy: selectedStrategyName,
+        subagentModel: selectedSubagentModel,
+        endpoint: `${proxy.baseUrl} -> ${service.baseUrl}`,
+      }));
+      console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
+    }
+
     await runInteractiveCli(claude.cliPath, claudeArgs, { env });
     return { kind: 'launched' };
   } finally {
-    await stopLongRunningLlmProxy(proxy);
+    await stopLongRunningLlmProxy(proxy, { graceMs: 2000 });
   }
 }
 
@@ -282,7 +356,7 @@ export function formatClaudeCodeChoiceMenu(message, choices) {
   return lines.join('\n');
 }
 
-function formatLaunchSummary({ service, strategy, subagentModel, endpoint }) {
+export function formatLaunchSummary({ service, strategy, subagentModel, endpoint }) {
   return [
     '',
     chalk.gray('Launch Summary'),
@@ -295,13 +369,13 @@ function formatLaunchSummary({ service, strategy, subagentModel, endpoint }) {
   ].join('\n');
 }
 
-function withSeparators(choices) {
+export function withSeparators(choices) {
   return choices.flatMap((choice, index) => (
     index === choices.length - 1 ? [choice] : [choice, new Separator(' ')]
   ));
 }
 
-function getStrategyIndicator(strategyValue, modelIds, serviceValue) {
+export function getStrategyIndicator(strategyValue, modelIds, serviceValue) {
   const launchReadiness = assessStrategyLaunch(strategyValue, modelIds, serviceValue);
   if (!launchReadiness.ready && launchReadiness.availability.level === 'unavailable') {
     return chalk.red('●');

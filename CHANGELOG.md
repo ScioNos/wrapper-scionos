@@ -2,10 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+## 4.1.0 - 2026-07-16
+
+### Added
+
+- End-to-end Claude Code launch coverage for the interactive `routerlab` and `llm` entry modes, using an isolated fake Claude CLI and local upstream so tests never contact production services.
+- End-to-end Codex CLI launch coverage for both interactive services, including npm-style Windows shim forwarding, service-scoped catalogs, local credential replacement, `store: false`, cleanup, and pre-launch failures.
+- Regression coverage for rejected credentials, legacy Anthropic environment variables, invalid service URLs, explicit token validation, unavailable model discovery, executable detection timeouts, and bounded proxy shutdown.
+- End-to-end Claude Desktop menu coverage for both services, including profile metadata, authenticated model discovery, upstream token replacement, model routing, and interactive proxy shutdown.
+- Claude Desktop status health fields for applied state, profile validity, metadata validity, gateway credentials, and gateway URL diagnostics.
+
+### Changed
+
+- Claude Code now validates HTTP(S) service endpoints before token use, reports environment-provided endpoint overrides, and warns when an environment token takes precedence over a stored service token without printing either credential.
+- RouterLab `/v1/models` authorization failures now stop Claude Code before proxy or child-process startup and include service-specific `auth status`, `auth test`, and `auth login` guidance. Non-authentication discovery failures remain warnings and allow a launch with unverified availability.
+- Claude CLI version detection is limited to five seconds per executable candidate. Claude Code proxy cleanup now surrounds the full proxy/child lifecycle and force-closes lingering connections after a two-second grace period.
+- Codex now validates HTTP(S) service endpoints and explicit tokens before network or proxy startup, stops on model-discovery authorization failures, and rejects a selected model that is absent from a verified service catalog. Non-authentication discovery failures retain the conservative catalog fallback.
+- Interactive Codex failures now report their exit or startup error and return to the main menu, while direct `codex launch` commands preserve the Codex child exit code.
+- Claude Desktop validates service endpoints before token resolution, listener startup, or profile writes. Generated profiles now restrict Cowork egress to the exact gateway hostname instead of a wildcard.
+- Interactive Start Local Mapping reuses an equivalent profile without rotating its credential and asks before replacing a different, legacy, direct, or unhealthy profile. The service selected at wrapper startup remains authoritative.
+- Ctrl+C now stops an interactively launched Claude Desktop proxy and returns to the Desktop menu with a successful exit state; direct proxy commands retain exit code 130.
+
+### Fixed
+
+- Made branding assertions independent of ANSI color and terminal hyperlink sequences, including coverage runs with forced color output.
+- Prevented invalid or non-HTTP(S) RouterLab base URLs from creating a listener or mutating Claude Desktop configuration.
+- Prevented an interactive Claude Desktop proxy stop from leaving process exit code 130 while continuing to display menus.
+- Preserved quoted TOML overrides through npm-style Windows `.cmd` shims instead of stripping the quotes before Codex receives them.
+
 ## 4.0.0 - 2026-07-11
 
 ### Added
 
+- Interactive cross-platform smoke coverage for the four documented global/npx entry modes, including Windows npm shim resolution.
 - Native `/v1/responses` transport for every RouterLab and RouterLab LLM model, in streaming and non-streaming modes, with no protocol-conversion fallback.
 - Dynamic normalized model capabilities with a conservative 128k text-only fallback.
 - Random per-profile Claude Desktop proxy credentials, authenticated model catalog, exact-origin CORS allowlists, request limits, abort propagation, and automatic legacy-secret migration.

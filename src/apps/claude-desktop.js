@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { requireServiceConfig, resolveServiceBaseUrl } from '../routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrl, validateServiceBaseUrl } from '../routerlab/services.js';
 import { findStrategy } from '../routerlab/strategies.js';
 import {
   DESKTOP_MAPPING_STRATEGIES,
@@ -95,8 +95,9 @@ export function isClaudeDesktopSafeModelId(model) {
 }
 
 export function buildGatewayProfile({ baseUrl, apiKey, modelSpecs = [] }) {
+  const egressHost = gatewayEgressHost(baseUrl);
   const profile = {
-    coworkEgressAllowedHosts: ['*'],
+    coworkEgressAllowedHosts: [egressHost],
     disableDeploymentModeChooser: true,
     inferenceGatewayApiKey: apiKey,
     inferenceGatewayAuthScheme: 'bearer',
@@ -118,6 +119,19 @@ export function buildGatewayProfile({ baseUrl, apiKey, modelSpecs = [] }) {
   }
 
   return profile;
+}
+
+function gatewayEgressHost(baseUrl) {
+  let parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(`Claude Desktop gateway base URL is invalid: ${baseUrl}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Claude Desktop gateway base URL must use HTTP or HTTPS.');
+  }
+  return parsed.hostname.replace(/^\[|\]$/g, '');
 }
 
 export function modelSpecsForDirectStrategy(strategyValue, serviceValue) {
@@ -183,25 +197,62 @@ function desktopRouteSuffix(strategyValue) {
     .toLowerCase();
 }
 
-export function readClaudeDesktopStatus() {
+export function readClaudeDesktopStatus(paths = getClaudeDesktopPaths()) {
   if (!isClaudeDesktopSupportedPlatform()) {
     return { supported: false };
   }
 
-  const paths = getClaudeDesktopPaths();
+  const profileState = readJsonState(paths.profilePath);
+  const metaState = readJsonState(paths.metaPath);
+  const profile = profileState.value;
+  const meta = metaState.value;
+  const wrapperScionos = meta?.wrapperScionos ?? null;
+  const appliedId = meta?.appliedId ?? null;
+  const issues = [];
+
+  if (!profileState.exists) {
+    issues.push('profile_missing');
+  } else if (!profileState.valid || !profile || typeof profile !== 'object') {
+    issues.push('profile_invalid');
+  }
+  if (appliedId !== CLAUDE_DESKTOP_PROFILE_ID) {
+    issues.push('profile_not_applied');
+  }
+  if (!isValidWrapperMetadata(wrapperScionos)) {
+    issues.push('metadata_invalid');
+  }
+  if (profileState.valid && profile && typeof profile === 'object') {
+    if (typeof profile.inferenceGatewayApiKey !== 'string' || !profile.inferenceGatewayApiKey) {
+      issues.push('missing_gateway_credential');
+    }
+    if (!isValidGatewayBaseUrl(profile.inferenceGatewayBaseUrl, wrapperScionos?.mode)) {
+      issues.push('invalid_gateway_base_url');
+    }
+  }
+
   return {
     supported: true,
     paths,
-    configured: fs.existsSync(paths.profilePath),
-    appliedId: readJson(paths.metaPath)?.appliedId ?? null,
-    wrapperScionos: readJson(paths.metaPath)?.wrapperScionos ?? null,
-    profile: redactClaudeDesktopProfile(readJson(paths.profilePath)),
+    configured: profileState.exists,
+    profileExists: profileState.exists,
+    applied: appliedId === CLAUDE_DESKTOP_PROFILE_ID,
+    healthy: issues.length === 0,
+    issues,
+    appliedId,
+    wrapperScionos,
+    profile: redactClaudeDesktopProfile(profile),
   };
 }
 
 export function applyDirectClaudeDesktop({ serviceValue, strategyValue = 'default', token, dryRun = true, paths = getClaudeDesktopPaths() }) {
   const serviceConfig = requireServiceConfig(serviceValue);
-  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
+  const service = {
+    ...serviceConfig,
+    baseUrl: validateServiceBaseUrl(
+      resolveServiceBaseUrl(serviceConfig.value, process.env),
+      serviceConfig.value,
+    ),
+  };
   const modelSpecs = strategyValue === 'default' ? [] : modelSpecsForDirectStrategy(strategyValue, service.value);
   const profile = buildGatewayProfile({
     baseUrl: service.baseUrl,
@@ -363,13 +414,17 @@ function withRollback(paths, operation) {
 }
 
 function readJson(filePath) {
+  return readJsonState(filePath).value;
+}
+
+function readJsonState(filePath) {
   if (typeof filePath !== 'string' || !fs.existsSync(filePath)) {
-    return null;
+    return { exists: false, valid: false, value: null };
   }
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return { exists: true, valid: true, value: JSON.parse(fs.readFileSync(filePath, 'utf8')) };
   } catch {
-    return null;
+    return { exists: true, valid: false, value: null };
   }
 }
 
@@ -443,4 +498,35 @@ function buildWrapperMeta({ mode, serviceValue, strategyValue = null, strategyVa
     strategies: strategyValues ? [...strategyValues] : null,
     baseUrl,
   };
+}
+
+function isValidWrapperMetadata(meta) {
+  if (!meta || typeof meta !== 'object') return false;
+  if (meta.schemaVersion !== CLAUDE_DESKTOP_META_SCHEMA_VERSION) return false;
+  if (meta.mode !== 'proxy' && meta.mode !== 'direct') return false;
+  let service;
+  try {
+    service = requireServiceConfig(meta.service);
+  } catch {
+    return false;
+  }
+  if (Array.isArray(meta.strategies)) {
+    return meta.strategies.length > 0
+      && meta.strategies.every((strategyValue) => Boolean(findStrategy(strategyValue, service.value)));
+  }
+  return typeof meta.strategy === 'string' && Boolean(findStrategy(meta.strategy, service.value));
+}
+
+function isValidGatewayBaseUrl(baseUrl, mode) {
+  let parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  if (mode !== 'proxy') return true;
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
+  return parsed.protocol === 'http:'
+    && (hostname === 'localhost' || hostname === '::1' || hostname.startsWith('127.'));
 }

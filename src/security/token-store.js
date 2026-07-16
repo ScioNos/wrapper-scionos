@@ -11,8 +11,8 @@ const WINDOWS_POWERSHELL_MODULE_PATHS = [
   'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\Modules',
 ];
 
-export function getSecureStorageBackend() {
-  return currentTokenBackend().status();
+export function getSecureStorageBackend(backend = currentTokenBackend()) {
+  return backend.status();
 }
 
 function commandExists(command) {
@@ -65,9 +65,9 @@ function getTokenFile(serviceValue, namespace = SECURE_STORAGE_SERVICE) {
   return path.join(os.homedir(), `.${namespace}`, service.secureStorageFileName);
 }
 
-function hasNonEmptyFile(filePath) {
+function hasNonEmptyFile(filePath, fileSystem = fs) {
   try {
-    return fs.statSync(filePath).size > 0;
+    return fileSystem.statSync(filePath).size > 0;
   } catch {
     return false;
   }
@@ -115,9 +115,8 @@ function deletePlainTokenFile(tokenFile) {
   return true;
 }
 
-export function storeToken(token, serviceValue) {
+export function storeToken(token, serviceValue, { backend = currentTokenBackend() } = {}) {
   const service = requireServiceConfig(serviceValue);
-  const backend = currentTokenBackend();
   const storage = backend.status();
   if (!storage.supported) {
     throw new Error(storage.reason || 'Secure storage is not available.');
@@ -126,59 +125,62 @@ export function storeToken(token, serviceValue) {
   return backend.store(token, service) ?? storage;
 }
 
-export function getStoredToken(serviceValue) {
+export function getStoredToken(serviceValue, { backend = currentTokenBackend() } = {}) {
   const service = requireServiceConfig(serviceValue);
-  const storage = getSecureStorageBackend();
+  const storage = getSecureStorageBackend(backend);
   if (!storage.supported) {
     return null;
   }
 
   try {
-    return currentTokenBackend().get(service);
+    return backend.get(service);
   } catch {
     return null;
   }
 }
 
-function readWindowsTokenFile(tokenFile) {
-  if (!hasNonEmptyFile(tokenFile)) {
+function readWindowsTokenFile(tokenFile, {
+  fileSystem = fs,
+  powerShellCommand = runPowerShell,
+} = {}) {
+  if (!hasNonEmptyFile(tokenFile, fileSystem)) {
     return null;
   }
-  const encrypted = fs.readFileSync(tokenFile, 'utf8').trim();
+  const encrypted = fileSystem.readFileSync(tokenFile, 'utf8').trim();
   if (!encrypted) {
     return null;
   }
-  return runPowerShell(
+  return powerShellCommand(
     '$encrypted = [Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($encrypted)) { throw "Encrypted token input is empty" }; $secure = $encrypted | ConvertTo-SecureString; $ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure); try { [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }',
     { input: encrypted },
   ) || null;
 }
 
-function readMacOSToken(account, namespace) {
-  const result = runCommand('security', ['find-generic-password', '-a', account, '-s', namespace, '-w']);
+function readMacOSToken(account, namespace, runCommandFn = runCommand) {
+  const result = runCommandFn('security', ['find-generic-password', '-a', account, '-s', namespace, '-w']);
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
 
-function readLinuxSecretServiceToken(account, namespace) {
-  const result = runCommand('secret-tool', ['lookup', 'service', namespace, 'account', account]);
+function readLinuxSecretServiceToken(account, namespace, runCommandFn = runCommand) {
+  const result = runCommandFn('secret-tool', ['lookup', 'service', namespace, 'account', account]);
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
 
-export function deleteStoredToken(serviceValue) {
+export function deleteStoredToken(serviceValue, { backend = currentTokenBackend() } = {}) {
   const service = requireServiceConfig(serviceValue);
-  const storage = getSecureStorageBackend();
+  const storage = getSecureStorageBackend(backend);
   if (!storage.supported) {
     return false;
   }
 
-  return currentTokenBackend().delete(service);
+  return backend.delete(service);
 }
 
-export function getStoredTokenStatus(serviceValue) {
-  const storage = getSecureStorageBackend();
+export function getStoredTokenStatus(serviceValue, { backend = currentTokenBackend() } = {}) {
+  const storage = getSecureStorageBackend(backend);
   return {
     ...storage,
-    stored: Boolean(getStoredToken(serviceValue)),
+    stored: Boolean(getStoredToken(serviceValue, { backend })),
   };
 }
 
@@ -202,28 +204,44 @@ function linuxFileStatus(reason = '`secret-tool` not found; using user-only file
   return { supported: true, backend: 'Linux user-only file', reason };
 }
 
-export function createLinuxTokenBackend({ hasSecretToolCommand = hasSecretTool } = {}) {
+export function createLinuxTokenBackend({
+  hasSecretToolCommand = hasSecretTool,
+  runCommandFn = runCommand,
+} = {}) {
   return {
     status: () => (hasSecretToolCommand() ? linuxSecretServiceStatus() : linuxFileStatus()),
-    store: (token, service) => storeLinuxToken(token, service, hasSecretToolCommand()),
-    get: (service) => getLinuxToken(service, hasSecretToolCommand()),
-    delete: (service) => deleteLinuxToken(service, hasSecretToolCommand()),
+    store: (token, service) => storeLinuxToken(token, service, hasSecretToolCommand(), runCommandFn),
+    get: (service) => getLinuxToken(service, hasSecretToolCommand(), runCommandFn),
+    delete: (service) => deleteLinuxToken(service, hasSecretToolCommand(), runCommandFn),
+  };
+}
+
+export function createWindowsTokenBackend({
+  fileSystem = fs,
+  powerShellCommand = runPowerShell,
+  tokenFileForService = getTokenFile,
+} = {}) {
+  const dependencies = { fileSystem, powerShellCommand, tokenFileForService };
+  return {
+    status: () => ({ supported: true, backend: 'Windows DPAPI' }),
+    store: (token, service) => storeWindowsToken(token, service, dependencies),
+    get: (service) => getWindowsToken(service, dependencies),
+    delete: (service) => deleteWindowsToken(service, dependencies),
+  };
+}
+
+export function createMacOSTokenBackend({ runCommandFn = runCommand } = {}) {
+  return {
+    status: () => ({ supported: true, backend: 'macOS Keychain' }),
+    store: (token, service) => storeMacOSToken(token, service, runCommandFn),
+    get: (service) => getMacOSToken(service, runCommandFn),
+    delete: (service) => deleteMacOSToken(service, runCommandFn),
   };
 }
 
 const TOKEN_BACKENDS = {
-  win32: {
-    status: () => ({ supported: true, backend: 'Windows DPAPI' }),
-    store: storeWindowsToken,
-    get: getWindowsToken,
-    delete: deleteWindowsToken,
-  },
-  darwin: {
-    status: () => ({ supported: true, backend: 'macOS Keychain' }),
-    store: storeMacOSToken,
-    get: getMacOSToken,
-    delete: deleteMacOSToken,
-  },
+  win32: createWindowsTokenBackend(),
+  darwin: createMacOSTokenBackend(),
   linux: createLinuxTokenBackend(),
 };
 
@@ -234,37 +252,48 @@ const UNSUPPORTED_BACKEND = {
   delete: () => false,
 };
 
-function storeWindowsToken(token, service) {
-  const tokenFile = getTokenFile(service.value);
-  fs.mkdirSync(path.dirname(tokenFile), { recursive: true });
-  const encrypted = runPowerShell(
+function storeWindowsToken(token, service, {
+  fileSystem = fs,
+  powerShellCommand = runPowerShell,
+  tokenFileForService = getTokenFile,
+} = {}) {
+  const tokenFile = tokenFileForService(service.value);
+  fileSystem.mkdirSync(path.dirname(tokenFile), { recursive: true });
+  const encrypted = powerShellCommand(
     '$token = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($token)) { throw "Token input is empty" }; $secure = ConvertTo-SecureString $token -AsPlainText -Force; ConvertFrom-SecureString $secure',
     { input: token },
   );
-  fs.writeFileSync(tokenFile, encrypted, 'utf8');
-  if (!hasNonEmptyFile(tokenFile)) {
+  fileSystem.writeFileSync(tokenFile, encrypted, 'utf8');
+  if (!hasNonEmptyFile(tokenFile, fileSystem)) {
     throw new Error('Secure token file was created but no encrypted content was written.');
   }
 }
 
-function getWindowsToken(service) {
-  const token = readWindowsTokenFile(getTokenFile(service.value));
-  return token ?? readWindowsTokenFile(getTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
+function getWindowsToken(service, dependencies = {}) {
+  const tokenFileForService = dependencies.tokenFileForService ?? getTokenFile;
+  const token = readWindowsTokenFile(tokenFileForService(service.value), dependencies);
+  return token ?? readWindowsTokenFile(
+    tokenFileForService(service.value, LEGACY_SECURE_STORAGE_SERVICE),
+    dependencies,
+  );
 }
 
-function deleteWindowsToken(service) {
+function deleteWindowsToken(service, {
+  fileSystem = fs,
+  tokenFileForService = getTokenFile,
+} = {}) {
   return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
-    .map((namespace) => getTokenFile(service.value, namespace))
+    .map((namespace) => tokenFileForService(service.value, namespace))
     .map((tokenFile) => {
-      if (!fs.existsSync(tokenFile)) return false;
-      fs.unlinkSync(tokenFile);
+      if (!fileSystem.existsSync(tokenFile)) return false;
+      fileSystem.unlinkSync(tokenFile);
       return true;
     })
     .some(Boolean);
 }
 
-function storeMacOSToken(token, service) {
-  const result = runCommand('security', [
+function storeMacOSToken(token, service, runCommandFn = runCommand) {
+  const result = runCommandFn('security', [
     'add-generic-password',
     '-U',
     '-a',
@@ -278,21 +307,21 @@ function storeMacOSToken(token, service) {
   }
 }
 
-function getMacOSToken(service) {
-  return readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
-    ?? readMacOSToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE);
+function getMacOSToken(service, runCommandFn = runCommand) {
+  return readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn)
+    ?? readMacOSToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE, runCommandFn);
 }
 
-function deleteMacOSToken(service) {
+function deleteMacOSToken(service, runCommandFn = runCommand) {
   return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
-    .map((namespace) => runCommand('security', [
+    .map((namespace) => runCommandFn('security', [
       'delete-generic-password', '-a', service.secureStorageAccount, '-s', namespace,
     ]).status === 0)
     .some(Boolean);
 }
 
-function storeLinuxSecretServiceToken(token, service) {
-  const result = runCommand('secret-tool', [
+function storeLinuxSecretServiceToken(token, service, runCommandFn = runCommand) {
+  const result = runCommandFn('secret-tool', [
     'store',
     `--label=${service.secureStorageLabel}`,
     'service',
@@ -315,10 +344,10 @@ function getLinuxFileToken(service) {
     ?? readPlainTokenFile(getTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
 }
 
-function storeLinuxToken(token, service, secretToolAvailable) {
+function storeLinuxToken(token, service, secretToolAvailable, runCommandFn = runCommand) {
   if (secretToolAvailable) {
     try {
-      storeLinuxSecretServiceToken(token, service);
+      storeLinuxSecretServiceToken(token, service, runCommandFn);
       return linuxSecretServiceStatus();
     } catch (error) {
       return storeLinuxFileToken(token, service, `Linux Secret Service failed; using user-only file storage: ${error.message}`);
@@ -328,18 +357,18 @@ function storeLinuxToken(token, service, secretToolAvailable) {
   return storeLinuxFileToken(token, service);
 }
 
-function getLinuxToken(service, secretToolAvailable) {
+function getLinuxToken(service, secretToolAvailable, runCommandFn = runCommand) {
   const secretServiceToken = secretToolAvailable
-    ? readLinuxSecretServiceToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE)
-      ?? readLinuxSecretServiceToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE)
+    ? readLinuxSecretServiceToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn)
+      ?? readLinuxSecretServiceToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE, runCommandFn)
     : null;
 
   return secretServiceToken ?? getLinuxFileToken(service);
 }
 
-function deleteLinuxToken(service, secretToolAvailable) {
+function deleteLinuxToken(service, secretToolAvailable, runCommandFn = runCommand) {
   const secretDeleted = secretToolAvailable && [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
-    .map((namespace) => runCommand('secret-tool', [
+    .map((namespace) => runCommandFn('secret-tool', [
       'clear', 'service', namespace, 'account', service.secureStorageAccount,
     ]).status === 0)
     .some(Boolean);

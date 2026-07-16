@@ -1,4 +1,8 @@
-import { requireServiceConfig } from '../../routerlab/services.js';
+import {
+  requireServiceConfig,
+  resolveServiceBaseUrl,
+  validateServiceBaseUrl,
+} from '../../routerlab/services.js';
 import { resolveToken } from '../../apps/claude-code.js';
 import {
   DESKTOP_MAPPING_STRATEGIES,
@@ -11,7 +15,6 @@ import {
   restoreOfficialClaudeDesktop,
 } from '../../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../../apps/claude-desktop-proxy.js';
-import { CLAUDE_DESKTOP_MENU_ITEMS, askMenu, askYesNo } from '../menu.js';
 import { print } from './output.js';
 import { warnDeprecationOnce } from '../deprecations.js';
 
@@ -29,12 +32,11 @@ export async function handleClaudeDesktop(action, options) {
     return;
   }
   if (action === 'proxy') {
-    await runClaudeDesktopProxy(options);
-    return;
+    return runClaudeDesktopProxy(options);
   }
 
   warnDeprecationOnce('action:claude-desktop-apply', 'claude-desktop apply is deprecated in 4.x because it stores the RouterLab token in the Desktop profile; use apply-proxy.');
-  const service = requireServiceConfig(options.service);
+  const service = resolveValidatedDesktopService(options.service);
   const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
   const result = applyDirectClaudeDesktop({
     serviceValue: service.value,
@@ -46,7 +48,7 @@ export async function handleClaudeDesktop(action, options) {
 }
 
 async function applyClaudeDesktopProxyProfile(options) {
-  const service = requireServiceConfig(options.service);
+  const service = resolveValidatedDesktopService(options.service);
   const strategyValue = options.strategy ?? defaultDesktopStrategy(service.value);
   const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
   if (!options.yes) {
@@ -70,6 +72,7 @@ async function applyClaudeDesktopProxyProfile(options) {
     strategyValues,
     routerlabToken: token,
     gatewayToken,
+    targetBaseUrl: service.baseUrl,
     host: options.host,
     port: options.port,
   });
@@ -88,35 +91,44 @@ async function applyClaudeDesktopProxyProfile(options) {
     await closeStartedProxy(proxy.server);
   }
 }
-async function runClaudeDesktopProxy(options) {
-  let credential = readClaudeDesktopProxyCredential();
-  const explicitProfileOptions = ['service', 'strategy', 'host', 'port']
-    .some((name) => options.providedOptions?.has(name));
-  let config = options.setupLocalMapping
-    ? requestedProxyConfig(options)
-    : credential ? storedProxyConfig(credential, options) : requestedProxyConfig(options);
 
-  if (credential && explicitProfileOptions) {
-    const requested = mergeExplicitProxyConfig(config, options);
-    if (!sameProxyConfig(config, requested)) {
-      if (!options.yes) {
-        throw new Error('Explicit proxy options differ from the stored Claude Desktop profile. Run "claude-desktop apply-proxy --yes" first, or repeat this command with --yes to rewrite it atomically.');
+export async function runClaudeDesktopProxy(options) {
+  const interactivePlan = options.interactiveDesktopPlan ?? null;
+  let credential = interactivePlan?.credential ?? readClaudeDesktopProxyCredential();
+  let config;
+  let rewriteProfile;
+
+  if (interactivePlan) {
+    config = interactivePlan.config;
+    rewriteProfile = interactivePlan.action !== 'reuse';
+  } else {
+    const explicitProfileOptions = ['service', 'strategy', 'host', 'port']
+      .some((name) => options.providedOptions?.has(name));
+    config = credential ? storedProxyConfig(credential, options) : requestedProxyConfig(options);
+
+    if (credential && explicitProfileOptions) {
+      const requested = mergeExplicitProxyConfig(config, options);
+      if (!sameProxyConfig(config, requested)) {
+        if (!options.yes) {
+          throw new Error('Explicit proxy options differ from the stored Claude Desktop profile. Run "claude-desktop apply-proxy --yes" first, or repeat this command with --yes to rewrite it atomically.');
+        }
+        config = requested;
+        credential = null;
       }
-      config = requested;
-      credential = null;
     }
+
+    if (!credential && !options.yes) {
+      throw new Error('No wrapper-managed local Claude Desktop profile exists. Run "claude-desktop apply-proxy --yes" first.');
+    }
+    rewriteProfile = !credential || credential.legacy || options.yes;
   }
 
-  if (!credential && !options.yes && !options.setupLocalMapping) {
-    throw new Error('No wrapper-managed local Claude Desktop profile exists. Run "claude-desktop apply-proxy --yes" first.');
-  }
   if (credential && !credential.metadata) {
     console.error('WARN Legacy Claude Desktop profile: restored host/port from inferenceGatewayBaseUrl and using the CLI-selected service. The next apply-proxy will persist v4 metadata.');
   }
 
-  const service = requireServiceConfig(config.serviceValue);
+  const service = resolveValidatedDesktopService(config.serviceValue);
   const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
-  const rewriteProfile = !credential || credential.legacy || options.setupLocalMapping || options.yes;
   const gatewayToken = rewriteProfile ? generateLocalProxyGatewayToken() : credential.token;
   const result = await startClaudeDesktopProxy({
     serviceValue: service.value,
@@ -124,6 +136,7 @@ async function runClaudeDesktopProxy(options) {
     strategyValues: config.strategyValues,
     routerlabToken: token,
     gatewayToken,
+    targetBaseUrl: service.baseUrl,
     allowedOrigins: options.allowOrigins,
     host: config.host,
     port: config.port,
@@ -154,7 +167,10 @@ async function runClaudeDesktopProxy(options) {
   console.log('Routes:');
   for (const route of result.routes) console.log('  ' + route.routeId + ' -> ' + route.upstreamModel);
   console.log('Press Ctrl+C to stop.');
-  await waitForProxyShutdown(result.server);
+  return waitForProxyShutdown(result.server, {
+    ...(options.shutdownOptions ?? {}),
+    returnToMenuOnSigint: Boolean(options.returnToMenuOnSigint),
+  });
 }
 
 function closeStartedProxy(server) {
@@ -194,6 +210,55 @@ export function requestedProxyConfig(options) {
   };
 }
 
+export function planInteractiveClaudeDesktopStart(options, context = {}) {
+  const credential = Object.hasOwn(context, 'credential')
+    ? context.credential
+    : readClaudeDesktopProxyCredential();
+  const status = Object.hasOwn(context, 'status')
+    ? context.status
+    : readClaudeDesktopStatus();
+  const current = safeStoredProxyConfig(credential, options);
+  const config = requestedInteractiveProxyConfig(options, credential);
+  const profileExists = status?.profileExists ?? status?.configured ?? false;
+
+  if (!profileExists) {
+    return {
+      action: 'create',
+      reason: 'profile_missing',
+      requiresConfirmation: false,
+      current,
+      config,
+      credential,
+    };
+  }
+  if (credential && status?.healthy && current && sameProxyConfig(current, config)) {
+    return {
+      action: 'reuse',
+      reason: 'configuration_matches',
+      requiresConfirmation: false,
+      current,
+      config,
+      credential,
+    };
+  }
+  return {
+    action: 'replace',
+    reason: status?.healthy ? 'configuration_differs' : 'profile_unhealthy',
+    requiresConfirmation: true,
+    current,
+    config,
+    credential,
+  };
+}
+
+export function formatDesktopReplacementPrompt(plan) {
+  const requested = describeProxyConfig(plan.config);
+  if (!plan.current) {
+    return `Replace the existing invalid or non-proxy Claude Desktop profile with ${requested}?`;
+  }
+  return `Replace the current Claude Desktop mapping (${describeProxyConfig(plan.current)}) with ${requested}?`;
+}
+
 export function mergeExplicitProxyConfig(stored, options) {
   const serviceExplicit = options.providedOptions?.has('service');
   const serviceValue = serviceExplicit ? requireServiceConfig(options.service).value : stored.serviceValue;
@@ -229,18 +294,80 @@ function resolveDesktopProxyStrategyValues(serviceValue, options) {
   if (options.strategyValues) return options.strategyValues;
   return options.strategy ? null : resolveDesktopMappingStrategies(serviceValue);
 }
-export function waitForProxyShutdown(server) {
+
+function requestedInteractiveProxyConfig(options, credential) {
+  const service = requireServiceConfig(options.service);
+  const strategyExplicit = options.providedOptions?.has('strategy');
+  return {
+    serviceValue: service.value,
+    strategyValue: strategyExplicit ? options.strategy : defaultDesktopStrategy(service.value),
+    strategyValues: strategyExplicit ? null : resolveDesktopMappingStrategies(service.value),
+    host: options.providedOptions?.has('host')
+      ? options.host.replace(/^\[|\]$/g, '')
+      : credential?.host ?? options.host,
+    port: options.providedOptions?.has('port') ? options.port : credential?.port ?? options.port,
+  };
+}
+
+function safeStoredProxyConfig(credential, options) {
+  if (!credential?.metadata || credential.metadata.mode !== 'proxy') return null;
+  try {
+    return storedProxyConfig(credential, options);
+  } catch {
+    return null;
+  }
+}
+
+function describeProxyConfig(config) {
+  const strategies = (config.strategyValues ?? [config.strategyValue]).join(', ');
+  const host = String(config.host).includes(':') ? `[${String(config.host).replace(/^\[|\]$/g, '')}]` : config.host;
+  return `${config.serviceValue} at ${host}:${config.port} using ${strategies}`;
+}
+
+function resolveValidatedDesktopService(serviceValue) {
+  const serviceConfig = requireServiceConfig(serviceValue);
+  return {
+    ...serviceConfig,
+    baseUrl: validateServiceBaseUrl(
+      resolveServiceBaseUrl(serviceConfig.value, process.env),
+      serviceConfig.value,
+    ),
+  };
+}
+
+export function waitForProxyShutdown(server, {
+  signalSource = process,
+  exitState = process,
+  returnToMenuOnSigint = false,
+} = {}) {
   return new Promise((resolve, reject) => {
+    let receivedSignal = null;
     const cleanup = () => {
-      process.off('SIGINT', stopSigint);
-      process.off('SIGTERM', stopSigterm);
+      signalSource.off('SIGINT', stopSigint);
+      signalSource.off('SIGTERM', stopSigterm);
       server.off('error', fail);
       server.off('close', done);
     };
-    const done = () => { cleanup(); resolve(); };
+    const done = () => {
+      cleanup();
+      if (receivedSignal === 'SIGINT' && returnToMenuOnSigint) {
+        exitState.exitCode = 0;
+        resolve({ kind: 'back', signal: receivedSignal, exitCode: 0 });
+        return;
+      }
+      if (receivedSignal) {
+        const exitCode = receivedSignal === 'SIGINT' ? 130 : 143;
+        resolve({ kind: 'terminate', signal: receivedSignal, exitCode });
+        return;
+      }
+      resolve({ kind: 'stopped', signal: null, exitCode: exitState.exitCode ?? 0 });
+    };
     const fail = (error) => { cleanup(); reject(error); };
-    const stop = (exitCode) => {
-      process.exitCode = exitCode;
+    const stop = (signal, exitCode) => {
+      receivedSignal = signal;
+      if (!(signal === 'SIGINT' && returnToMenuOnSigint)) {
+        exitState.exitCode = exitCode;
+      }
       if (server.listening) {
         server.close();
         server.closeAllConnections?.();
@@ -248,10 +375,10 @@ export function waitForProxyShutdown(server) {
         done();
       }
     };
-    const stopSigint = () => stop(130);
-    const stopSigterm = () => stop(143);
-    process.once('SIGINT', stopSigint);
-    process.once('SIGTERM', stopSigterm);
+    const stopSigint = () => stop('SIGINT', 130);
+    const stopSigterm = () => stop('SIGTERM', 143);
+    signalSource.once('SIGINT', stopSigint);
+    signalSource.once('SIGTERM', stopSigterm);
     server.once('error', fail);
     server.once('close', done);
   });

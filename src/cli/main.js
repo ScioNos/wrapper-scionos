@@ -7,7 +7,11 @@ import { findStrategy } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
 import { handleAuth } from './commands/auth.js';
 import { handleClaudeCode } from './commands/claude-code.js';
-import { handleClaudeDesktop } from './commands/claude-desktop.js';
+import {
+  formatDesktopReplacementPrompt,
+  handleClaudeDesktop,
+  planInteractiveClaudeDesktopStart,
+} from './commands/claude-desktop.js';
 import { handleCodex, launchCodexForService } from './commands/codex.js';
 import { handleDoctor } from './commands/doctor.js';
 import { handleStrategies } from './commands/strategies.js';
@@ -247,12 +251,22 @@ function formatOptionHelp() {
   return rows.map(([usage, description]) => `  ${usage.padEnd(width, ' ')}${description}`).join('\n');
 }
 
-async function handleInteractiveMenu(options) {
+export async function handleInteractiveMenu(options, overrides = {}) {
+  const runtime = {
+    askMenu,
+    handleClaudeCode,
+    launchCodexForService,
+    handleInteractiveDesktopAction,
+    handleAuth,
+    handleStrategies,
+    handleDoctor,
+    ...overrides,
+  };
   const service = requireServiceConfig(options.service);
   let routeId = 'home';
   while (true) {
     const route = MENU_ROUTES[routeId];
-    const action = await askMenu(formatBreadcrumb(routeId), route.items, {
+    const action = await runtime.askMenu(formatBreadcrumb(routeId), route.items, {
       interactiveSelect: true,
       version: routeId === 'home' ? pkg.version : null,
       message: `${route.message}  Service: ${service.label}`,
@@ -264,7 +278,7 @@ async function handleInteractiveMenu(options) {
       continue;
     }
     if (action === 'claude-code') {
-      const result = await handleClaudeCode({ ...options, passthrough: [], allowBack: true }, pkg.version, []);
+      const result = await runtime.handleClaudeCode({ ...options, passthrough: [], allowBack: true }, pkg.version, []);
       if (result?.kind === 'back') {
         routeId = 'home';
         continue;
@@ -272,27 +286,51 @@ async function handleInteractiveMenu(options) {
       return;
     }
     if (action === 'codex') {
-      await launchCodexForService(options);
-      return;
+      try {
+        const exitCode = await runtime.launchCodexForService({
+          ...options,
+          service: service.value,
+          updateProcessExitCode: false,
+        });
+        if (exitCode === undefined || exitCode === 0) return;
+        console.error(`ERROR Codex CLI exited with code ${exitCode}. Returning to ScioNos Wrapper.`);
+      } catch (error) {
+        console.error(`ERROR Codex CLI could not start for ${service.label}: ${error.message}`);
+      }
+      process.exitCode = 0;
+      routeId = 'home';
+      continue;
     }
     if (routeId === 'desktop') {
-      await handleInteractiveDesktopAction(action, options);
+      const result = await runtime.handleInteractiveDesktopAction(action, options);
+      if (result?.kind === 'terminate') return;
     } else if (routeId === 'account') {
-      await handleAuth(action, { ...options, service: service.value });
+      await runtime.handleAuth(action, { ...options, service: service.value });
     } else if (routeId === 'tools') {
-      if (action === 'strategies') await handleStrategies(options);
-      if (action === 'doctor') await handleDoctor(options);
+      if (action === 'strategies') await runtime.handleStrategies(options);
+      if (action === 'doctor') await runtime.handleDoctor(options);
     }
   }
 }
 
-async function handleInteractiveDesktopAction(action, options) {
+export async function handleInteractiveDesktopAction(action, options, overrides = {}) {
+  const runtime = {
+    askYesNo,
+    handleClaudeDesktop,
+    planInteractiveClaudeDesktopStart,
+    ...overrides,
+  };
   const desktopOptions = { ...options };
   if (action === 'proxy') {
-    desktopOptions.setupLocalMapping = true;
-    desktopOptions.yes = true;
+    const plan = runtime.planInteractiveClaudeDesktopStart(options);
+    if (plan.requiresConfirmation) {
+      const confirmed = await runtime.askYesNo(formatDesktopReplacementPrompt(plan), false);
+      if (!confirmed) return { kind: 'cancelled' };
+    }
+    desktopOptions.interactiveDesktopPlan = plan;
+    desktopOptions.returnToMenuOnSigint = true;
   } else if (action === 'restore-official') {
-    desktopOptions.yes = await askYesNo('Restore Claude Desktop official mode now?', false);
+    desktopOptions.yes = await runtime.askYesNo('Restore Claude Desktop official mode now?', false);
   }
-  await handleClaudeDesktop(action, desktopOptions);
+  return runtime.handleClaudeDesktop(action, desktopOptions);
 }

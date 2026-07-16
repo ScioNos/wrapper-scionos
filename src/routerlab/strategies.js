@@ -339,7 +339,7 @@ export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAUL
   return strategy.allowSubagentOverride !== false;
 }
 
-function applySubagentModelOverride(strategy, env, options = {}) {
+export function applySubagentModelOverride(strategy, env, options = {}) {
   if (strategy.allowSubagentOverride === false) {
     return env;
   }

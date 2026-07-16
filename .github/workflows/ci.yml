@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:coverage
+      - run: npm run test:entry-modes
       - run: npm audit
       - run: npm pack --dry-run
       - name: Packed CLI smoke for RouterLab and LLM

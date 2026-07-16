@@ -27,6 +27,8 @@ With a global install:
 
 All four entry modes open the same interactive menu. The selected service is shown in the banner. The installed package also exposes scionos as an exact binary alias for wrapper-scionos.
 
+On Windows, PowerShell may resolve the generated `wrapper-scionos.ps1` or `npx.ps1` shim while Command Prompt resolves the corresponding `.cmd` shim; both are created by npm and are supported. On Linux and macOS, npm creates executable shell shims. The release smoke test exercises the four commands above on all three operating systems.
+
 ## Main commands
 
     wrapper-scionos claude-code --service routerlab --strategy aws
@@ -73,15 +75,19 @@ ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL remain accepted during 4.x and emit 
 
 Secure storage reads both wrapper-scionos and the legacy claude-scionos namespace; logout deletes both. On Linux, the file fallback creates directories as `0700` and verifies token files as `0600`, failing closed if those permissions cannot be guaranteed.
 
-auth login uses a masked prompt. The --token option works with all clients, including auth test and strategies. Their token order is --token, service environment variable, then secure storage. Codex intentionally keeps its special order of --token, secure storage, then environment. A token passed on the command line may remain visible in shell history and process inspection.
+auth login uses a masked prompt. The --token option works with all clients, including auth test and strategies. Their token order is --token, service environment variable, then secure storage. Claude Code warns when an environment token masks an available stored token but preserves that order for compatibility. Codex intentionally keeps its special order of --token, secure storage, then environment. A token passed on the command line may remain visible in shell history and process inspection.
 
 ## Claude Code
 
-Claude Code is launched through a loopback proxy. Wrapper-owned credentials and model mappings are injected only into the child process; unknown arguments after -- are forwarded to Claude Code.
+Claude Code is launched through a loopback proxy. Wrapper-owned credentials and model mappings are injected only into the child process; unknown arguments after -- are forwarded to Claude Code. CLI detection gives each `claude --version` candidate five seconds before trying the next executable.
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
 
-The proxy has no total generation timeout and closes its upstream request if the client disconnects.
+Claude Code validates the selected service base as HTTP(S) before resolving or sending a token. Environment-provided base URL overrides are printed on stderr, and legacy `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` values remain accepted with their 4.x deprecation warning.
+
+An HTTP 401/403 from model discovery stops the launch before the local proxy or Claude child starts. The error identifies the token source without exposing it and prints service-specific `auth status`, `auth test`, and `auth login` commands. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings; the user may continue with unverified model availability.
+
+The proxy has no total generation timeout and closes its upstream request if the client disconnects. Cleanup starts as soon as the proxy is created, waits up to two seconds for normal shutdown, then force-closes lingering local connections.
 
 ## Claude Desktop
 
@@ -99,9 +105,15 @@ Recommended local mapped proxy:
 
 apply-proxy resolves the RouterLab token and starts listening before it writes the profile. A missing token, cancellation, occupied port, or profile-write failure leaves the previous profile intact and closes any newly opened listener. It writes a random 32-byte base64url credential and versioned wrapperScionos metadata atomically. A later proxy command with no explicit profile options restores the stored service, strategy list, loopback host, and port. Divergent explicit options are refused until the profile is rewritten with apply-proxy --yes or the proxy command is repeated with --yes. Legacy profiles recover host/port from inferenceGatewayBaseUrl, use the CLI-selected service with a warning, and gain v4 metadata on the next application. A 3.x scionos-local credential is replaced automatically before listening.
 
+From the interactive menu, Start Local Mapping uses the service shown in the banner. A missing profile is created immediately, an equivalent healthy profile is reused without rotating its local credential, and replacement of a different, direct, legacy, or unhealthy profile requires confirmation. The stored host and port are preserved unless explicitly overridden; changing services refreshes the service-specific mapping catalog.
+
+The selected service base URL is validated before a token is resolved, a listener opens, or a profile changes. Generated profiles allow Cowork egress only to their exact gateway hostname. `claude-desktop status` keeps the existing fields and also reports `profileExists`, `applied`, `healthy`, and stable `issues` codes without exposing credentials.
+
 The proxy binds only to loopback. Every GET/POST route, including /v1/models, requires the profile credential. Browser origins are rejected by default. An exact HTTP(S) origin can be allowed with repeatable --allow-origin; only a matching CORS OPTIONS preflight may return 204 without authentication, and it exposes no data. Wildcard CORS is never emitted.
 
 Requests are limited to 64 MiB both before and after decompression. Identity, gzip, deflate, and Brotli bodies are accepted; zstd is accepted when the active Node runtime exposes it, otherwise HTTP 415 unsupported_content_encoding is returned. Invalid JSON returns HTTP 400. Header receipt is limited to 30 seconds and body receipt to 120 seconds. Long generations have no total timeout.
+
+When the proxy was started from the interactive menu, Ctrl+C stops it and returns to the Claude Desktop submenu without leaving a failure exit code. For the direct `claude-desktop proxy` command, Ctrl+C terminates with exit code 130; SIGTERM terminates with 143 in both modes.
 
 ## Codex CLI
 
@@ -110,6 +122,8 @@ The default Codex path is the session-local proxy:
     wrapper-scionos codex launch --service routerlab
     wrapper-scionos codex launch --service llm
 
+Before resolving a token or opening the proxy, Codex validates the selected service endpoint as HTTP(S) and validates an explicit `--token`. An HTTP 401/403 from model discovery stops the launch with service-specific `auth status`, `auth test`, and `auth login` guidance. If discovery succeeds, the requested or default model must be present in the verified Codex-compatible service catalog; otherwise the wrapper lists the available models and refuses to launch. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings and use the conservative local catalog.
+
 For diagnostics only, --direct bypasses the proxy:
 
     wrapper-scionos codex launch --service llm --direct
@@ -117,6 +131,8 @@ For diagnostics only, --direct bypasses the proxy:
 The wrapper passes only provider, model, base URL, wire API, and temporary catalog overrides. It does not override the user's Codex sandbox, approval policy, reasoning effort, MCP configuration, features, hooks, authentication files, or web_search mode. Codex therefore inherits the user's cached/live/disabled search preference. The web-search tool is exposed only when RouterLab metadata explicitly marks the selected model as search-compatible.
 
 In proxy mode, outgoing Responses requests are forced to store: false. Direct mode makes no storage guarantee.
+
+When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
 
 The temporary model catalog is generated from normalized upstream metadata. When only model IDs are available, the fallback is conservative: 128k context, text only, sequential function calls, medium reasoning, and no unverified vision, hosted tools, search, freeform, or parallel-call claims. Catalog files older than 24 hours are removed at startup and the active catalog is removed when Codex exits.
 
@@ -142,9 +158,14 @@ Prefer the default proxy, --direct for diagnostics, and the RouterLab environmen
 
     npm test
     npm run test:coverage
+    npm run test:entry-modes
     npm audit
     npm pack --dry-run
 
-For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-4.0.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
+`npm run test:entry-modes` opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It therefore expects a globally installed development build for the first two commands and npm/npx access for the last two.
+
+`npm test` also performs isolated end-to-end Claude Code, Claude Desktop, and Codex launches for `routerlab` and `llm`. Fake client executables and local upstreams verify menu selection, service propagation, child-only credential injection, local-to-upstream token replacement, authentication failures, model availability, proxy cleanup, and Windows npm shim forwarding without contacting RouterLab production endpoints. Coverage gates remain 85% for lines/functions and 80% for branches.
+
+For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-4.1.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
 
 Architecture details are in [docs/architecture-notes.md](./docs/architecture-notes.md).

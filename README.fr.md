@@ -27,6 +27,8 @@ Avec une installation globale :
 
 Les quatre modes ouvrent le même menu interactif. Le service sélectionné apparaît dans la bannière. Le paquet installé expose aussi scionos comme alias binaire exact de wrapper-scionos.
 
+Sous Windows, PowerShell peut résoudre le shim `wrapper-scionos.ps1` ou `npx.ps1` généré, tandis que l’invite de commandes résout le shim `.cmd` correspondant ; npm crée et prend en charge les deux. Sous Linux et macOS, npm crée des shims shell exécutables. Le smoke test de release exerce les quatre commandes ci-dessus sur les trois systèmes.
+
 ## Commandes principales
 
     wrapper-scionos claude-code --service routerlab --strategy aws
@@ -73,15 +75,19 @@ ANTHROPIC_AUTH_TOKEN et ANTHROPIC_BASE_URL restent acceptées pendant la 4.x et 
 
 Le stockage sécurisé lit wrapper-scionos et l’ancien espace claude-scionos ; logout supprime les deux. Sous Linux, le fallback fichier crée les répertoires en `0700`, vérifie les fichiers de token en `0600` et échoue fermé si ces permissions ne peuvent pas être garanties.
 
-auth login utilise une invite masquée. L’option --token fonctionne avec tous les clients, notamment auth test et strategies. Leur priorité est --token, variable d’environnement du service, puis stockage sécurisé. Codex conserve volontairement sa priorité particulière : --token, stockage sécurisé, puis environnement. Un token passé sur la ligne de commande peut rester visible dans l’historique du shell et dans l’inspection des processus.
+auth login utilise une invite masquée. L’option --token fonctionne avec tous les clients, notamment auth test et strategies. Leur priorité est --token, variable d’environnement du service, puis stockage sécurisé. Claude Code avertit lorsqu’un token d’environnement masque un token stocké disponible, tout en conservant cet ordre pour compatibilité. Codex conserve volontairement sa priorité particulière : --token, stockage sécurisé, puis environnement. Un token passé sur la ligne de commande peut rester visible dans l’historique du shell et dans l’inspection des processus.
 
 ## Claude Code
 
-Claude Code est lancé via un proxy loopback. Les identifiants et mappings gérés par le wrapper ne sont injectés que dans le processus enfant ; les arguments inconnus après -- sont transmis à Claude Code.
+Claude Code est lancé via un proxy loopback. Les identifiants et mappings gérés par le wrapper ne sont injectés que dans le processus enfant ; les arguments inconnus après -- sont transmis à Claude Code. La détection accorde cinq secondes à chaque candidat `claude --version` avant d’essayer l’exécutable suivant.
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Résume ce dépôt"
 
-Le proxy n’impose aucun timeout total aux générations et ferme la requête upstream si le client se déconnecte.
+Claude Code valide que la base du service sélectionné utilise HTTP(S) avant de résoudre ou transmettre un token. Les surcharges d’URL provenant de l’environnement sont affichées sur stderr ; les anciennes variables `ANTHROPIC_AUTH_TOKEN` et `ANTHROPIC_BASE_URL` restent acceptées avec leur avertissement de dépréciation 4.x.
+
+Une réponse HTTP 401/403 pendant la découverte des modèles arrête le lancement avant la création du proxy local ou du processus Claude. L’erreur indique la source du token sans l’exposer et affiche les commandes `auth status`, `auth test` et `auth login` adaptées au service. Les erreurs réseau, timeouts, réponses invalides et autres échecs non liés à l’authentification restent des avertissements ; l’utilisateur peut continuer avec une disponibilité des modèles non vérifiée.
+
+Le proxy n’impose aucun timeout total aux générations et ferme la requête upstream si le client se déconnecte. Le nettoyage est actif dès la création du proxy, attend jusqu’à deux secondes une fermeture normale, puis force la fermeture des connexions locales restantes.
 
 ## Claude Desktop
 
@@ -99,9 +105,15 @@ Proxy local recommandé avec mapping :
 
 apply-proxy résout le token RouterLab et démarre l’écoute avant d’écrire le profil. Un token absent, une annulation, un port occupé ou un échec d’écriture laisse le profil précédent intact et ferme toute nouvelle écoute. Il écrit atomiquement un identifiant aléatoire de 32 octets encodé en base64url et des métadonnées wrapperScionos versionnées. Un futur proxy sans option explicite reprend le service, la liste de stratégies, l’hôte loopback et le port stockés. Des options explicites divergentes sont refusées jusqu’à une réécriture avec apply-proxy --yes, ou avec --yes sur la commande proxy. Un ancien profil récupère hôte/port depuis inferenceGatewayBaseUrl, utilise le service CLI avec avertissement et reçoit les métadonnées v4 à la prochaine application. Un identifiant 3.x scionos-local est remplacé automatiquement avant l’écoute.
 
+Depuis le menu interactif, Start Local Mapping utilise le service affiché dans la bannière. Un profil absent est créé directement, un profil sain et équivalent est réutilisé sans rotation de son identifiant local, et le remplacement d’un profil différent, direct, ancien ou invalide demande confirmation. L’hôte et le port stockés sont conservés sauf surcharge explicite ; un changement de service recharge le catalogue propre au service.
+
+La base URL du service sélectionné est validée avant la résolution du token, l’ouverture du listener ou toute modification du profil. Les profils générés n’autorisent l’egress Cowork que vers le hostname exact de leur gateway. `claude-desktop status` conserve ses champs existants et ajoute `profileExists`, `applied`, `healthy` et des codes `issues` stables sans exposer les credentials.
+
 Le proxy écoute uniquement sur loopback. Toutes les routes GET/POST, y compris /v1/models, exigent l’identifiant du profil. Les origines navigateur sont refusées par défaut. Une origine HTTP(S) exacte peut être autorisée avec l’option répétable --allow-origin ; seul un préflight CORS OPTIONS correspondant peut répondre 204 sans authentification, sans exposer de données. Aucun CORS wildcard n’est émis.
 
 Les requêtes sont limitées à 64 Mio avant et après décompression. Les corps identity, gzip, deflate et Brotli sont acceptés ; zstd l’est si le runtime Node actif l’expose, sinon HTTP 415 unsupported_content_encoding est retourné. Un JSON invalide retourne HTTP 400. La réception des en-têtes est limitée à 30 secondes et celle du corps à 120 secondes. Les générations longues n’ont pas de timeout total.
+
+Quand le proxy a été lancé depuis le menu interactif, Ctrl+C l’arrête et revient au sous-menu Claude Desktop sans conserver un code d’échec. Pour la commande directe `claude-desktop proxy`, Ctrl+C termine avec le code 130 ; SIGTERM termine avec 143 dans les deux modes.
 
 ## Codex CLI
 
@@ -110,6 +122,8 @@ Le chemin Codex par défaut utilise le proxy local de session :
     wrapper-scionos codex launch --service routerlab
     wrapper-scionos codex launch --service llm
 
+Avant de résoudre un token ou d’ouvrir le proxy, Codex valide que le point d’accès du service sélectionné utilise HTTP(S) et valide un `--token` explicite. Une réponse HTTP 401/403 pendant la découverte des modèles arrête le lancement avec les commandes `auth status`, `auth test` et `auth login` adaptées au service. Quand la découverte réussit, le modèle demandé ou utilisé par défaut doit appartenir au catalogue Codex vérifié du service ; sinon le wrapper affiche les modèles disponibles et refuse le lancement. Les erreurs réseau, timeouts, réponses invalides et autres échecs non liés à l’authentification restent des avertissements et utilisent le catalogue local conservateur.
+
 Pour le diagnostic uniquement, --direct contourne le proxy :
 
     wrapper-scionos codex launch --service llm --direct
@@ -117,6 +131,8 @@ Pour le diagnostic uniquement, --direct contourne le proxy :
 Le wrapper ne surcharge que le fournisseur, le modèle, l’URL, le wire API et le catalogue temporaire. Il ne modifie ni le sandbox Codex, ni la politique d’approbation, ni l’effort de raisonnement, ni MCP, les features, les hooks, les fichiers d’authentification ou le mode web_search de l’utilisateur. Codex hérite donc de la préférence cached/live/disabled. L’outil de recherche n’est exposé que si les métadonnées RouterLab déclarent explicitement le modèle compatible.
 
 En mode proxy, les requêtes Responses sortantes sont forcées à store: false. Le mode direct ne garantit aucune politique de stockage.
+
+Quand Codex est choisi depuis le menu interactif, un échec de démarrage ou une sortie Codex non nulle affiche l’erreur et revient au menu principal. Une sortie Codex normale ferme le wrapper. Les commandes directes `codex launch` conservent le code de sortie du processus Codex.
 
 Le catalogue temporaire est généré depuis les métadonnées upstream normalisées. Si seuls les IDs sont disponibles, le fallback est conservateur : contexte 128k, texte uniquement, fonctions séquentielles, raisonnement medium, et aucune annonce non vérifiée de vision, outil hébergé, recherche, freeform ou appels parallèles. Les catalogues vieux de plus de 24 heures sont supprimés au démarrage et le catalogue actif est retiré à la sortie de Codex.
 
@@ -142,9 +158,14 @@ Préfère le proxy par défaut, --direct pour le diagnostic et les variables Rou
 
     npm test
     npm run test:coverage
+    npm run test:entry-modes
     npm audit
     npm pack --dry-run
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-4.0.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+`npm run test:entry-modes` ouvre puis quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il attend donc une version de développement installée globalement pour les deux premières commandes et un accès npm/npx pour les deux dernières.
+
+`npm test` effectue aussi des lancements isolés de bout en bout pour Claude Code, Claude Desktop et Codex sur `routerlab` et `llm`. De faux exécutables clients et des serveurs upstream locaux vérifient la sélection du menu, la propagation du service, l’injection des credentials limitée au processus enfant, le remplacement du token local par le token upstream, les refus d’authentification, la disponibilité des modèles, le nettoyage des proxies et la transmission par les shims npm Windows, sans contacter les points d’accès RouterLab de production. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
+
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-4.1.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

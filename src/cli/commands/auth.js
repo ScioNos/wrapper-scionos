@@ -12,13 +12,20 @@ export function getAuthMenuContext(options) {
 }
 
 
-export async function handleAuth(action, options) {
+export async function handleAuth(action, options, {
+  passwordFn = password,
+  deleteStoredTokenFn = deleteStoredToken,
+  getStoredTokenStatusFn = getStoredTokenStatus,
+  storeTokenFn = storeToken,
+  fetchModelsFn = fetchModels,
+  resolveTokenWithSourceFn = resolveTokenWithSource,
+} = {}) {
   const service = requireServiceConfig(options.service);
   if (action === 'login' || action === 'change') {
     if (options.dryRun) {
       const format = options.token ? validateTokenFormat(options.token) : null;
       if (format && !format.valid) throw new Error(format.message);
-      const status = getStoredTokenStatus(service.value);
+      const status = getStoredTokenStatusFn(service.value);
       print({
         dryRun: true, service: service.value, backend: status.backend,
         storageSupported: status.supported, tokenProvided: Boolean(options.token),
@@ -26,33 +33,33 @@ export async function handleAuth(action, options) {
       }, options);
       return;
     }
-    const token = options.token ?? await password({ message: service.label + ' token:' });
+    const token = options.token ?? await passwordFn({ message: service.label + ' token:' });
     const format = validateTokenFormat(token);
     if (!format.valid) throw new Error(format.message);
-    const storage = storeToken(token.trim(), service.value);
+    const storage = storeTokenFn(token.trim(), service.value);
     print({ stored: true, service: service.value, backend: storage.backend }, options);
     return;
   }
   if (action === 'logout') {
     if (options.dryRun) {
-      const status = getStoredTokenStatus(service.value);
+      const status = getStoredTokenStatusFn(service.value);
       print({ dryRun: true, service: service.value, wouldDelete: status.stored, backend: status.backend }, options);
       return;
     }
-    const deleted = deleteStoredToken(service.value);
+    const deleted = deleteStoredTokenFn(service.value);
     print({ deleted, service: service.value, legacyEntriesIncluded: deleted }, options);
     return;
   }
   if (action === 'test') {
-    const resolved = await resolveOptionFirstToken(service, options);
-    const result = await fetchModels(resolved.token, {
+    const resolved = await resolveOptionFirstToken(service, options, resolveTokenWithSourceFn);
+    const result = await fetchModelsFn(resolved.token, {
       serviceValue: service.value,
       baseUrl: resolveServiceBaseUrl(service.value, process.env),
     });
     print({ tokenSource: resolved.source, ...result }, options);
     return;
   }
-  const status = getStoredTokenStatus(service.value);
+  const status = getStoredTokenStatusFn(service.value);
   const envToken = resolveServiceEnvToken(service.value, process.env);
   print({
     service: service.value,
@@ -64,11 +71,15 @@ export async function handleAuth(action, options) {
   }, options);
 }
 
-async function resolveOptionFirstToken(service, options) {
+export async function resolveOptionFirstToken(
+  service,
+  options,
+  resolveTokenWithSourceFn = resolveTokenWithSource,
+) {
   if (options.token) {
     const format = validateTokenFormat(options.token);
     if (!format.valid) throw new Error(format.message);
     return { token: options.token.trim(), source: 'option' };
   }
-  return resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt });
+  return resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt: options.noPrompt });
 }

@@ -1,4 +1,4 @@
-import { requireServiceConfig, resolveServiceBaseUrl } from '../routerlab/services.js';
+import { requireServiceConfig, resolveServiceBaseUrl, validateServiceBaseUrl } from '../routerlab/services.js';
 import {
   createLongRunningLlmProxy,
   forwardLongRunningLlmRequest,
@@ -15,10 +15,17 @@ export function createClaudeDesktopProxy({
   routerlabToken,
   gatewayToken,
   allowedOrigins = [],
+  targetBaseUrl = null,
 }) {
   if (!gatewayToken) throw new Error('A generated local proxy credential is required.');
   const serviceConfig = requireServiceConfig(serviceValue);
-  const service = { ...serviceConfig, baseUrl: resolveServiceBaseUrl(serviceConfig.value, process.env) };
+  const service = {
+    ...serviceConfig,
+    baseUrl: validateServiceBaseUrl(
+      targetBaseUrl ?? resolveServiceBaseUrl(serviceConfig.value, process.env),
+      serviceConfig.value,
+    ),
+  };
   const routes = strategyValues
     ? modelRoutesForDesktopMapping(service.value, strategyValues)
     : modelRoutesForProxyStrategy(strategyValue, service.value);

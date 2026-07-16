@@ -1,6 +1,8 @@
 node_modules/
 npm-debug.log*
 *.log
+*.pid
+.tmp-package-audit/
 .env
 .env.*
 !.env.example

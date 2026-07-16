@@ -127,9 +127,9 @@ export function writeCodexRuntimeModelCatalog({
   paths = getCodexPaths(),
   tmpDir = os.tmpdir(),
   modelMetadata = [],
+  models = codexModelsForService(serviceValue),
 } = {}) {
   cleanupStaleCodexRuntimeModelCatalogs({ tmpDir });
-  const models = codexModelsForService(serviceValue);
   const catalog = buildCodexModelCatalogFromCache({
     paths,
     models,
@@ -257,13 +257,19 @@ export function assertCodexCliAvailable() {
   return codex;
 }
 
-export async function launchCodex({ apiKey = null, codexArgs = [] } = {}) {
-  const codex = assertCodexCliAvailable();
-  await runInteractiveCli(codex.cliPath, codexArgs, {
+export async function launchCodex({
+  apiKey = null,
+  codexArgs = [],
+  codex = null,
+  updateProcessExitCode = true,
+} = {}) {
+  const resolvedCodex = codex ?? assertCodexCliAvailable();
+  return runInteractiveCli(resolvedCodex.cliPath, codexArgs, {
     env: {
       ...process.env,
       ...(apiKey ? buildCodexAuth(apiKey) : {}),
     },
+    updateProcessExitCode,
   });
 }
 

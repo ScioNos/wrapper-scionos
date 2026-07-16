@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
+import { stripVTControlCharacters } from 'node:util';
+import { handleInteractiveDesktopAction, handleInteractiveMenu, main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { getAuthMenuContext } from '../src/cli/commands/auth.js';
 import { parseOptions } from '../src/cli/args.js';
 import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, resolveMenuChoice, resolveNavigation } from '../src/cli/menu.js';
@@ -16,10 +17,24 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Codex CLI/);
-  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos Wrapper/);
-  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /Compatible Windows, macOS, Linux/);
-  assert.match(formatBanner('ScioNos Wrapper', '1.0.0'), /https:\/\/github\.com\/aaddrick\/claude-desktop-debian/);
-  assert.doesNotMatch(formatBanner('ScioNos Wrapper', '1.0.0'), /ScioNos\s+✕\s+Claude Code/);
+  const banner = formatBanner('ScioNos Wrapper', '1.0.0');
+  const plainBanner = stripVTControlCharacters(banner);
+  assert.match(plainBanner, /ScioNos Wrapper/);
+  assert.match(plainBanner, /Compatible Windows, macOS, Linux/);
+  assert.match(banner, /https:\/\/github\.com\/aaddrick\/claude-desktop-debian/);
+  assert.doesNotMatch(plainBanner, /ScioNos\s+✕\s+Claude Code/);
+  const genericBanner = stripVTControlCharacters(formatBanner('Claude Desktop'));
+  assert.match(genericBanner, /Claude Desktop/);
+  assert.doesNotMatch(genericBanner, /Compatible Windows, macOS, Linux/);
+  assert.doesNotMatch(genericBanner, /v1\.0\.0/);
+  assert.match(
+    stripVTControlCharacters(formatMenu('Claude Desktop', CLAUDE_DESKTOP_MENU_ITEMS, {
+      banner: true,
+      version: '1.0.0',
+    })),
+    /Claude Desktop/,
+  );
+  assert.match(stripVTControlCharacters(formatBanner('A'.repeat(60))), /A{60}/);
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',
     value: 'claude-code',
@@ -92,6 +107,142 @@ test('the interactive navigation model has predictable parents and actions', () 
   assert.equal(formatBreadcrumb('home'), 'ScioNos Wrapper');
   assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop');
 });
+
+test('interactive Claude Desktop actions confirm replacements and pass return-to-menu behavior', async () => {
+  const options = parseOptions(['--service', 'llm']);
+  const replacementPlan = {
+    action: 'replace',
+    requiresConfirmation: true,
+    current: {
+      serviceValue: 'routerlab',
+      strategyValue: 'default',
+      strategyValues: ['default'],
+      host: '127.0.0.1',
+      port: 15721,
+    },
+    config: {
+      serviceValue: 'llm',
+      strategyValue: 'claude',
+      strategyValues: ['claude'],
+      host: '127.0.0.1',
+      port: 15721,
+    },
+    credential: { token: 'never-print-this' },
+  };
+  let handled = false;
+  const cancelled = await handleInteractiveDesktopAction('proxy', options, {
+    planInteractiveClaudeDesktopStart: () => replacementPlan,
+    askYesNo: async (message, defaultValue) => {
+      assert.match(message, /routerlab/);
+      assert.match(message, /llm/);
+      assert.doesNotMatch(message, /never-print-this/);
+      assert.equal(defaultValue, false);
+      return false;
+    },
+    handleClaudeDesktop: async () => {
+      handled = true;
+    },
+  });
+  assert.deepEqual(cancelled, { kind: 'cancelled' });
+  assert.equal(handled, false);
+
+  const started = await handleInteractiveDesktopAction('proxy', options, {
+    planInteractiveClaudeDesktopStart: () => ({ ...replacementPlan, requiresConfirmation: false }),
+    handleClaudeDesktop: async (action, desktopOptions) => {
+      assert.equal(action, 'proxy');
+      assert.equal(desktopOptions.returnToMenuOnSigint, true);
+      assert.equal(desktopOptions.interactiveDesktopPlan.action, 'replace');
+      return { kind: 'back', signal: 'SIGINT', exitCode: 0 };
+    },
+  });
+  assert.deepEqual(started, { kind: 'back', signal: 'SIGINT', exitCode: 0 });
+});
+
+test('interactive menu routes Claude Desktop actions for the selected service and returns cleanly', async () => {
+  const actions = ['claude-desktop', 'proxy', 'back', 'quit'];
+  const seenMessages = [];
+  let desktopCalls = 0;
+  await handleInteractiveMenu(parseOptions(['--service', 'llm']), {
+    askMenu: async (_title, _items, menuOptions) => {
+      seenMessages.push(menuOptions.message);
+      return actions.shift();
+    },
+    handleInteractiveDesktopAction: async (action, options) => {
+      desktopCalls += 1;
+      assert.equal(action, 'proxy');
+      assert.equal(options.service, 'llm');
+      return { kind: 'back', signal: 'SIGINT', exitCode: 0 };
+    },
+  });
+  assert.equal(desktopCalls, 1);
+  assert.equal(actions.length, 0);
+  assert.equal(seenMessages.every((message) => /Service: RouterLab LLM/.test(message)), true);
+});
+
+test('interactive menu launches Codex directly with the selected service', async (t) => {
+  for (const serviceCase of [
+    { args: [], service: 'routerlab', label: 'RouterLab' },
+    { args: ['--service', 'llm'], service: 'llm', label: 'RouterLab LLM' },
+  ]) {
+    await t.test(serviceCase.service, async () => {
+      const messages = [];
+      let launched = 0;
+      await handleInteractiveMenu(parseOptions(serviceCase.args), {
+        askMenu: async (_title, _items, menuOptions) => {
+          messages.push(menuOptions.message);
+          return 'codex';
+        },
+        launchCodexForService: async (options) => {
+          launched += 1;
+          assert.equal(options.service, serviceCase.service);
+          assert.equal(options.updateProcessExitCode, false);
+          return 0;
+        },
+      });
+      assert.equal(launched, 1);
+      assert.equal(messages.length, 1);
+      assert.match(messages[0], new RegExp(`Service: ${serviceCase.label}`));
+    });
+  }
+});
+
+test('interactive Codex failures report the error and return to the home menu', async (t) => {
+  const previousExitCode = process.exitCode;
+  const originalError = console.error;
+  const errors = [];
+  console.error = (...values) => errors.push(values.join(' '));
+  try {
+    await t.test('non-zero child exit', async () => {
+      const actions = ['codex', 'quit'];
+      process.exitCode = 9;
+      await handleInteractiveMenu(parseOptions(['--service', 'llm']), {
+        askMenu: async () => actions.shift(),
+        launchCodexForService: async () => 9,
+      });
+      assert.equal(actions.length, 0);
+      assert.equal(process.exitCode, 0);
+      assert.match(errors.at(-1), /exited with code 9/);
+    });
+
+    await t.test('startup exception', async () => {
+      const actions = ['codex', 'quit'];
+      await handleInteractiveMenu(parseOptions([]), {
+        askMenu: async () => actions.shift(),
+        launchCodexForService: async () => {
+          throw new Error('test startup failure');
+        },
+      });
+      assert.equal(actions.length, 0);
+      assert.equal(process.exitCode, 0);
+      assert.match(errors.at(-1), /could not start for RouterLab: test startup failure/);
+    });
+  } finally {
+    console.error = originalError;
+    if (previousExitCode === undefined) process.exitCode = 0;
+    else process.exitCode = previousExitCode;
+  }
+});
+
 test('auth menu uses the command-selected service', () => {
   const routerlab = getAuthMenuContext(parseOptions([]));
   assert.equal(routerlab.service.value, 'routerlab');

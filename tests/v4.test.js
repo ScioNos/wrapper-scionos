@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import * as zlib from 'node:zlib';
 import { parseOptions, isLoopbackHost } from '../src/cli/args.js';
 import { main, resolveCommandInvocation } from '../src/cli/main.js';
 import { printError } from '../src/cli/commands/output.js';
-import { defaultDesktopStrategy, mergeExplicitProxyConfig, requestedProxyConfig, sameProxyConfig, storedProxyConfig } from '../src/cli/commands/claude-desktop.js';
+import { defaultDesktopStrategy, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
 import { extractModelMetadata, fetchModels } from '../src/routerlab/models.js';
 import {
   buildCodexModelCatalogFromCache,
@@ -199,7 +200,7 @@ test('central command registry drives non-interactive help and diagnostic comman
     console.log = originalLog;
     console.error = originalError;
   }
-  assert.match(output.join('\n'), /wrapper-scionos v4\.0\.0/);
+  assert.match(output.join('\n'), /wrapper-scionos v4\.1\.0/);
   assert.match(output.join('\n'), /model_provider/);
   assert.equal(output.join('\n').includes('test-token-with-sufficient-length'), false);
 });
@@ -475,6 +476,139 @@ test('Desktop stored proxy configuration helpers restore and reconcile explicit 
   assert.equal(reconciled.host, '::1');
 });
 
+test('Desktop interactive start plans create, reuse, or confirm replacements without exposing credentials', () => {
+  const credential = {
+    token: 'generated-local-secret',
+    host: '::1',
+    port: 17000,
+    metadata: {
+      schemaVersion: 1,
+      mode: 'proxy',
+      service: 'llm',
+      strategy: null,
+      strategies: DESKTOP_MAPPING_STRATEGIES.llm,
+    },
+  };
+  const healthyStatus = {
+    configured: true,
+    profileExists: true,
+    healthy: true,
+  };
+
+  const create = planInteractiveClaudeDesktopStart(parseOptions([]), {
+    credential: null,
+    status: { configured: false, profileExists: false, healthy: false },
+  });
+  assert.equal(create.action, 'create');
+  assert.equal(create.requiresConfirmation, false);
+  assert.equal(create.config.serviceValue, 'routerlab');
+  assert.deepEqual(create.config.strategyValues, DESKTOP_MAPPING_STRATEGIES.routerlab);
+
+  const reuse = planInteractiveClaudeDesktopStart(parseOptions(['--service', 'llm']), {
+    credential,
+    status: healthyStatus,
+  });
+  assert.equal(reuse.action, 'reuse');
+  assert.equal(reuse.requiresConfirmation, false);
+  assert.equal(reuse.config.host, '::1');
+  assert.equal(reuse.config.port, 17000);
+  assert.equal(reuse.credential.token, 'generated-local-secret');
+
+  const replace = planInteractiveClaudeDesktopStart(parseOptions([]), {
+    credential,
+    status: healthyStatus,
+  });
+  assert.equal(replace.action, 'replace');
+  assert.equal(replace.requiresConfirmation, true);
+  assert.equal(replace.config.serviceValue, 'routerlab');
+  assert.equal(replace.config.host, '::1');
+  assert.equal(replace.config.port, 17000);
+  assert.deepEqual(replace.config.strategyValues, DESKTOP_MAPPING_STRATEGIES.routerlab);
+  const prompt = formatDesktopReplacementPrompt(replace);
+  assert.match(prompt, /llm/);
+  assert.match(prompt, /routerlab/);
+  assert.doesNotMatch(prompt, /generated-local-secret/);
+
+  const unhealthy = planInteractiveClaudeDesktopStart(parseOptions(['--service', 'llm']), {
+    credential,
+    status: { ...healthyStatus, healthy: false, issues: ['metadata_invalid'] },
+  });
+  assert.equal(unhealthy.action, 'replace');
+  assert.equal(unhealthy.reason, 'profile_unhealthy');
+  assert.equal(unhealthy.requiresConfirmation, true);
+
+  const invalidMetadata = planInteractiveClaudeDesktopStart(parseOptions([]), {
+    credential: {
+      ...credential,
+      metadata: { ...credential.metadata, service: 'invalid-service' },
+    },
+    status: { ...healthyStatus, healthy: false, issues: ['metadata_invalid'] },
+  });
+  assert.equal(invalidMetadata.current, null);
+  assert.match(formatDesktopReplacementPrompt(invalidMetadata), /invalid or non-proxy/);
+});
+
+test('Desktop proxy shutdown returns to the menu on interactive SIGINT and preserves direct exit codes', async () => {
+  function createShutdownFixture() {
+    const signalSource = new EventEmitter();
+    const server = new EventEmitter();
+    server.listening = true;
+    server.closeAllConnections = () => {};
+    server.close = () => {
+      server.listening = false;
+      queueMicrotask(() => server.emit('close'));
+    };
+    return { signalSource, server };
+  }
+
+  {
+    const { signalSource, server } = createShutdownFixture();
+    const exitState = { exitCode: undefined };
+    const waiting = waitForProxyShutdown(server, {
+      signalSource,
+      exitState,
+      returnToMenuOnSigint: true,
+    });
+    signalSource.emit('SIGINT');
+    assert.deepEqual(await waiting, { kind: 'back', signal: 'SIGINT', exitCode: 0 });
+    assert.equal(exitState.exitCode, 0);
+    assert.equal(signalSource.listenerCount('SIGINT'), 0);
+    assert.equal(signalSource.listenerCount('SIGTERM'), 0);
+  }
+
+  {
+    const { signalSource, server } = createShutdownFixture();
+    const exitState = {};
+    const waiting = waitForProxyShutdown(server, { signalSource, exitState });
+    signalSource.emit('SIGINT');
+    assert.deepEqual(await waiting, { kind: 'terminate', signal: 'SIGINT', exitCode: 130 });
+    assert.equal(exitState.exitCode, 130);
+  }
+
+  {
+    const { signalSource, server } = createShutdownFixture();
+    const exitState = {};
+    const waiting = waitForProxyShutdown(server, {
+      signalSource,
+      exitState,
+      returnToMenuOnSigint: true,
+    });
+    signalSource.emit('SIGTERM');
+    assert.deepEqual(await waiting, { kind: 'terminate', signal: 'SIGTERM', exitCode: 143 });
+    assert.equal(exitState.exitCode, 143);
+  }
+
+  {
+    const signalSource = new EventEmitter();
+    const server = new EventEmitter();
+    server.listening = false;
+    const exitState = {};
+    const waiting = waitForProxyShutdown(server, { signalSource, exitState });
+    signalSource.emit('SIGINT');
+    assert.deepEqual(await waiting, { kind: 'terminate', signal: 'SIGINT', exitCode: 130 });
+  }
+});
+
 test('CLI help, version, dry-run logout, and errors honor JSON contracts', async () => {
   const originalLog = console.log;
   const originalError = console.error;
@@ -580,14 +714,29 @@ test('global options can precede commands without consuming option values or pas
 test('Desktop proxy does not mutate a profile before token and port validation', async (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-transaction-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const envKeys = ['LOCALAPPDATA', 'HOME', 'XDG_CONFIG_HOME', 'WRAPPER_SCIONOS_TOKEN_DIR', 'ROUTERLAB_API_KEY', 'ANTHROPIC_AUTH_TOKEN'];
+  const envKeys = [
+    'LOCALAPPDATA',
+    'HOME',
+    'XDG_CONFIG_HOME',
+    'WRAPPER_SCIONOS_TOKEN_DIR',
+    'ROUTERLAB_API_KEY',
+    'ROUTERLAB_LLM_API_KEY',
+    'ROUTERLAB_BASE_URL',
+    'ROUTERLAB_LLM_BASE_URL',
+    'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL',
+  ];
   const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   process.env.LOCALAPPDATA = path.join(dir, 'local');
   process.env.HOME = path.join(dir, 'home');
   process.env.XDG_CONFIG_HOME = path.join(dir, 'config');
   process.env.WRAPPER_SCIONOS_TOKEN_DIR = path.join(dir, 'tokens');
   delete process.env.ROUTERLAB_API_KEY;
+  delete process.env.ROUTERLAB_LLM_API_KEY;
+  delete process.env.ROUTERLAB_BASE_URL;
+  delete process.env.ROUTERLAB_LLM_BASE_URL;
   delete process.env.ANTHROPIC_AUTH_TOKEN;
+  delete process.env.ANTHROPIC_BASE_URL;
   t.after(() => {
     for (const key of envKeys) {
       if (previous[key] === undefined) delete process.env[key];
@@ -596,6 +745,47 @@ test('Desktop proxy does not mutate a profile before token and port validation',
   });
 
   const paths = getClaudeDesktopPaths();
+  for (const invalidCase of [
+    {
+      serviceArgs: [],
+      envKey: 'ROUTERLAB_BASE_URL',
+      value: 'file:///tmp/routerlab',
+      expected: /must use HTTP or HTTPS/,
+    },
+    {
+      serviceArgs: ['--service', 'llm'],
+      envKey: 'ROUTERLAB_LLM_BASE_URL',
+      value: 'not-a-valid-url',
+      expected: /base URL is invalid/,
+    },
+  ]) {
+    process.env[invalidCase.envKey] = invalidCase.value;
+    await assert.rejects(
+      () => main([
+        'claude-desktop', 'apply-proxy', '--yes', '--no-prompt',
+        ...invalidCase.serviceArgs,
+      ]),
+      invalidCase.expected,
+    );
+    await assert.rejects(
+      () => main([
+        'claude-desktop', 'proxy', '--yes', '--no-prompt',
+        ...invalidCase.serviceArgs,
+      ]),
+      invalidCase.expected,
+    );
+    await assert.rejects(
+      () => main([
+        'claude-desktop', 'apply', '--yes', '--no-prompt',
+        ...invalidCase.serviceArgs,
+      ]),
+      invalidCase.expected,
+    );
+    delete process.env[invalidCase.envKey];
+    assert.equal(fs.existsSync(paths.profilePath), false);
+    assert.equal(fs.existsSync(paths.metaPath), false);
+  }
+
   await assert.rejects(
     () => main(['claude-desktop', 'proxy', '--yes', '--no-prompt']),
     /token is required/,
@@ -621,6 +811,126 @@ test('Desktop proxy does not mutate a profile before token and port validation',
   );
   assert.equal(fs.existsSync(paths.profilePath), false);
   await new Promise((resolve) => blocker.close(resolve));
+});
+
+test('Desktop command covers successful apply, stored-profile reuse, legacy replacement, and restore', async (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-command-success-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const envKeys = ['LOCALAPPDATA', 'HOME', 'XDG_CONFIG_HOME', 'WRAPPER_SCIONOS_TOKEN_DIR'];
+  const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  process.env.LOCALAPPDATA = path.join(dir, 'local');
+  process.env.HOME = path.join(dir, 'home');
+  process.env.XDG_CONFIG_HOME = path.join(dir, 'config');
+  process.env.WRAPPER_SCIONOS_TOKEN_DIR = path.join(dir, 'tokens');
+  t.after(() => {
+    for (const key of envKeys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  });
+
+  async function freePort() {
+    const server = http.createServer();
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    await new Promise((resolve) => server.close(resolve));
+    return port;
+  }
+
+  async function runAndInterrupt(options, { expectedKind = 'back' } = {}) {
+    const signalSource = new EventEmitter();
+    const exitState = {};
+    const originalLog = console.log;
+    const originalError = console.error;
+    const output = [];
+    console.log = (line) => {
+      output.push(String(line));
+      if (String(line).includes('Press Ctrl+C to stop.')) {
+        queueMicrotask(() => signalSource.emit('SIGINT'));
+      }
+    };
+    console.error = (line) => output.push(String(line));
+    try {
+      const result = await runClaudeDesktopProxy({
+        ...options,
+        returnToMenuOnSigint: expectedKind === 'back',
+        shutdownOptions: { signalSource, exitState },
+      });
+      assert.equal(result.kind, expectedKind);
+      return output;
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+  }
+
+  const token = 'valid-token-with-enough-length';
+  const interactivePort = await freePort();
+  const interactiveOptions = parseOptions(['--token', token]);
+  interactiveOptions.interactiveDesktopPlan = {
+    action: 'create',
+    credential: null,
+    config: {
+      serviceValue: 'routerlab',
+      strategyValue: 'default',
+      strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
+      host: '127.0.0.1',
+      port: interactivePort,
+    },
+  };
+  await runAndInterrupt(interactiveOptions);
+
+  const port = await freePort();
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    await main([
+      'claude-desktop', 'apply-proxy', '--yes', '--token', token, '--port', String(port),
+    ]);
+  } finally {
+    console.log = originalLog;
+  }
+  const paths = getClaudeDesktopPaths();
+  assert.equal(fs.existsSync(paths.profilePath), true);
+  const firstCredential = readClaudeDesktopProxyCredential(paths);
+  assert.ok(firstCredential);
+
+  const reuseOutput = await runAndInterrupt(parseOptions(['--token', token]));
+  assert.equal(reuseOutput.some((line) => line.includes('Configured Claude Desktop local mapping profile')), false);
+  assert.equal(readClaudeDesktopProxyCredential(paths).token, firstCredential.token);
+
+  await assert.rejects(
+    () => runClaudeDesktopProxy(parseOptions(['--service', 'llm', '--token', token])),
+    /Explicit proxy options differ/,
+  );
+
+  const llmPort = await freePort();
+  await runAndInterrupt(parseOptions([
+    '--service', 'llm', '--yes', '--token', token, '--port', String(llmPort),
+  ]));
+  assert.equal(readClaudeDesktopProxyCredential(paths).metadata.service, 'llm');
+
+  const legacyProfile = JSON.parse(fs.readFileSync(paths.profilePath, 'utf8'));
+  legacyProfile.inferenceGatewayApiKey = 'scionos-local';
+  fs.writeFileSync(paths.profilePath, JSON.stringify(legacyProfile));
+  const legacyMeta = JSON.parse(fs.readFileSync(paths.metaPath, 'utf8'));
+  delete legacyMeta.wrapperScionos;
+  fs.writeFileSync(paths.metaPath, JSON.stringify(legacyMeta));
+  const legacyOutput = await runAndInterrupt(parseOptions(['--yes', '--token', token]));
+  assert.equal(legacyOutput.some((line) => line.includes('WARN Legacy Claude Desktop profile')), true);
+  assert.notEqual(readClaudeDesktopProxyCredential(paths).token, 'scionos-local');
+
+  console.log = () => {};
+  try {
+    await main(['claude-desktop', 'restore-official', '--yes']);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(fs.existsSync(paths.profilePath), false);
+  await assert.rejects(
+    () => runClaudeDesktopProxy(parseOptions(['--token', token])),
+    /No wrapper-managed local Claude Desktop profile exists/,
+  );
 });
 
 test('deprecated Desktop direct mode warns once and never prints its token', async () => {

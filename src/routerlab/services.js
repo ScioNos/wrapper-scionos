@@ -64,6 +64,21 @@ export function requireServiceConfig(serviceValue = DEFAULT_SERVICE) {
   return service;
 }
 
+export function validateServiceBaseUrl(baseUrl, serviceValue = DEFAULT_SERVICE) {
+  const service = requireServiceConfig(serviceValue);
+  const value = String(baseUrl ?? '').trim();
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${service.label} base URL is invalid: ${value}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`${service.label} base URL must use HTTP or HTTPS.`);
+  }
+  return value;
+}
+
 export function resolveServiceBaseUrl(serviceValue = DEFAULT_SERVICE, env = {}) {
   return resolveServiceBaseUrlWithSource(serviceValue, env).baseUrl;
 }

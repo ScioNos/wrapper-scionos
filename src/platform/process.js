@@ -1,6 +1,11 @@
 import { spawn } from 'node:child_process';
 
-export async function runInteractiveCli(command, args = [], { env = process.env, signalGraceMs = 5000, signalSource = process } = {}) {
+export async function runInteractiveCli(command, args = [], {
+  env = process.env,
+  signalGraceMs = 5000,
+  signalSource = process,
+  updateProcessExitCode = true,
+} = {}) {
   const invocation = buildInteractiveCliInvocation(command, args);
   const child = spawn(invocation.command, invocation.args, {
     stdio: 'inherit',
@@ -44,7 +49,9 @@ export async function runInteractiveCli(command, args = [], { env = process.env,
     signalSource.off('SIGTERM', onSigterm);
   }
 
-  process.exitCode = exitCode;
+  if (updateProcessExitCode) {
+    process.exitCode = exitCode;
+  }
   return exitCode;
 }
 
@@ -89,7 +96,9 @@ export function buildWindowsCommandLine(command, args = []) {
 export function quoteWindowsCmdArg(value) {
   const text = String(value);
   if (text.length === 0) return '""';
-  const escaped = text.replace(/%/g, '%%');
+  const escaped = text
+    .replace(/(\\*)"/g, (_match, backslashes) => `${backslashes}${backslashes}\\"`)
+    .replace(/(\\+)$/, '$1$1');
   return `"${escaped}"`;
 }
 

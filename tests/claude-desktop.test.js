@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyDirectClaudeDesktop, buildGatewayProfile, DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, getClaudeDesktopPaths, isClaudeDesktopSafeModelId, isClaudeDesktopSupportedPlatform, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, readClaudeDesktopProxyCredential, redactClaudeDesktopResult, restoreOfficialClaudeDesktop, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
+import { applyDirectClaudeDesktop, applyProxyClaudeDesktop, buildGatewayProfile, DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, getClaudeDesktopPaths, isClaudeDesktopSafeModelId, isClaudeDesktopSupportedPlatform, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, readClaudeDesktopProxyCredential, readClaudeDesktopStatus, redactClaudeDesktopResult, restoreOfficialClaudeDesktop, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
 
 test('Claude Desktop helper identifies visible model ids and rejects hidden direct strategy ids', () => {
   assert.equal(isClaudeDesktopSafeModelId('claude-sonnet-4-6'), true);
@@ -251,8 +251,18 @@ test('Claude Desktop profile helpers cover model specs, redaction, and invalid c
     baseUrl: 'http://127.0.0.1:1', apiKey: 'secret',
     modelSpecs: [{ name: 'claude-sonnet-5', labelOverride: 'Sonnet', supports1m: true }, { name: 'claude-haiku-4-5' }],
   });
+  assert.deepEqual(profile.coworkEgressAllowedHosts, ['127.0.0.1']);
   assert.equal(profile.inferenceModels[0].labelOverride, 'Sonnet');
   assert.equal(profile.inferenceModels[1], 'claude-haiku-4-5');
+  assert.deepEqual(buildGatewayProfile({
+    baseUrl: 'http://[::1]:15721', apiKey: 'secret',
+  }).coworkEgressAllowedHosts, ['::1']);
+  assert.deepEqual(buildGatewayProfile({
+    baseUrl: 'https://api.routerlab.ch/gateway', apiKey: 'secret',
+  }).coworkEgressAllowedHosts, ['api.routerlab.ch']);
+  assert.throws(() => buildGatewayProfile({
+    baseUrl: 'file:///tmp/routerlab', apiKey: 'secret',
+  }), /must use HTTP or HTTPS/);
   assert.equal(modelSpecsForDirectStrategy('aws', 'routerlab').length, 3);
   assert.equal(redactClaudeDesktopResult(null), null);
   assert.throws(() => getClaudeDesktopPaths({}, 'freebsd'), /supported only/);
@@ -262,4 +272,52 @@ test('Claude Desktop profile helpers cover model specs, redaction, and invalid c
   const profilePath = path.join(dir, 'profile.json');
   fs.writeFileSync(profilePath, '{"inferenceGatewayApiKey":"x","inferenceGatewayBaseUrl":"not a url"}');
   assert.equal(readClaudeDesktopProxyCredential({ profilePath, metaPath: path.join(dir, 'missing.json') }), null);
+});
+
+test('Claude Desktop status distinguishes healthy, unapplied, and corrupt profiles', (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-status-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const paths = {
+    normalConfigPath: path.join(dir, 'normal.json'),
+    threepConfigPath: path.join(dir, 'threep.json'),
+    configLibraryPath: dir,
+    profilePath: path.join(dir, 'profile.json'),
+    metaPath: path.join(dir, '_meta.json'),
+  };
+
+  const missing = readClaudeDesktopStatus(paths);
+  assert.equal(missing.configured, false);
+  assert.equal(missing.profileExists, false);
+  assert.equal(missing.applied, false);
+  assert.equal(missing.healthy, false);
+  assert.deepEqual(missing.issues, ['profile_missing', 'profile_not_applied', 'metadata_invalid']);
+
+  applyProxyClaudeDesktop({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
+    gatewayToken: 'generated-local-test-token',
+    dryRun: false,
+    paths,
+  });
+  const healthy = readClaudeDesktopStatus(paths);
+  assert.equal(healthy.configured, true);
+  assert.equal(healthy.profileExists, true);
+  assert.equal(healthy.applied, true);
+  assert.equal(healthy.healthy, true);
+  assert.deepEqual(healthy.issues, []);
+  assert.equal(healthy.profile.inferenceGatewayApiKey, '[redacted]');
+
+  const meta = JSON.parse(fs.readFileSync(paths.metaPath, 'utf8'));
+  delete meta.appliedId;
+  fs.writeFileSync(paths.metaPath, JSON.stringify(meta));
+  const unapplied = readClaudeDesktopStatus(paths);
+  assert.equal(unapplied.healthy, false);
+  assert.deepEqual(unapplied.issues, ['profile_not_applied']);
+
+  fs.writeFileSync(paths.profilePath, '{not json');
+  const corrupt = readClaudeDesktopStatus(paths);
+  assert.equal(corrupt.configured, true);
+  assert.equal(corrupt.healthy, false);
+  assert.deepEqual(corrupt.issues, ['profile_invalid', 'profile_not_applied']);
 });

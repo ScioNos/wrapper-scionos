@@ -98,18 +98,28 @@ export async function startLongRunningLlmProxy({
   return { server, baseUrl: 'http://' + displayHost + ':' + resolvedPort, gatewayToken };
 }
 
-export async function stopLongRunningLlmProxy(proxy) {
-  if (!proxy?.server?.listening) {
+export async function stopLongRunningLlmProxy(proxy, { graceMs = 2000 } = {}) {
+  const server = proxy?.server;
+  if (!server?.listening) {
     return;
   }
   await new Promise((resolve, reject) => {
-    proxy.server.close((error) => {
+    let forceTimer = null;
+    const finish = (error) => {
+      if (forceTimer) clearTimeout(forceTimer);
       if (error) {
         reject(error);
       } else {
         resolve();
       }
-    });
+    };
+
+    server.close(finish);
+    forceTimer = setTimeout(() => {
+      server.closeIdleConnections?.();
+      server.closeAllConnections?.();
+    }, Math.max(0, graceMs));
+    forceTimer.unref?.();
   });
 }
 

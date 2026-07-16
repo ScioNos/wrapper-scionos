@@ -43,6 +43,82 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
   }
 });
 
+test('Claude Desktop proxy rewrites mapped request models and forwards empty JSON bodies', async () => {
+  const captured = [];
+  const upstream = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      captured.push({
+        body: JSON.parse(body),
+        apiKey: req.headers['x-api-key'],
+        authorization: req.headers.authorization,
+        url: req.url,
+      });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((resolve, reject) => {
+    upstream.once('error', reject);
+    upstream.listen(0, '127.0.0.1', () => {
+      upstream.off('error', reject);
+      resolve();
+    });
+  });
+
+  const upstreamBaseUrl = `http://127.0.0.1:${upstream.address().port}`;
+  const { server, routes } = createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    strategyValue: 'claude-gpt',
+    routerlabToken: 'real-routerlab-token',
+    gatewayToken: 'generated-local-test-token',
+    targetBaseUrl: upstreamBaseUrl,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+
+  try {
+    const proxyBaseUrl = `http://127.0.0.1:${server.address().port}`;
+    const mappedRoute = routes[0];
+    const mappedResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer generated-local-test-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: mappedRoute.routeId, messages: [] }),
+    });
+    assert.equal(mappedResponse.status, 200);
+
+    const emptyResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer generated-local-test-token',
+        'content-type': 'application/json',
+      },
+    });
+    assert.equal(emptyResponse.status, 200);
+
+    assert.equal(captured[0].body.model, mappedRoute.upstreamModel);
+    assert.deepEqual(captured[0].body.messages, []);
+    assert.equal(captured[0].apiKey, 'real-routerlab-token');
+    assert.equal(captured[0].authorization, undefined);
+    assert.equal(captured[0].url, '/v1/messages');
+    assert.deepEqual(captured[1].body, {});
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
 test('shared long-running LLM proxy swaps local Codex token for upstream OpenAI auth', async () => {
   const upstream = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -86,6 +162,44 @@ test('shared long-running LLM proxy swaps local Codex token for upstream OpenAI 
     assert.equal(payload.url, '/v1/responses');
   } finally {
     await stopLongRunningLlmProxy(proxy);
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('shared long-running LLM proxy forces lingering connections closed after its grace period', async () => {
+  let markUpstreamStarted;
+  const upstreamStarted = new Promise((resolve) => {
+    markUpstreamStarted = resolve;
+  });
+  const upstream = http.createServer((_req, _res) => {
+    markUpstreamStarted();
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
+    routerlabToken: 'real-routerlab-token',
+    upstreamAuth: 'anthropic',
+  });
+  const request = http.request(proxy.baseUrl + '/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': proxy.gatewayToken,
+      'content-type': 'application/json',
+    },
+  });
+  request.on('error', () => {});
+  request.end('{}');
+
+  try {
+    await upstreamStarted;
+    const startedAt = Date.now();
+    await stopLongRunningLlmProxy(proxy, { graceMs: 50 });
+    assert.ok(Date.now() - startedAt < 1000, 'proxy shutdown should remain bounded');
+    assert.equal(proxy.server.listening, false);
+  } finally {
+    request.destroy();
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
     await new Promise((resolve) => upstream.close(resolve));
   }
 });

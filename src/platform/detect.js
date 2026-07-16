@@ -4,8 +4,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildInteractiveCliInvocation } from './process.js';
 
-export function detectOS() {
-  const platform = os.platform();
+export function detectOS({
+  platform = os.platform(),
+  arch = os.arch(),
+  processPlatform = process.platform,
+  env = process.env,
+} = {}) {
   const type = platform === 'win32'
     ? 'Windows'
     : platform === 'darwin'
@@ -17,10 +21,10 @@ export function detectOS() {
   return {
     platform,
     type,
-    arch: os.arch(),
-    shell: process.platform === 'win32'
-      ? (process.env.PSModulePath ? 'PowerShell' : 'Windows Shell')
-      : path.basename(process.env.SHELL || 'default shell'),
+    arch,
+    shell: processPlatform === 'win32'
+      ? (env.PSModulePath ? 'PowerShell' : 'Windows Shell')
+      : path.basename(env.SHELL || 'default shell'),
   };
 }
 
@@ -81,6 +85,7 @@ export function detectCli({
   candidates = [],
   configPath = null,
   preferWindowsShim = false,
+  versionTimeoutMs = 5000,
 } = {}) {
   const cliCandidates = findExecutables(command, candidates, { preferWindowsShim });
   let cliPath = null;
@@ -90,6 +95,7 @@ export function detectCli({
     const result = spawnSync(invocation.command, invocation.args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: versionTimeoutMs,
       ...(invocation.spawnOptions ?? {}),
     });
     if (result.status === 0) {
@@ -109,9 +115,8 @@ export function detectCli({
   }
   return detected;
 }
-export function detectClaudeCode() {
-  const home = os.homedir();
-  const candidates = process.platform === 'win32'
+export function claudeCodeCandidates(platform = process.platform, home = os.homedir()) {
+  return platform === 'win32'
     ? [
         path.join(home, '.local', 'bin', 'claude.exe'),
         path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'claude.exe'),
@@ -121,10 +126,16 @@ export function detectClaudeCode() {
         '/opt/homebrew/bin/claude',
         '/usr/local/bin/claude',
       ];
+}
 
-  return detectCli({
+export function detectClaudeCode({
+  platform = process.platform,
+  home = os.homedir(),
+  detectCliFn = detectCli,
+} = {}) {
+  return detectCliFn({
     command: 'claude',
-    candidates,
+    candidates: claudeCodeCandidates(platform, home),
     configPath: path.join(home, '.claude', 'settings.json'),
   });
 }
@@ -145,10 +156,12 @@ export function isCodexVersionSupported(version, minimum = MINIMUM_CODEX_VERSION
   }
   return true;
 }
-export function detectCodexCli() {
-  const home = os.homedir();
-  const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-  const candidates = process.platform === 'win32'
+export function codexCliCandidates(
+  platform = process.platform,
+  home = os.homedir(),
+  appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+) {
+  return platform === 'win32'
     ? [
         path.join(appData, 'npm', 'codex'),
         path.join(home, '.local', 'bin', 'codex.exe'),
@@ -159,15 +172,22 @@ export function detectCodexCli() {
         '/opt/homebrew/bin/codex',
         '/usr/local/bin/codex',
       ];
+}
 
-  const detected = detectCli({
+export function detectCodexCli({
+  platform = process.platform,
+  home = os.homedir(),
+  appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+  detectCliFn = detectCli,
+} = {}) {
+  const detected = detectCliFn({
     command: 'codex',
-    candidates,
+    candidates: codexCliCandidates(platform, home, appData),
     preferWindowsShim: true,
   });
   detected.minimumVersion = MINIMUM_CODEX_VERSION;
   detected.versionSupported = detected.installed && isCodexVersionSupported(detected.version);
-  if (process.platform === 'win32' && detected.installed) {
+  if (platform === 'win32' && detected.installed) {
     return {
       ...detected,
       resolvedCliPath: detected.cliPath,
@@ -176,18 +196,22 @@ export function detectCodexCli() {
   return detected;
 }
 
-export function checkGitBashOnWindows() {
-  if (process.platform !== 'win32') {
+export function checkGitBashOnWindows({
+  platform = process.platform,
+  env = process.env,
+  existsSync = fs.existsSync,
+} = {}) {
+  if (platform !== 'win32') {
     return { available: true, path: null, message: 'Not required on non-Windows systems.' };
   }
 
   const candidates = [
-    process.env.CLAUDE_CODE_GIT_BASH_PATH,
+    env.CLAUDE_CODE_GIT_BASH_PATH,
     'C:\\Program Files\\Git\\bin\\bash.exe',
     'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
   ].filter(Boolean);
 
-  const bashPath = candidates.find((candidate) => fs.existsSync(candidate));
+  const bashPath = candidates.find((candidate) => existsSync(candidate));
   return bashPath
     ? { available: true, path: bashPath, message: `Git Bash found at ${bashPath}.` }
     : { available: false, path: null, message: 'Git Bash not found. Claude Code requires Git Bash on Windows.' };

@@ -1,14 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildStrategyPromptChoices, chooseStrategy, chooseSubagentModel } from '../src/apps/claude-code.js';
-import { requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken } from '../src/routerlab/services.js';
-import { allowsSubagentModelOverride, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getStrategyDisplayName, getStrategyEnvironment, getStrategyChoices } from '../src/routerlab/strategies.js';
+import { requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../src/routerlab/services.js';
+import {
+  allowsSubagentModelOverride,
+  applySubagentModelOverride,
+  assessStrategy,
+  assessStrategyLaunch,
+  getClaudeCodeStrategyEnvironment,
+  getServiceStrategies,
+  getStrategyDisplayName,
+  getStrategyEnvironment,
+  getStrategyChoices,
+  getSubagentModelOverride,
+  hasExploitableModelIds,
+  normalizeStrategyValue,
+  STRATEGIES,
+} from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 import { codexModelDisplayName, codexModelFromClaudeCodeModel, codexModelsFromClaudeCodeStrategies, desktopLabelForDesktopMapping, desktopLabelForStrategyModel, desktopRouteIdForStrategyModel, getStrategyModels, isClaudeFamilyModel, sortDesktopRoutes, supportsOneMillionContext } from '../src/routerlab/strategy-models.js';
 
 test('RouterLab services expose the expected endpoints', () => {
   assert.equal(requireServiceConfig('routerlab').baseUrl, 'https://api.routerlab.ch');
   assert.equal(requireServiceConfig('llm').baseUrl, 'https://llm-api.routerlab.ch');
+  assert.equal(validateServiceBaseUrl('https://example.test/gateway/v1', 'routerlab'), 'https://example.test/gateway/v1');
+  assert.throws(() => validateServiceBaseUrl('not-a-valid-url', 'routerlab'), /RouterLab base URL is invalid/);
+  assert.throws(() => validateServiceBaseUrl('file:\/\/\/tmp/routerlab', 'llm'), /RouterLab LLM base URL must use HTTP or HTTPS/);
 });
 
 test('service environment tokens prefer RouterLab names with Anthropic legacy fallback', () => {
@@ -332,4 +349,82 @@ test('Claude strategy selection covers verified choices, aliases, invalid prefer
   const verifiedChoices = buildStrategyPromptChoices(['claude-opus-4-8'], 'routerlab');
   assert.equal(verifiedChoices.some((choice) => typeof choice.disabled === 'string'), true);
   assert.equal(verifiedChoices.some((choice) => choice.name.includes('●')), true);
+});
+
+test('strategy helpers cover legacy aliases, invalid overrides, unknown strategies, and empty catalogs', () => {
+  assert.equal(normalizeStrategyValue('claude-gpt-5.4'), 'claude-gpt');
+  assert.equal(normalizeStrategyValue('default'), 'default');
+  assert.equal(getSubagentModelOverride(), null);
+  assert.equal(getSubagentModelOverride('default'), null);
+  assert.throws(() => getSubagentModelOverride('unknown'), /Unknown subagent model/);
+  assert.throws(
+    () => getClaudeCodeStrategyEnvironment('missing', 'routerlab'),
+    /Unknown strategy/,
+  );
+  assert.equal(getStrategyDisplayName('missing', 'routerlab'), 'missing');
+  assert.deepEqual(assessStrategy('missing', [], 'routerlab'), {
+    available: false,
+    level: 'unavailable',
+    note: 'Unknown strategy.',
+    strategy: null,
+  });
+  assert.equal(assessStrategyLaunch('missing', [], 'routerlab').ready, false);
+  assert.deepEqual(assessStrategyLaunch('missing', [], 'routerlab').requiredModels, []);
+
+  const originalValues = SERVICES.routerlab.strategyValues;
+  SERVICES.routerlab.strategyValues = [];
+  try {
+    assert.deepEqual(getServiceStrategies('routerlab'), []);
+    assert.equal(hasExploitableModelIds(['model'], 'routerlab'), false);
+  } finally {
+    SERVICES.routerlab.strategyValues = originalValues;
+  }
+});
+
+test('strategy helpers cover always-available routes and subagent override application', () => {
+  const syntheticValue = 'test-always-available';
+  STRATEGIES.push({
+    value: syntheticValue,
+    name: 'Test always available',
+    environment: {},
+    allowSubagentOverride: true,
+  });
+  SERVICES.routerlab.strategyValues.push(syntheticValue);
+  try {
+    const availability = assessStrategy(syntheticValue, ['unrelated-model'], 'routerlab');
+    assert.equal(availability.available, true);
+    assert.equal(availability.level, 'ready');
+    assert.equal(availability.note, 'Always available.');
+    const launch = assessStrategyLaunch(syntheticValue, ['unrelated-model'], 'routerlab');
+    assert.equal(launch.ready, true);
+    assert.deepEqual(launch.requiredModels, []);
+  } finally {
+    SERVICES.routerlab.strategyValues.pop();
+    STRATEGIES.pop();
+  }
+
+  const unchanged = { EXISTING: 'value' };
+  assert.equal(
+    applySubagentModelOverride({ allowSubagentOverride: false }, unchanged, { subagentModel: 'haiku' }),
+    unchanged,
+  );
+  assert.deepEqual(
+    applySubagentModelOverride(
+      { allowSubagentOverride: true },
+      { EXISTING: 'value' },
+      { subagentModel: 'haiku' },
+    ),
+    {
+      EXISTING: 'value',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
+    },
+  );
+  assert.deepEqual(
+    applySubagentModelOverride(
+      { allowSubagentOverride: true },
+      { EXISTING: 'value' },
+      { subagentModel: 'default' },
+    ),
+    { EXISTING: 'value' },
+  );
 });

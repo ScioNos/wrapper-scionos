@@ -162,7 +162,7 @@ Prefer the default proxy, --direct for diagnostics, and the RouterLab environmen
     npm audit
     npm pack --dry-run
 
-`npm run test:entry-modes` opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It therefore expects a globally installed development build for the first two commands and npm/npx access for the last two.
+`npm run test:entry-modes` packs the current working tree into a temporary tarball, installs it in an isolated prefix, then opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It does not require a global installation or a previously published npm version.
 
 `npm test` also performs isolated end-to-end Claude Code, Claude Desktop, and Codex launches for `routerlab` and `llm`. Fake client executables and local upstreams verify menu selection, service propagation, child-only credential injection, local-to-upstream token replacement, authentication failures, model availability, proxy cleanup, and Windows npm shim forwarding without contacting RouterLab production endpoints. Coverage gates remain 85% for lines/functions and 80% for branches.
 

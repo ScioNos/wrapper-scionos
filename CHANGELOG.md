@@ -31,6 +31,8 @@ All notable changes to this project will be documented in this file.
 - Prevented invalid or non-HTTP(S) RouterLab base URLs from creating a listener or mutating Claude Desktop configuration.
 - Prevented an interactive Claude Desktop proxy stop from leaving process exit code 130 while continuing to display menus.
 - Preserved quoted TOML overrides through npm-style Windows `.cmd` shims instead of stripping the quotes before Codex receives them.
+- Made coverage checks compatible with the documented Node.js 22.13 minimum while retaining single-process coverage on runtimes that support it.
+- Made the four entry-mode smoke tests install and execute the current package tarball in isolation instead of requiring a global installation or resolving a previously published npm version.
 
 ## 4.0.0 - 2026-07-11
 

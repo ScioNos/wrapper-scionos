@@ -162,7 +162,7 @@ Préfère le proxy par défaut, --direct pour le diagnostic et les variables Rou
     npm audit
     npm pack --dry-run
 
-`npm run test:entry-modes` ouvre puis quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il attend donc une version de développement installée globalement pour les deux premières commandes et un accès npm/npx pour les deux dernières.
+`npm run test:entry-modes` empaquette l’arbre de travail courant dans un tarball temporaire, l’installe dans un préfixe isolé, puis ouvre et quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il ne nécessite ni installation globale ni version npm déjà publiée.
 
 `npm test` effectue aussi des lancements isolés de bout en bout pour Claude Code, Claude Desktop et Codex sur `routerlab` et `llm`. De faux exécutables clients et des serveurs upstream locaux vérifient la sélection du menu, la propagation du service, l’injection des credentials limitée au processus enfant, le remplacement du token local par le token upstream, les refus d’authentification, la disponibilité des modèles, le nettoyage des proxies et la transmission par les shims npm Windows, sans contacter les points d’accès RouterLab de production. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 

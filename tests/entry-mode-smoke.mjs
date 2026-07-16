@@ -6,7 +6,14 @@ import { MAIN_MENU_ITEMS } from '../src/cli/menu.js';
 import { findWindowsExecutable } from '../src/platform/detect.js';
 import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 
-const [requestedCommand, ...args] = process.argv.slice(2);
+let requestedArgs = process.argv.slice(2);
+let displayLabel = null;
+if (requestedArgs[0] === '--label') {
+  displayLabel = requestedArgs[1];
+  requestedArgs = requestedArgs.slice(2);
+}
+
+const [requestedCommand, ...args] = requestedArgs;
 assert.ok(requestedCommand, 'Usage: node tests/entry-mode-smoke.mjs <command> [...args]');
 
 function resolveCommand(command) {
@@ -61,4 +68,4 @@ if (args.includes('llm')) {
   assert.match(stdout, /Service: RouterLab(?! LLM)/);
 }
 
-console.log(`${requestedCommand} ${args.join(' ')}`.trim() + ': interactive menu OK');
+console.log((displayLabel ?? `${requestedCommand} ${args.join(' ')}`.trim()) + ': interactive menu OK');

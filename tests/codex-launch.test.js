@@ -74,6 +74,7 @@ test('interactive Codex selection launches through the authenticated local proxy
         assert.equal(capture.model, serviceCase.defaultModel);
         assert.equal(capture.providerName, serviceCase.service);
         assert.match(capture.baseUrl, /^http:\/\/127\.0\.0\.1:\d+\/v1$/);
+        assert.ok(capture.args.includes('web_search="disabled"'));
         assert.notEqual(capture.apiKey, TEST_TOKEN);
         assert.ok(capture.apiKey.length >= 32);
         assert.equal(capture.responseStatus, 200);

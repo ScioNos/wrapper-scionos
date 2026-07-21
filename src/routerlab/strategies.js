@@ -1,7 +1,7 @@
 import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './services.js';
 
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5-20251001';
-export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-sonnet-4-6';
+export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-sonnet-5';
 
 export const DEFAULT_CLAUDE_MODELS = [
   'claude-fable-5',
@@ -12,7 +12,7 @@ export const DEFAULT_CLAUDE_MODELS = [
 
 export const LLM_CLAUDE_MODELS = [
   'claude-opus-4-8',
-  'claude-sonnet-4-6',
+  'claude-sonnet-5',
   'claude-haiku-4-5-20251001',
 ];
 
@@ -101,9 +101,9 @@ export const STRATEGIES = [
     requiredModels: LLM_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-opus-4-8',
-      sonnet: 'claude-sonnet-4-6',
+      sonnet: 'claude-sonnet-5',
       haiku: 'claude-haiku-4-5-20251001',
-      subagent: 'claude-sonnet-4-6',
+      subagent: 'claude-sonnet-5',
     }),
   },
   {
@@ -194,20 +194,19 @@ export const STRATEGIES = [
 
 const LLM_STRATEGY_OVERRIDES = {
   claude: {
-    selectionName: 'Claude — Maintenance',
-    selectionDescription: 'Maintenance — this strategy cannot be selected in Claude Code.',
-    requiredModels: [],
+    description: 'Opus => Claude Opus 4.8, Sonnet => Claude Sonnet 5, Haiku => Claude Haiku 4.5, subagents => Claude Sonnet 5.',
+    selectionDescription: 'Opus => Claude Opus 4.8, Sonnet => Claude Sonnet 5, Haiku => Claude Haiku 4.5, subagents => Claude Sonnet 5.',
+    requiredModels: LLM_CLAUDE_MODELS,
     allowSubagentOverride: false,
-    claudeCodeDisabledReason: 'Maintenance — Claude is temporarily unavailable.',
     environment: createModelEnvironment({
       opus: 'claude-opus-4-8',
-      sonnet: 'claude-sonnet-4-6',
+      sonnet: 'claude-sonnet-5',
       haiku: 'claude-haiku-4-5-20251001',
     }),
   },
   'claude-gpt': {
-    description: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 4.6.',
-    selectionDescription: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 4.6.',
+    description: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 5.',
+    selectionDescription: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 5.',
     requiredModels: ['gpt-5.6-sol-pro', 'gpt-5.6-sol', 'gpt-5.6-terra-pro', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
@@ -217,8 +216,8 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'glm-5.2': {
-    description: 'Uses glm-5.2 for all main model aliases and Claude Sonnet 4.6 for subagents.',
-    selectionDescription: 'Uses glm-5.2 for all main model aliases and Claude Sonnet 4.6 for subagents.',
+    description: 'Uses glm-5.2 for all main model aliases and Claude Sonnet 5 for subagents.',
+    selectionDescription: 'Uses glm-5.2 for all main model aliases and Claude Sonnet 5 for subagents.',
     requiredModels: ['glm-5.2', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
@@ -228,8 +227,8 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'claude-qwen3.7-max': {
-    description: 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 4.6 for subagents.',
-    selectionDescription: 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 4.6 for subagents.',
+    description: 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 5 for subagents.',
+    selectionDescription: 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 5 for subagents.',
     requiredModels: ['qwen3.7-max', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
@@ -239,8 +238,8 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'claude-MiniMax-M3': {
-    description: 'Uses MiniMax-M3 for all main model aliases and Claude Sonnet 4.6 for subagents.',
-    selectionDescription: 'Uses MiniMax-M3 for all main model aliases and Claude Sonnet 4.6 for subagents.',
+    description: 'Uses MiniMax-M3 for all main model aliases and Claude Sonnet 5 for subagents.',
+    selectionDescription: 'Uses MiniMax-M3 for all main model aliases and Claude Sonnet 5 for subagents.',
     requiredModels: ['MiniMax-M3', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
@@ -250,8 +249,8 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'deepseek-v4': {
-    description: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Sonnet 4.6.',
-    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Sonnet 4.6.',
+    description: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Sonnet 5.',
+    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Sonnet 5.',
     requiredModels: ['deepseek-v4-pro', 'deepseek-v4-flash', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
     allowSubagentOverride: false,
     environment: createModelEnvironment({

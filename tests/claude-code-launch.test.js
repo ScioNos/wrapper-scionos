@@ -34,20 +34,19 @@ const SERVICE_CASES = [
   },
   {
     service: 'llm',
-    args: ['--service', 'llm', '--strategy', 'claude-gpt'],
+    args: ['--service', 'llm', '--strategy', 'claude'],
     tokenKey: 'ROUTERLAB_LLM_API_KEY',
     baseUrlKey: 'ROUTERLAB_LLM_BASE_URL',
     models: [
-      'gpt-5.6-sol-pro',
-      'gpt-5.6-sol',
-      'gpt-5.6-terra-pro',
-      'claude-sonnet-4-6',
+      'claude-opus-4-8',
+      'claude-sonnet-5',
+      'claude-haiku-4-5-20251001',
     ],
     expectedEnvironment: {
-      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.6-sol-pro',
-      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.6-sol',
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.6-terra-pro',
-      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-4-6',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
     },
   },
 ];

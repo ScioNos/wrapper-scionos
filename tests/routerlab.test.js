@@ -116,21 +116,21 @@ test('Claude Code strategy mapping is service-aware', () => {
   });
   assert.deepEqual(getStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
   });
 
   assert.deepEqual(getClaudeCodeStrategyEnvironment('claude', 'llm'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-4-6',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-4-6',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
   });
   assert.deepEqual(getStrategyEnvironment('claude-gpt', 'llm'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.6-sol-pro',
@@ -151,13 +151,13 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'MiniMax-M3',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'MiniMax-M3',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'MiniMax-M3',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-4-6',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('claude-qwen3.7-max', 'llm', { subagentModel: 'haiku' }), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.7-max',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'qwen3.7-max',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'qwen3.7-max',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-4-6',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-sonnet-5',
   });
   assert.deepEqual(getStrategyEnvironment('glm-5.2', 'llm'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.2',
@@ -192,35 +192,35 @@ test('Claude Code strategies force service-defined subagents and disable selecti
     serviceValue: 'llm',
     strategyValue: 'claude-MiniMax-M3',
     preferredSubagentModel: 'haiku',
-  }), 'claude-sonnet-4-6');
+  }), 'claude-sonnet-5');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'llm',
     strategyValue: 'claude-qwen3.7-max',
     preferredSubagentModel: 'haiku',
-  }), 'claude-sonnet-4-6');
+  }), 'claude-sonnet-5');
   assert.throws(() => allowsSubagentModelOverride('claude-gpt-special', 'llm'), /Unknown strategy/);
 });
 
-test('LLM Claude strategy is in maintenance and cannot be selected', async () => {
+test('LLM Claude strategy is active and selects the requested native models', async () => {
   const claudeChoice = getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude');
-  assert.equal(claudeChoice.name, 'Claude — Maintenance');
-  assert.equal(claudeChoice.availability.level, 'unavailable');
-  assert.match(claudeChoice.description, /Maintenance/);
-  await assert.rejects(chooseStrategy({
+  assert.equal(claudeChoice.name, 'Claude');
+  assert.equal(claudeChoice.availability.level, 'unknown');
+  assert.match(claudeChoice.description, /Claude Sonnet 5/);
+  assert.equal(await chooseStrategy({
     serviceValue: 'llm',
     preferredStrategy: 'claude',
     noPrompt: true,
     modelIds: [],
-  }), /Maintenance/);
+  }), 'claude');
   assert.equal(await chooseStrategy({
     serviceValue: 'llm',
     noPrompt: true,
     modelIds: [],
-  }), 'claude-gpt');
+  }), 'claude');
   assert.equal(await chooseStrategy({
     serviceValue: 'llm',
     noPrompt: true,
-    modelIds: ['glm-5.2', 'claude-sonnet-4-6'],
+    modelIds: ['glm-5.2', 'claude-sonnet-5'],
   }), 'glm-5.2');
   await assert.rejects(chooseStrategy({
     serviceValue: 'llm',
@@ -265,9 +265,9 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-MiniMax-M3').name, 'MiniMax-M3');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').name, 'qwen3.7-max');
-  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'glm-5.2').description, 'Uses glm-5.2 for all main model aliases and Claude Sonnet 4.6 for subagents.');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'glm-5.2').description, 'Uses glm-5.2 for all main model aliases and Claude Sonnet 5 for subagents.');
   assert.equal(getStrategyDisplayName('claude-qwen3.7-max', 'llm'), 'qwen3.7-max');
-  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').description, 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 4.6 for subagents.');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'claude-qwen3.7-max').description, 'Uses qwen3.7-max for all main model aliases and Claude Sonnet 5 for subagents.');
 
   assert.equal(assessStrategyLaunch('aws', [
     'aws-claude-haiku-4-5-20251001',
@@ -284,16 +284,18 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
     'aws-claude-haiku-4-5-20251001',
   ], 'routerlab').ready, true);
   assert.equal(assessStrategyLaunch('claude', [
-    'claude-sonnet-4-6',
-  ], 'llm').ready, false);
+    'claude-opus-4-8',
+    'claude-sonnet-5',
+    'claude-haiku-4-5-20251001',
+  ], 'llm').ready, true);
   assert.deepEqual(assessStrategyLaunch('claude', [
-    'claude-sonnet-4-6',
-  ], 'llm').missingModels, []);
+    'claude-sonnet-5',
+  ], 'llm').missingModels, ['claude-opus-4-8', 'claude-haiku-4-5-20251001']);
   assert.equal(assessStrategyLaunch('claude-gpt', [
     'gpt-5.6-sol-pro',
     'gpt-5.6-sol',
     'gpt-5.6-terra-pro',
-    'claude-sonnet-4-6',
+    'claude-sonnet-5',
   ], 'llm').ready, true);
   assert.equal(assessStrategyLaunch('claude-gpt', [
     'gpt-5.6-sol-pro',

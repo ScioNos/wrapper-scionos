@@ -83,6 +83,8 @@ Claude Code est lancé via un proxy loopback. Les identifiants et mappings gér�
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Résume ce dépôt"
 
+Pour `--service llm`, la stratégie `claude` est active et associe Opus à `claude-opus-4-8`, Sonnet à `claude-sonnet-5` et Haiku à `claude-haiku-4-5-20251001`. Les sous-agents Claude Code utilisent `claude-sonnet-5` pour toutes les stratégies LLM.
+
 Claude Code valide que la base du service sélectionné utilise HTTP(S) avant de résoudre ou transmettre un token. Les surcharges d’URL provenant de l’environnement sont affichées sur stderr ; les anciennes variables `ANTHROPIC_AUTH_TOKEN` et `ANTHROPIC_BASE_URL` restent acceptées avec leur avertissement de dépréciation 4.x.
 
 Une réponse HTTP 401/403 pendant la découverte des modèles arrête le lancement avant la création du proxy local ou du processus Claude. L’erreur indique la source du token sans l’exposer et affiche les commandes `auth status`, `auth test` et `auth login` adaptées au service. Les erreurs réseau, timeouts, réponses invalides et autres échecs non liés à l’authentification restent des avertissements ; l’utilisateur peut continuer avec une disponibilité des modèles non vérifiée.
@@ -133,13 +135,13 @@ Pour le diagnostic uniquement, --direct contourne le proxy :
 
     wrapper-scionos codex launch --service llm --direct
 
-Le wrapper ne surcharge que le fournisseur, le modèle, l'URL, le wire API et le catalogue temporaire. Il ne modifie ni le sandbox Codex, ni la politique d'approbation, ni l'effort de raisonnement, ni MCP, les features, les hooks, les fichiers d'authentification ou le mode web_search de l'utilisateur. Comme le profil Responses natif de cc-switch, le catalogue n'annonce cependant ni outil freeform `apply_patch`, ni outil hébergé `web_search` : les modifications de fichiers passent par `shell_command`, compatible avec les passerelles natives.
+Le wrapper surcharge pour la session Codex le fournisseur, le modèle, l'URL, le wire API, le catalogue temporaire et `web_search="disabled"`. Cette désactivation de la recherche n'est jamais écrite dans la configuration Codex de l'utilisateur. Le wrapper ne modifie ni le sandbox, ni la politique d'approbation, ni l'effort de raisonnement, ni MCP, les features, les hooks ou les fichiers d'authentification. Comme le profil Responses natif de cc-switch, le catalogue n'annonce pas l'outil freeform `apply_patch` : les modifications de fichiers passent par `shell_command`, compatible avec les passerelles natives. La recherche hébergée est désactivée par la surcharge explicite de session et non déduite des métadonnées du catalogue.
 
-En mode proxy, les requêtes Responses sortantes sont forcées à store: false. Le mode direct ne garantit aucune politique de stockage.
+En mode proxy, les requêtes Responses sortantes sont réécrites avec `store: false`. En mode direct, le wrapper ne réécrit pas le corps ; Codex CLI 0.144.6 envoie lui-même `store: false` aux fournisseurs Responses personnalisés hors Azure. Ce champ de requête ne constitue pas une garantie contractuelle sur la politique de conservation du fournisseur upstream.
 
 Quand Codex est choisi depuis le menu interactif, un échec de démarrage ou une sortie Codex non nulle affiche l’erreur et revient au menu principal. Une sortie Codex normale ferme le wrapper. Les commandes directes `codex launch` conservent le code de sortie du processus Codex.
 
-Le catalogue temporaire est généré depuis les métadonnées upstream normalisées. Une valeur explicitement fournie par RouterLab reste prioritaire. Si seuls les IDs sont disponibles, les modèles connus reprennent les profils Codex de cc-switch : GPT-5.6 à 372 000 tokens, DeepSeek V4 Pro et MiniMax M3 à 1 000 000, Kimi K2.7 Code à 262 144, GLM-5.2 à 200 000, Kimi K3 à 1 048 576 et Grok 4.5 à 500 000. Un ID inconnu reste limité au fallback conservateur de 128k, texte uniquement et appels séquentiels. Le budget effectif annoncé à Codex est de 95 % de la fenêtre. Les catalogues vieux de plus de 24 heures sont supprimés au démarrage et le catalogue actif est retiré à la sortie de Codex.
+Le catalogue temporaire est généré depuis les métadonnées upstream normalisées. Une valeur RouterLab explicitement vérifiée reste prioritaire. Si seuls les IDs sont disponibles, les modèles connus utilisent volontairement des fenêtres conservatrices issues de cc-switch : GPT-5.6 à 372 000 tokens, DeepSeek V4 Pro et MiniMax M3 à 1 000 000, Kimi K2.7 Code à 262 144, GLM-5.2 à 200 000, Kimi K3 à 1 048 576 et Grok 4.5 à 500 000. Ces fallbacks sont des hypothèses de compatibilité RouterLab et non les maxima publics revendiqués par les fournisseurs. Un ID inconnu reste limité au fallback conservateur de 128k, texte uniquement et appels séquentiels. Le budget effectif annoncé à Codex est de 95 % de la fenêtre. Les catalogues vieux de plus de 24 heures sont supprimés au démarrage et le catalogue actif est retiré à la sortie de Codex.
 
 Tous les modèles RouterLab et RouterLab LLM sont envoyés sans transformation vers l’endpoint natif `/v1/responses` avec `wire_api="responses"`, en streaming comme hors streaming. RouterLab fournit la compatibilité Responses propre à chaque modèle ; le wrapper n’effectue aucune traduction de protocole. Il conserve l’authentification locale, le remplacement du token upstream, `store: false`, les catalogues temporaires et les diagnostics 401/403 contextualisés. Les réponses compressées relayées conservent encodage et longueur ; les erreurs compressées interceptées sont décodées de façon bornée avant normalisation.
 
@@ -162,6 +164,7 @@ Préfère le proxy par défaut, --direct pour le diagnostic et les variables Rou
 ## Développement et portes de release
 
     npm test
+    npm run test:codex-real
     npm run test:coverage
     npm run test:entry-modes
     npm audit
@@ -169,8 +172,8 @@ Préfère le proxy par défaut, --direct pour le diagnostic et les variables Rou
 
 `npm run test:entry-modes` empaquette l’arbre de travail courant dans un tarball temporaire, l’installe dans un préfixe isolé, puis ouvre et quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il ne nécessite ni installation globale ni version npm déjà publiée.
 
-`npm test` effectue aussi des lancements isolés de bout en bout pour Claude Code, Claude Desktop et Codex sur `routerlab` et `llm`. De faux exécutables clients et des serveurs upstream locaux vérifient la sélection du menu, la propagation du service, l’injection des credentials limitée au processus enfant, le remplacement du token local par le token upstream, les refus d’authentification, la disponibilité des modèles, le nettoyage des proxies et la transmission par les shims npm Windows, sans contacter les points d’accès RouterLab de production. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
+`npm test` effectue aussi des lancements isolés de bout en bout pour Claude Code, Claude Desktop et Codex sur `routerlab` et `llm`. De faux exécutables clients et des serveurs upstream locaux vérifient la sélection du menu, la propagation du service, l’injection des credentials limitée au processus enfant, le remplacement du token local par le token upstream, les refus d’authentification, la disponibilité des modèles, le nettoyage des proxies et la transmission par les shims npm Windows, sans contacter les points d’accès RouterLab de production. `npm run test:codex-real` est un smoke test optionnel qui exécute le vrai Codex installé contre un faux serveur Responses limité au loopback, avec configuration et catalogue temporaires ; il ne contacte jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-4.1.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-4.2.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

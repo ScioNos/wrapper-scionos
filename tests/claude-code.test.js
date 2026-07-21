@@ -28,7 +28,7 @@ test('Claude Code launch environment disables experimental betas only for the ch
   try {
     const env = buildClaudeCodeEnvironment('valid-token-with-enough-length', requireServiceConfig('llm'), 'glm-5.2');
     assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
-    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-sonnet-4-6');
+    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-sonnet-5');
     assert.equal(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, undefined);
   } finally {
     if (original === undefined) {
@@ -48,19 +48,19 @@ test('Claude Code launch screens use wrapper-branded guided layout', () => {
 
   const menu = formatClaudeCodeChoiceMenu('Select Model Strategy:', [
     {
-      name: 'Claude — Maintenance',
+      name: 'Claude',
       value: 'claude',
-      description: 'Maintenance — this strategy cannot be selected in Claude Code.',
+      description: 'Opus => Claude Opus 4.8, Sonnet => Claude Sonnet 5, Haiku => Claude Haiku 4.5, subagents => Claude Sonnet 5.',
     },
     {
       name: 'OpenAI GPT',
       value: 'claude-gpt',
-      description: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 4.6.',
+      description: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 5.',
     },
   ]);
   assert.match(menu, /Select Model Strategy:/);
-  assert.match(menu, /1\. Claude — Maintenance/);
-  assert.match(menu, /Maintenance — this strategy cannot be selected in Claude Code\./);
+  assert.match(menu, /1\. Claude/);
+  assert.match(menu, /Opus => Claude Opus 4\.8, Sonnet => Claude Sonnet 5/);
   assert.match(menu, /2\. OpenAI GPT/);
 });
 

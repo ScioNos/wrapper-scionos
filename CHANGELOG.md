@@ -4,11 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.2.0 - 2026-07-21
+
+### Added
+
+- Added an opt-in real-Codex smoke test that runs the installed CLI against an isolated loopback Responses server and validates the generated catalog, tool profile, reasoning, parallel calls, and `store: false` without contacting RouterLab.
+
 ### Changed
 
 - Updated the Codex `routerlab` and `llm` catalogs to their requested six-model menus, with `gpt-5.6-sol` as the default for both services.
-- Added cc-switch-aligned per-model Codex context, modality, reasoning, and parallel-tool fallbacks so ID-only discovery no longer collapses every known model to 128k.
-- Switched generated Codex catalogs to cc-switch's native Responses tool profile: file edits use `shell_command`, while freeform `apply_patch`, hosted `web_search`, and inherited model-message declarations are omitted.
+- Kept the conservative cc-switch-derived Codex context and modality fallbacks, while aligning reasoning levels and GPT-5.6 parallel-tool support with Codex 0.144.6 and official provider documentation.
+- Switched generated Codex catalogs to cc-switch's native Responses tool profile: file edits use `shell_command`, freeform `apply_patch` and inherited model-message declarations remain omitted, and hosted `web_search` is disabled with a temporary session override.
+- Re-enabled the RouterLab LLM Claude Code `claude` strategy with `claude-opus-4-8`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`, and moved every LLM Claude Code subagent mapping to `claude-sonnet-5`.
 
 ## 4.1.0 - 2026-07-16
 

@@ -40,9 +40,9 @@ All GET/POST routes require authentication and browser origins are denied unless
 
 ## Codex behavior changes
 
-Codex launch no longer forces workspace-write, on-request approvals, high reasoning, a web_search mode, or a storage option. Your active Codex policy remains authoritative. Cached/live/disabled search follows the user's Codex configuration, and only models explicitly marked search-compatible expose the tool.
+Codex launch no longer forces workspace-write, on-request approvals, high reasoning, or a persistent storage option. Your active Codex policy remains authoritative except for hosted search: each RouterLab session receives the temporary `web_search="disabled"` compatibility override, without modifying the user's `config.toml`.
 
-Proxy mode forces store: false on Responses requests. Direct mode offers no storage guarantee.
+Proxy mode rewrites Responses requests with `store: false`. Direct mode performs no wrapper rewrite; Codex CLI 0.144.6 itself sends `store: false` to non-Azure custom Responses providers. Neither statement defines RouterLab's contractual retention policy.
 
 The catalog no longer copies the local Codex cache. Missing RouterLab metadata yields a conservative 128k text-only entry. Temporary catalogs older than 24 hours are purged automatically.
 

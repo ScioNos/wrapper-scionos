@@ -83,6 +83,8 @@ Claude Code is launched through a loopback proxy. Wrapper-owned credentials and 
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
 
+For `--service llm`, the `claude` strategy is active and maps Opus to `claude-opus-4-8`, Sonnet to `claude-sonnet-5`, and Haiku to `claude-haiku-4-5-20251001`. Claude Code subagents use `claude-sonnet-5` for every LLM strategy.
+
 Claude Code validates the selected service base as HTTP(S) before resolving or sending a token. Environment-provided base URL overrides are printed on stderr, and legacy `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` values remain accepted with their 4.x deprecation warning.
 
 An HTTP 401/403 from model discovery stops the launch before the local proxy or Claude child starts. The error identifies the token source without exposing it and prints service-specific `auth status`, `auth test`, and `auth login` commands. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings; the user may continue with unverified model availability.
@@ -133,13 +135,13 @@ For diagnostics only, --direct bypasses the proxy:
 
     wrapper-scionos codex launch --service llm --direct
 
-The wrapper passes only provider, model, base URL, wire API, and temporary catalog overrides. It does not override the user's Codex sandbox, approval policy, reasoning effort, MCP configuration, features, hooks, authentication files, or web_search mode. Like cc-switch's native Responses profile, however, the catalog advertises neither the freeform `apply_patch` tool nor the hosted `web_search` tool; file edits use `shell_command`, which native gateways accept.
+The wrapper passes provider, model, base URL, wire API, temporary catalog, and `web_search="disabled"` overrides for the Codex session. The search override is never written to the user's Codex configuration. The wrapper does not override the user's sandbox, approval policy, reasoning effort, MCP configuration, features, hooks, or authentication files. Like cc-switch's native Responses profile, the catalog does not advertise the freeform `apply_patch` tool; file edits use `shell_command`, which native gateways accept. Hosted web search is disabled by the explicit session override rather than inferred from catalog metadata.
 
-In proxy mode, outgoing Responses requests are forced to store: false. Direct mode makes no storage guarantee.
+In proxy mode, outgoing Responses requests are rewritten with `store: false`. In direct mode the wrapper does not rewrite the body; Codex CLI 0.144.6 itself sends `store: false` to non-Azure custom Responses providers. This request field is not a contractual guarantee about the upstream provider's retention policy.
 
 When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
 
-The temporary model catalog is generated from normalized upstream metadata, and explicit RouterLab values take precedence. When only model IDs are available, known models use cc-switch's Codex profiles: GPT-5.6 at 372,000 tokens, DeepSeek V4 Pro and MiniMax M3 at 1,000,000, Kimi K2.7 Code at 262,144, GLM-5.2 at 200,000, Kimi K3 at 1,048,576, and Grok 4.5 at 500,000. Unknown IDs retain the conservative 128k, text-only, sequential fallback. Codex receives 95% of each context window as its effective budget. Catalog files older than 24 hours are removed at startup and the active catalog is removed when Codex exits.
+The temporary model catalog is generated from normalized upstream metadata, and explicit verified RouterLab values take precedence. When only model IDs are available, known models intentionally use conservative cc-switch-derived context profiles: GPT-5.6 at 372,000 tokens, DeepSeek V4 Pro and MiniMax M3 at 1,000,000, Kimi K2.7 Code at 262,144, GLM-5.2 at 200,000, Kimi K3 at 1,048,576, and Grok 4.5 at 500,000. These fallback values are RouterLab compatibility assumptions, not claims about each provider's public maximum. Unknown IDs retain the conservative 128k, text-only, sequential fallback. Codex receives 95% of each context window as its effective budget. Catalog files older than 24 hours are removed at startup and the active catalog is removed when Codex exits.
 
 Every RouterLab and RouterLab LLM model is sent unchanged to the native `/v1/responses` endpoint with `wire_api="responses"`, for streaming and non-streaming requests. RouterLab provides model-level Responses compatibility; the wrapper performs no protocol translation. It retains local authentication, upstream token replacement, `store: false`, temporary catalogs, and contextual 401/403 diagnostics. Relayed compressed responses keep their encoding and length, while intercepted compressed errors are decoded safely before normalization.
 
@@ -162,6 +164,7 @@ Prefer the default proxy, --direct for diagnostics, and the RouterLab environmen
 ## Development and release checks
 
     npm test
+    npm run test:codex-real
     npm run test:coverage
     npm run test:entry-modes
     npm audit
@@ -169,8 +172,8 @@ Prefer the default proxy, --direct for diagnostics, and the RouterLab environmen
 
 `npm run test:entry-modes` packs the current working tree into a temporary tarball, installs it in an isolated prefix, then opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It does not require a global installation or a previously published npm version.
 
-`npm test` also performs isolated end-to-end Claude Code, Claude Desktop, and Codex launches for `routerlab` and `llm`. Fake client executables and local upstreams verify menu selection, service propagation, child-only credential injection, local-to-upstream token replacement, authentication failures, model availability, proxy cleanup, and Windows npm shim forwarding without contacting RouterLab production endpoints. Coverage gates remain 85% for lines/functions and 80% for branches.
+`npm test` also performs isolated end-to-end Claude Code, Claude Desktop, and Codex launches for `routerlab` and `llm`. Fake client executables and local upstreams verify menu selection, service propagation, child-only credential injection, local-to-upstream token replacement, authentication failures, model availability, proxy cleanup, and Windows npm shim forwarding without contacting RouterLab production endpoints. `npm run test:codex-real` is an opt-in smoke test that runs the installed Codex CLI against a loopback-only fake Responses server with temporary config and catalog files; it never contacts RouterLab. Coverage gates remain 85% for lines/functions and 80% for branches.
 
-For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-4.1.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
+For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-4.2.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
 
 Architecture details are in [docs/architecture-notes.md](./docs/architecture-notes.md).

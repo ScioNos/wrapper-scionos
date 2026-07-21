@@ -112,6 +112,18 @@ test('Codex catalog applies metadata conservatively and removes stale runtime fi
   assert.equal(catalog.models[1].context_window, 128000);
   assert.equal(catalog.models[1].supports_search_tool, false);
 
+  const noReasoning = buildCodexModelCatalogFromCache({
+    models: ['gpt-5.6-sol'],
+    modelMetadata: [{
+      id: 'gpt-5.6-sol',
+      supportsReasoning: false,
+      supportsReasoningVerified: true,
+    }],
+  });
+  assert.equal(noReasoning.models[0].default_reasoning_level, null);
+  assert.deepEqual(noReasoning.models[0].supported_reasoning_levels, []);
+  assert.equal(noReasoning.models[0].supports_reasoning_summaries, false);
+
   const knownFallback = buildCodexModelCatalogFromCache({
     models: ['gpt-5.6-sol', 'deepseek-v4-pro', 'glm-5.2', 'MiniMax-M3'],
     modelMetadata: extractModelMetadata({
@@ -223,7 +235,7 @@ test('central command registry drives non-interactive help and diagnostic comman
     console.log = originalLog;
     console.error = originalError;
   }
-  assert.match(output.join('\n'), /wrapper-scionos v4\.1\.0/);
+  assert.match(output.join('\n'), /wrapper-scionos v4\.2\.0/);
   assert.match(output.join('\n'), /model_provider/);
   assert.equal(output.join('\n').includes('test-token-with-sufficient-length'), false);
 });

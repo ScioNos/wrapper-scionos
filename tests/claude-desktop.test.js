@@ -161,7 +161,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   ]);
   assert.deepEqual(llmRoutes.map((route) => route.routeId), [
     'claude-opus-4-8',
-    'claude-sonnet-4-6',
+    'claude-sonnet-5',
     'claude-haiku-4-5',
     'claude-5.6-sol',
     'claude-lm5.2',
@@ -179,7 +179,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   )), true);
   assert.equal(llmRoutes.some((route) => route.upstreamModel === 'claude-opus-4-6'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-haiku-4-5-gpt-special'), false);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-sonnet-4-6-gpt-special'), false);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-sonnet-5-gpt-special'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.6-sol-pro' && route.upstreamModel === 'gpt-5.6-sol-pro' && route.labelOverride === 'gpt-5.6-sol-pro'), true);

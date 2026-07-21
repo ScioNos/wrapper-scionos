@@ -33,54 +33,80 @@ export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup'
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
 export const CODEX_FALLBACK_CONTEXT_WINDOW = 128000;
 const CODEX_FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
-const CODEX_FALLBACK_REASONING_LEVELS = [
-  { effort: 'low', description: 'Fast responses with lighter reasoning' },
-  { effort: 'medium', description: 'Balances speed and reasoning depth for everyday tasks' },
-  { effort: 'high', description: 'Greater reasoning depth for complex problems' },
-];
-const CODEX_GPT56_REASONING_LEVELS = [
-  { effort: 'none', description: 'Disables additional reasoning' },
-  ...CODEX_FALLBACK_REASONING_LEVELS,
-  { effort: 'xhigh', description: 'Extra high reasoning depth for complex problems' },
-  { effort: 'max', description: 'Maximum reasoning depth for the hardest problems' },
-  { effort: 'ultra', description: 'Maximum reasoning with automatic task delegation' },
-];
-const CODEX_NATIVE_REASONING_LEVELS = [
-  { effort: 'none', description: 'Disable Thinking' },
-  { effort: 'high', description: 'Enabled Thinking' },
-];
+const CODEX_REASONING_DESCRIPTIONS = {
+  none: 'Disables additional reasoning',
+  low: 'Fast responses with lighter reasoning',
+  medium: 'Balances speed and reasoning depth for everyday tasks',
+  high: 'Greater reasoning depth for complex problems',
+  xhigh: 'Extra high reasoning depth for complex problems',
+  max: 'Maximum reasoning depth for the hardest problems',
+  ultra: 'Maximum reasoning with automatic task delegation',
+};
+
+function codexReasoningLevels(...efforts) {
+  return efforts.map((effort) => ({ effort, description: CODEX_REASONING_DESCRIPTIONS[effort] }));
+}
+
+const CODEX_FALLBACK_REASONING_LEVELS = codexReasoningLevels('low', 'medium', 'high');
 const CODEX_REASONING_PROFILES = new Map([
-  ['gpt-5.6-terra', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
-  ['gpt-5.6-sol', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
-  ['gpt-5.6-luna', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
-  ['deepseek-v4-pro', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
-  ['kimi-k2.7-code', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
-  ['glm-5.2', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
-  ['kimi-k3', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
-  ['grok-4.5', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
-  ['MiniMax-M3', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['gpt-5.6-sol', {
+    defaultLevel: 'low',
+    levels: codexReasoningLevels('low', 'medium', 'high', 'xhigh', 'max', 'ultra'),
+  }],
+  ['gpt-5.6-terra', {
+    defaultLevel: 'medium',
+    levels: codexReasoningLevels('low', 'medium', 'high', 'xhigh', 'max', 'ultra'),
+  }],
+  ['gpt-5.6-luna', {
+    defaultLevel: 'medium',
+    levels: codexReasoningLevels('low', 'medium', 'high', 'xhigh', 'max'),
+  }],
+  ['deepseek-v4-pro', {
+    defaultLevel: 'high',
+    levels: codexReasoningLevels('none', 'high', 'max'),
+  }],
+  ['kimi-k2.7-code', {
+    defaultLevel: 'high',
+    levels: codexReasoningLevels('high'),
+  }],
+  ['glm-5.2', {
+    defaultLevel: 'high',
+    levels: codexReasoningLevels('none', 'high'),
+  }],
+  ['kimi-k3', {
+    defaultLevel: 'max',
+    levels: codexReasoningLevels('low', 'high', 'max'),
+  }],
+  ['grok-4.5', {
+    defaultLevel: 'high',
+    levels: codexReasoningLevels('low', 'medium', 'high'),
+  }],
+  ['MiniMax-M3', {
+    defaultLevel: 'high',
+    levels: codexReasoningLevels('none', 'high'),
+  }],
 ]);
 
-// Keep these local fallbacks aligned with cc-switch's Codex provider presets
-// and native Responses catalog profile. Verified RouterLab metadata still wins.
-const CODEX_CC_SWITCH_MODEL_PROFILES = new Map([
+// Context and modality fallbacks stay aligned with cc-switch's conservative
+// RouterLab presets. Model-specific capabilities live here until verified metadata wins.
+const CODEX_MODEL_PROFILES = new Map([
   ['gpt-5.6-sol', {
     contextWindow: 372000,
     inputModalities: ['text', 'image'],
     supportsReasoning: true,
-    supportsParallelToolCalls: false,
+    supportsParallelToolCalls: true,
   }],
   ['gpt-5.6-terra', {
     contextWindow: 372000,
     inputModalities: ['text', 'image'],
     supportsReasoning: true,
-    supportsParallelToolCalls: false,
+    supportsParallelToolCalls: true,
   }],
   ['gpt-5.6-luna', {
     contextWindow: 372000,
     inputModalities: ['text', 'image'],
     supportsReasoning: true,
-    supportsParallelToolCalls: false,
+    supportsParallelToolCalls: true,
   }],
   ['deepseek-v4-pro', {
     contextWindow: 1000000,
@@ -164,6 +190,7 @@ export function buildCodexRuntimeArgs({
     `model_provider=${q('custom')}`,
     `model=${q(model)}`,
     ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
+    `web_search=${q('disabled')}`,
     `model_providers.custom.name=${q(providerName)}`,
     `model_providers.custom.base_url=${q(baseUrl)}`,
     `model_providers.custom.wire_api=${q('responses')}`,
@@ -370,7 +397,7 @@ export function buildCodexModelCatalogFromCache({
 }
 
 function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue = 'routerlab') {
-  const modelProfile = CODEX_CC_SWITCH_MODEL_PROFILES.get(model) ?? {};
+  const modelProfile = CODEX_MODEL_PROFILES.get(model) ?? {};
   const contextWindow = resolveCatalogMetadataValue(
     metadata,
     'contextWindow',
@@ -396,7 +423,12 @@ function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue =
     'supportsParallelToolCallsVerified',
     modelProfile.supportsParallelToolCalls === true,
   );
-  const reasoningProfile = supportsReasoning ? CODEX_REASONING_PROFILES.get(model) : null;
+  const reasoningProfile = supportsReasoning
+    ? CODEX_REASONING_PROFILES.get(model) ?? {
+        defaultLevel: 'medium',
+        levels: CODEX_FALLBACK_REASONING_LEVELS,
+      }
+    : null;
   const unavailableNotice = serviceValue === 'llm'
     ? CODEX_LLM_MODEL_NOTICES.get(model) ?? null
     : null;
@@ -406,12 +438,10 @@ function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue =
     slug: model,
     display_name: displayName,
     description: unavailableNotice ?? displayName,
-    default_reasoning_level: reasoningProfile?.defaultLevel ?? 'medium',
-    supported_reasoning_levels: reasoningProfile?.levels
+    default_reasoning_level: reasoningProfile?.defaultLevel ?? null,
+    supported_reasoning_levels: reasoningProfile
       ? structuredClone(reasoningProfile.levels)
-      : supportsReasoning
-        ? structuredClone(CODEX_FALLBACK_REASONING_LEVELS)
-        : [{ effort: 'medium', description: 'Conservative default reasoning effort' }],
+      : [],
     shell_type: 'shell_command',
     visibility: 'list',
     supported_in_api: !unavailableNotice,
@@ -422,7 +452,7 @@ function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue =
     availability_nux: unavailableNotice ? { message: '🔴 ' + unavailableNotice } : null,
     upgrade: null,
     base_instructions: modelProfile.baseInstructions ?? CODEX_FALLBACK_BASE_INSTRUCTIONS,
-    supports_reasoning_summaries: supportsReasoning || Boolean(reasoningProfile),
+    supports_reasoning_summaries: supportsReasoning,
     default_reasoning_summary: 'none',
     support_verbosity: false,
     default_verbosity: null,

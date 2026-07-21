@@ -7,20 +7,22 @@ function firstFiniteNumber(...values) {
 function normalizeModalities(entry = {}) {
   const raw = entry.input_modalities ?? entry.modalities?.input ?? entry.modalities;
   if (!Array.isArray(raw)) {
-    return ['text'];
+    return { values: ['text'], verified: false };
   }
   const values = raw.map((value) => String(value).toLowerCase()).filter(Boolean);
-  return values.length > 0 ? [...new Set(values)] : ['text'];
+  return values.length > 0
+    ? { values: [...new Set(values)], verified: true }
+    : { values: ['text'], verified: false };
 }
 
 function explicitBoolean(entry, ...keys) {
   for (const key of keys) {
     const value = key.split('.').reduce((current, segment) => current?.[segment], entry);
     if (typeof value === 'boolean') {
-      return value;
+      return { value, verified: true };
     }
   }
-  return false;
+  return { value: false, verified: false };
 }
 
 function normalizeModelEntry(entry) {
@@ -30,39 +32,56 @@ function normalizeModelEntry(entry) {
     return null;
   }
 
+  const contextWindow = firstFiniteNumber(
+    source.context_window,
+    source.context_length,
+    source.max_context_tokens,
+    source.max_input_tokens,
+    source.limits?.context_window,
+  );
+  const inputModalities = normalizeModalities(source);
+  const supportsReasoning = explicitBoolean(source, 'supports_reasoning', 'capabilities.reasoning');
+  const supportsParallelToolCalls = explicitBoolean(
+    source,
+    'supports_parallel_tool_calls',
+    'capabilities.parallel_tool_calls',
+  );
+  const supportsFunctionTools = explicitBoolean(
+    source,
+    'supports_function_tools',
+    'capabilities.function_tools',
+    'capabilities.tools',
+  );
+  const supportsFreeformTools = explicitBoolean(
+    source,
+    'supports_freeform_tools',
+    'capabilities.freeform_tools',
+  );
+  const supportsHostedTools = explicitBoolean(
+    source,
+    'supports_hosted_tools',
+    'capabilities.hosted_tools',
+  );
+  const supportsSearch = explicitBoolean(source, 'supports_search', 'capabilities.search');
+
   return {
     id: String(id),
-    contextWindow: firstFiniteNumber(
-      source.context_window,
-      source.context_length,
-      source.max_context_tokens,
-      source.max_input_tokens,
-      source.limits?.context_window,
-    ) ?? 128000,
-    inputModalities: normalizeModalities(source),
-    supportsReasoning: explicitBoolean(source, 'supports_reasoning', 'capabilities.reasoning'),
-    supportsParallelToolCalls: explicitBoolean(
-      source,
-      'supports_parallel_tool_calls',
-      'capabilities.parallel_tool_calls',
-    ),
-    supportsFunctionTools: explicitBoolean(
-      source,
-      'supports_function_tools',
-      'capabilities.function_tools',
-      'capabilities.tools',
-    ),
-    supportsFreeformTools: explicitBoolean(
-      source,
-      'supports_freeform_tools',
-      'capabilities.freeform_tools',
-    ),
-    supportsHostedTools: explicitBoolean(
-      source,
-      'supports_hosted_tools',
-      'capabilities.hosted_tools',
-    ),
-    supportsSearch: explicitBoolean(source, 'supports_search', 'capabilities.search'),
+    contextWindow: contextWindow ?? 128000,
+    contextWindowVerified: contextWindow !== undefined,
+    inputModalities: inputModalities.values,
+    inputModalitiesVerified: inputModalities.verified,
+    supportsReasoning: supportsReasoning.value,
+    supportsReasoningVerified: supportsReasoning.verified,
+    supportsParallelToolCalls: supportsParallelToolCalls.value,
+    supportsParallelToolCallsVerified: supportsParallelToolCalls.verified,
+    supportsFunctionTools: supportsFunctionTools.value,
+    supportsFunctionToolsVerified: supportsFunctionTools.verified,
+    supportsFreeformTools: supportsFreeformTools.value,
+    supportsFreeformToolsVerified: supportsFreeformTools.verified,
+    supportsHostedTools: supportsHostedTools.value,
+    supportsHostedToolsVerified: supportsHostedTools.verified,
+    supportsSearch: supportsSearch.value,
+    supportsSearchVerified: supportsSearch.verified,
     raw: source,
   };
 }

@@ -17,23 +17,21 @@ export const CODEX_ROUTERLAB_MODELS = [
   'glm-5.2',
 ];
 export const CODEX_LLM_MODELS = [
-  'gpt-5.6-sol-pro',
-  'gpt-5.6-terra-pro',
   'gpt-5.6-sol',
+  'gpt-5.6-luna',
   'gpt-5.6-terra',
-  'glm-5.2',
-  'qwen3.7-max',
+  'kimi-k3',
+  'grok-4.5',
   'MiniMax-M3',
 ];
 
 export const DEFAULT_CODEX_MODEL = CODEX_ROUTERLAB_MODELS[0];
-export const DEFAULT_CODEX_LLM_MODEL = 'gpt-5.6-sol-pro';
+export const DEFAULT_CODEX_LLM_MODEL = CODEX_LLM_MODELS[0];
 export const CODEX_LLM_MODEL_NOTICES = new Map();
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
 export const CODEX_FALLBACK_CONTEXT_WINDOW = 128000;
-const CODEX_FALLBACK_COMP_HASH = 'wrapper-scionos-fallback-v4';
 const CODEX_FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
 const CODEX_FALLBACK_REASONING_LEVELS = [
   { effort: 'low', description: 'Fast responses with lighter reasoning' },
@@ -41,22 +39,87 @@ const CODEX_FALLBACK_REASONING_LEVELS = [
   { effort: 'high', description: 'Greater reasoning depth for complex problems' },
 ];
 const CODEX_GPT56_REASONING_LEVELS = [
+  { effort: 'none', description: 'Disables additional reasoning' },
   ...CODEX_FALLBACK_REASONING_LEVELS,
   { effort: 'xhigh', description: 'Extra high reasoning depth for complex problems' },
   { effort: 'max', description: 'Maximum reasoning depth for the hardest problems' },
   { effort: 'ultra', description: 'Maximum reasoning with automatic task delegation' },
 ];
+const CODEX_NATIVE_REASONING_LEVELS = [
+  { effort: 'none', description: 'Disable Thinking' },
+  { effort: 'high', description: 'Enabled Thinking' },
+];
 const CODEX_REASONING_PROFILES = new Map([
   ['gpt-5.6-terra', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
   ['gpt-5.6-sol', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
   ['gpt-5.6-luna', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
-  ['gpt-5.6-terra-pro', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
-  ['gpt-5.6-sol-pro', { defaultLevel: 'xhigh', levels: CODEX_GPT56_REASONING_LEVELS }],
+  ['deepseek-v4-pro', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['kimi-k2.7-code', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['glm-5.2', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['kimi-k3', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['grok-4.5', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
+  ['MiniMax-M3', { defaultLevel: 'high', levels: CODEX_NATIVE_REASONING_LEVELS }],
 ]);
-const CODEX_FALLBACK_MODEL_MESSAGES = {
-  instructions_template: CODEX_FALLBACK_BASE_INSTRUCTIONS,
-  instructions_variables: {},
-};
+
+// Keep these local fallbacks aligned with cc-switch's Codex provider presets
+// and native Responses catalog profile. Verified RouterLab metadata still wins.
+const CODEX_CC_SWITCH_MODEL_PROFILES = new Map([
+  ['gpt-5.6-sol', {
+    contextWindow: 372000,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['gpt-5.6-terra', {
+    contextWindow: 372000,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['gpt-5.6-luna', {
+    contextWindow: 372000,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['deepseek-v4-pro', {
+    contextWindow: 1000000,
+    inputModalities: ['text'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['kimi-k2.7-code', {
+    contextWindow: 262144,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['glm-5.2', {
+    contextWindow: 200000,
+    inputModalities: ['text'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['kimi-k3', {
+    contextWindow: 1048576,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: false,
+  }],
+  ['grok-4.5', {
+    contextWindow: 500000,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: true,
+  }],
+  ['MiniMax-M3', {
+    contextWindow: 1000000,
+    inputModalities: ['text', 'image'],
+    supportsReasoning: true,
+    supportsParallelToolCalls: true,
+    baseInstructions: 'You are Codex, a coding agent based on MiniMax-M3. You and the user share the same workspace and collaborate to achieve the user\'s goals.',
+  }],
+]);
 
 export function getCodexPaths(env = process.env) {
   const configDir = env.CODEX_HOME || path.join(os.homedir(), '.codex');
@@ -307,10 +370,33 @@ export function buildCodexModelCatalogFromCache({
 }
 
 function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue = 'routerlab') {
-  const contextWindow = metadata.contextWindow ?? CODEX_FALLBACK_CONTEXT_WINDOW;
-  const inputModalities = metadata.inputModalities?.includes('image') ? ['text', 'image'] : ['text'];
-  const supportsReasoning = metadata.supportsReasoning === true;
-  const reasoningProfile = CODEX_REASONING_PROFILES.get(model);
+  const modelProfile = CODEX_CC_SWITCH_MODEL_PROFILES.get(model) ?? {};
+  const contextWindow = resolveCatalogMetadataValue(
+    metadata,
+    'contextWindow',
+    'contextWindowVerified',
+    modelProfile.contextWindow ?? CODEX_FALLBACK_CONTEXT_WINDOW,
+  );
+  const declaredModalities = resolveCatalogMetadataValue(
+    metadata,
+    'inputModalities',
+    'inputModalitiesVerified',
+    modelProfile.inputModalities ?? ['text'],
+  );
+  const inputModalities = declaredModalities?.includes('image') ? ['text', 'image'] : ['text'];
+  const supportsReasoning = resolveCatalogBoolean(
+    metadata,
+    'supportsReasoning',
+    'supportsReasoningVerified',
+    modelProfile.supportsReasoning === true,
+  );
+  const supportsParallelToolCalls = resolveCatalogBoolean(
+    metadata,
+    'supportsParallelToolCalls',
+    'supportsParallelToolCallsVerified',
+    modelProfile.supportsParallelToolCalls === true,
+  );
+  const reasoningProfile = supportsReasoning ? CODEX_REASONING_PROFILES.get(model) : null;
   const unavailableNotice = serviceValue === 'llm'
     ? CODEX_LLM_MODEL_NOTICES.get(model) ?? null
     : null;
@@ -335,26 +421,35 @@ function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue =
     default_service_tier: null,
     availability_nux: unavailableNotice ? { message: '🔴 ' + unavailableNotice } : null,
     upgrade: null,
-    base_instructions: CODEX_FALLBACK_BASE_INSTRUCTIONS,
-    model_messages: structuredClone(CODEX_FALLBACK_MODEL_MESSAGES),
+    base_instructions: modelProfile.baseInstructions ?? CODEX_FALLBACK_BASE_INSTRUCTIONS,
     supports_reasoning_summaries: supportsReasoning || Boolean(reasoningProfile),
     default_reasoning_summary: 'none',
     support_verbosity: false,
     default_verbosity: null,
-    apply_patch_tool_type: 'freeform',
-    web_search_tool_type: 'text_and_image',
-    truncation_policy: { mode: 'tokens', limit: 10000 },
-    supports_parallel_tool_calls: metadata.supportsParallelToolCalls === true,
+    truncation_policy: { mode: 'bytes', limit: 10000 },
+    supports_parallel_tool_calls: supportsParallelToolCalls,
     supports_image_detail_original: inputModalities.includes('image'),
     context_window: contextWindow,
     max_context_window: contextWindow,
-    comp_hash: CODEX_FALLBACK_COMP_HASH,
     effective_context_window_percent: 95,
     experimental_supported_tools: [],
     input_modalities: inputModalities,
-    supports_search_tool: metadata.supportsSearch === true,
-    use_responses_lite: false,
+    supports_search_tool: false,
   };
+}
+
+function resolveCatalogMetadataValue(metadata, valueKey, verifiedKey, fallback) {
+  if (metadata?.[verifiedKey] === false) {
+    return fallback;
+  }
+  return metadata?.[valueKey] ?? fallback;
+}
+
+function resolveCatalogBoolean(metadata, valueKey, verifiedKey, fallback) {
+  if (metadata?.[verifiedKey] === false) {
+    return fallback;
+  }
+  return typeof metadata?.[valueKey] === 'boolean' ? metadata[valueKey] : fallback;
 }
 
 export function cleanupStaleCodexRuntimeModelCatalogs({

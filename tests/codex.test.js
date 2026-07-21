@@ -14,18 +14,17 @@ test('Codex template uses provider-scoped model provider config', () => {
     'glm-5.2',
   ]);
   assert.deepEqual(CODEX_LLM_MODELS, [
-    'gpt-5.6-sol-pro',
-    'gpt-5.6-terra-pro',
     'gpt-5.6-sol',
+    'gpt-5.6-luna',
     'gpt-5.6-terra',
-    'glm-5.2',
-    'qwen3.7-max',
+    'kimi-k3',
+    'grok-4.5',
     'MiniMax-M3',
   ]);
   assert.deepEqual(codexModelsForService('routerlab'), CODEX_ROUTERLAB_MODELS);
   assert.deepEqual(codexModelsForService('llm'), CODEX_LLM_MODELS);
   assert.equal(defaultCodexModelForService('routerlab'), 'gpt-5.6-sol');
-  assert.equal(defaultCodexModelForService('llm'), 'gpt-5.6-sol-pro');
+  assert.equal(defaultCodexModelForService('llm'), 'gpt-5.6-sol');
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
@@ -208,7 +207,8 @@ test('Codex template preview includes model_catalog_json when Codex model cache 
   assert.equal(catalog.models[3].display_name, 'DeepSeek V4 Pro');
   assert.deepEqual(catalog.models[3].additional_speed_tiers, []);
   assert.equal(catalog.models[3].availability_nux, null);
-  assert.match(catalog.models[3].model_messages.instructions_template, /You are Codex/);
+  assert.equal(catalog.models[3].context_window, 1000000);
+  assert.equal('model_messages' in catalog.models[3], false);
 
   const preview = buildCodexConfigPreview({
     providerName: 'routerlab',
@@ -240,21 +240,22 @@ test('Codex template preview includes fallback model_catalog_json without local 
   assert.equal(catalog.models[0].slug, 'gpt-5.6-sol');
   assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol');
   assert.equal(catalog.models[0].supported_in_api, true);
-  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.equal(catalog.models[0].context_window, 372000);
   assert.equal(catalog.models[2].display_name, 'GPT 5.6 Luna');
   assert.equal(catalog.models[4].slug, 'kimi-k2.7-code');
   assert.equal(catalog.models[4].display_name, 'Kimi K2.7 Code');
   assert.equal(catalog.models[4].visibility, 'list');
-  assert.equal(catalog.models[4].context_window, 128000);
+  assert.equal(catalog.models[4].context_window, 262144);
   assert.equal(typeof catalog.models[4].base_instructions, 'string');
   assert.equal(catalog.models[4].base_instructions.length > 0, true);
-  assert.equal(typeof catalog.models[4].model_messages.instructions_template, 'string');
-  assert.deepEqual(catalog.models[4].model_messages.instructions_variables, {});
-  assert.equal(typeof catalog.models[4].comp_hash, 'string');
-  assert.deepEqual(catalog.models[4].input_modalities, ['text']);
+  assert.equal('model_messages' in catalog.models[4], false);
+  assert.equal('comp_hash' in catalog.models[4], false);
+  assert.deepEqual(catalog.models[4].input_modalities, ['text', 'image']);
   assert.equal(catalog.models[4].supports_parallel_tool_calls, false);
-  assert.equal(catalog.models[4].apply_patch_tool_type, 'freeform');
-  assert.equal(catalog.models[4].web_search_tool_type, 'text_and_image');
+  assert.equal('apply_patch_tool_type' in catalog.models[4], false);
+  assert.equal('web_search_tool_type' in catalog.models[4], false);
+  assert.deepEqual(catalog.models[4].truncation_policy, { mode: 'bytes', limit: 10000 });
   assert.equal(catalog.models[4].supports_search_tool, false);
 
   const preview = buildCodexConfigPreview({
@@ -273,7 +274,7 @@ test('Codex template preview includes fallback model_catalog_json without local 
   const written = JSON.parse(fs.readFileSync(runtimeCatalog.path, 'utf8'));
   assert.equal(written.models[4].slug, 'kimi-k2.7-code');
   assert.equal(typeof written.models[4].base_instructions, 'string');
-  assert.equal(typeof written.models[4].model_messages.instructions_template, 'string');
+  assert.equal('model_messages' in written.models[4], false);
   cleanupCodexRuntimeModelCatalog(runtimeCatalog);
   assert.equal(fs.existsSync(runtimeCatalog.path), false);
 });
@@ -290,8 +291,8 @@ test('Codex template preview builds LLM-specific model catalog for llm service',
   };
   fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
     models: [{
-      slug: 'gpt-5.6-sol-pro',
-      display_name: 'GPT 5.6 Sol Pro',
+      slug: 'gpt-5.6-sol',
+      display_name: 'GPT 5.6 Sol',
       context_window: 272000,
     }],
   }), 'utf8');
@@ -304,22 +305,32 @@ test('Codex template preview builds LLM-specific model catalog for llm service',
     paths,
     dryRun: false,
   });
-  assert.match(preview.config, /model = "gpt-5\.6-sol-pro"/);
+  assert.match(preview.config, /model = "gpt-5\.6-sol"/);
   assert.deepEqual(preview.catalog.models, CODEX_LLM_MODELS);
   const catalog = buildCodexModelCatalogFromCache({
     paths,
     models: CODEX_LLM_MODELS,
     serviceValue: 'llm',
   });
-  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol Pro');
+  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol');
   assert.equal(catalog.models[0].default_reasoning_level, 'xhigh');
-  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['none', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
+  assert.equal(catalog.models[0].context_window, 372000);
+  assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
   assert.equal(catalog.models[0].supported_in_api, true);
-  assert.equal(catalog.models[1].display_name, 'GPT 5.6 Terra Pro');
+  assert.equal(catalog.models[1].display_name, 'GPT 5.6 Luna');
   assert.equal(catalog.models[1].supported_in_api, true);
-  assert.equal(catalog.models[4].display_name, 'GLM 5.2');
-  assert.equal(catalog.models[5].display_name, 'Qwen 3.7 Max');
-  assert.equal(catalog.models[6].display_name, 'MiniMax M3');
+  assert.equal(catalog.models[3].display_name, 'Kimi K3');
+  assert.equal(catalog.models[3].context_window, 1048576);
+  assert.equal(catalog.models[4].display_name, 'Grok 4.5');
+  assert.equal(catalog.models[4].context_window, 500000);
+  assert.equal(catalog.models[4].supports_parallel_tool_calls, true);
+  assert.equal(catalog.models[5].display_name, 'MiniMax M3');
+  assert.equal(catalog.models[5].context_window, 1000000);
+  assert.equal(catalog.models[5].supports_parallel_tool_calls, true);
+  assert.equal('apply_patch_tool_type' in catalog.models[5], false);
+  assert.equal('web_search_tool_type' in catalog.models[5], false);
+  assert.equal('model_messages' in catalog.models[5], false);
   assert.equal(fs.existsSync(paths.configPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
 });

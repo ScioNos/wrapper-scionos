@@ -122,19 +122,24 @@ Le chemin Codex par défaut utilise le proxy local de session :
     wrapper-scionos codex launch --service routerlab
     wrapper-scionos codex launch --service llm
 
+Les catalogues Codex sont limités aux modèles suivants, dans l'ordre du menu :
+
+- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
+- `llm` : `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
+
 Avant de résoudre un token ou d’ouvrir le proxy, Codex valide que le point d’accès du service sélectionné utilise HTTP(S) et valide un `--token` explicite. Une réponse HTTP 401/403 pendant la découverte des modèles arrête le lancement avec les commandes `auth status`, `auth test` et `auth login` adaptées au service. Quand la découverte réussit, le modèle demandé ou utilisé par défaut doit appartenir au catalogue Codex vérifié du service ; sinon le wrapper affiche les modèles disponibles et refuse le lancement. Les erreurs réseau, timeouts, réponses invalides et autres échecs non liés à l’authentification restent des avertissements et utilisent le catalogue local conservateur.
 
 Pour le diagnostic uniquement, --direct contourne le proxy :
 
     wrapper-scionos codex launch --service llm --direct
 
-Le wrapper ne surcharge que le fournisseur, le modèle, l’URL, le wire API et le catalogue temporaire. Il ne modifie ni le sandbox Codex, ni la politique d’approbation, ni l’effort de raisonnement, ni MCP, les features, les hooks, les fichiers d’authentification ou le mode web_search de l’utilisateur. Codex hérite donc de la préférence cached/live/disabled. L’outil de recherche n’est exposé que si les métadonnées RouterLab déclarent explicitement le modèle compatible.
+Le wrapper ne surcharge que le fournisseur, le modèle, l'URL, le wire API et le catalogue temporaire. Il ne modifie ni le sandbox Codex, ni la politique d'approbation, ni l'effort de raisonnement, ni MCP, les features, les hooks, les fichiers d'authentification ou le mode web_search de l'utilisateur. Comme le profil Responses natif de cc-switch, le catalogue n'annonce cependant ni outil freeform `apply_patch`, ni outil hébergé `web_search` : les modifications de fichiers passent par `shell_command`, compatible avec les passerelles natives.
 
 En mode proxy, les requêtes Responses sortantes sont forcées à store: false. Le mode direct ne garantit aucune politique de stockage.
 
 Quand Codex est choisi depuis le menu interactif, un échec de démarrage ou une sortie Codex non nulle affiche l’erreur et revient au menu principal. Une sortie Codex normale ferme le wrapper. Les commandes directes `codex launch` conservent le code de sortie du processus Codex.
 
-Le catalogue temporaire est généré depuis les métadonnées upstream normalisées. Si seuls les IDs sont disponibles, le fallback est conservateur : contexte 128k, texte uniquement, fonctions séquentielles, raisonnement medium, et aucune annonce non vérifiée de vision, outil hébergé, recherche, freeform ou appels parallèles. Les catalogues vieux de plus de 24 heures sont supprimés au démarrage et le catalogue actif est retiré à la sortie de Codex.
+Le catalogue temporaire est généré depuis les métadonnées upstream normalisées. Une valeur explicitement fournie par RouterLab reste prioritaire. Si seuls les IDs sont disponibles, les modèles connus reprennent les profils Codex de cc-switch : GPT-5.6 à 372 000 tokens, DeepSeek V4 Pro et MiniMax M3 à 1 000 000, Kimi K2.7 Code à 262 144, GLM-5.2 à 200 000, Kimi K3 à 1 048 576 et Grok 4.5 à 500 000. Un ID inconnu reste limité au fallback conservateur de 128k, texte uniquement et appels séquentiels. Le budget effectif annoncé à Codex est de 95 % de la fenêtre. Les catalogues vieux de plus de 24 heures sont supprimés au démarrage et le catalogue actif est retiré à la sortie de Codex.
 
 Tous les modèles RouterLab et RouterLab LLM sont envoyés sans transformation vers l’endpoint natif `/v1/responses` avec `wire_api="responses"`, en streaming comme hors streaming. RouterLab fournit la compatibilité Responses propre à chaque modèle ; le wrapper n’effectue aucune traduction de protocole. Il conserve l’authentification locale, le remplacement du token upstream, `store: false`, les catalogues temporaires et les diagnostics 401/403 contextualisés. Les réponses compressées relayées conservent encodage et longueur ; les erreurs compressées interceptées sont décodées de façon bornée avant normalisation.
 

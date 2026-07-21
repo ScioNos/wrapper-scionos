@@ -34,7 +34,7 @@ The default path is a session-local Responses proxy. The direct path is diagnost
 
 Model-discovery 401/403 responses are fatal and provide service-scoped auth recovery commands. A successful discovery must contain the selected model in the wrapper-supported Codex catalog; the runtime catalog is restricted to the compatible models verified by the service. Network, timeout, malformed-response, and non-authentication server failures retain the conservative static-catalog fallback.
 
-Runtime overrides are limited to provider identity, base URL, model, wire API, token environment key, and temporary model catalog. User sandbox, approvals, reasoning effort, features, MCP settings, hooks, auth files, web-search mode, and other active policy remain untouched. supports_search_tool is true only for explicit RouterLab model metadata. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
+Runtime overrides are limited to provider identity, base URL, model, wire API, token environment key, and temporary model catalog. User sandbox, approvals, reasoning effort, features, MCP settings, hooks, auth files, web-search mode, and other active policy remain untouched. The native Responses catalog always disables hosted search and freeform custom tools; edits use `shell_command`. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
 
 Cleanup surrounds the entire token/network/proxy/catalog/argument/child lifecycle with nullable resources. The active catalog and proxy are removed after normal exit, creation failure, launch error, SIGINT, or SIGTERM. Catalogs older than 24 hours are removed before a new one is created.
 
@@ -50,9 +50,11 @@ Custom HTTP(S) service bases retain their pathname. Appending `/v1/responses` to
 
 ## Model catalog
 
-RouterLab model metadata is normalized into context, modalities, reasoning, parallel function-call, freeform, hosted-tool, and search capabilities. The wrapper never clones an arbitrary Codex models_cache.json entry.
+RouterLab model metadata is normalized into context, modalities, reasoning, parallel function-call, freeform, hosted-tool, and search capabilities. Presence flags distinguish explicit values from normalizer defaults so an ID-only response can use the known-model manifest. The wrapper never clones an arbitrary Codex models_cache.json entry.
 
-Missing or insufficient metadata uses a conservative manifest: 128k, text only, sequential function tools, medium reasoning, and no unverified vision, search, hosted tools, freeform, or parallel calls.
+Known-model fallbacks mirror cc-switch's Codex presets and native Responses profile: GPT-5.6 uses 372,000 tokens; DeepSeek V4 Pro and MiniMax M3 use 1,000,000; Kimi K2.7 Code uses 262,144; GLM-5.2 uses 200,000; Kimi K3 uses 1,048,576; and Grok 4.5 uses 500,000. Explicit RouterLab metadata wins. Unknown models retain the conservative 128k text-only sequential fallback. Catalog windows use a 95% effective budget. DeepSeek V4 Pro and GLM-5.2 are text-only; GPT-5.6, Kimi K2.7 Code, Kimi K3, Grok 4.5, and MiniMax M3 expose image input. Only Grok 4.5 and MiniMax M3 enable parallel tool calls in the static manifest.
+
+The native profile deliberately omits `apply_patch_tool_type`, `web_search_tool_type`, `tools`, and `model_messages`, matching cc-switch's compatibility strategy for Responses gateways that reject Codex custom tools. `shell_type="shell_command"` remains available for edits, and `supports_search_tool` remains false.
 
 ## Credential storage
 

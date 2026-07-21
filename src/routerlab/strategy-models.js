@@ -268,6 +268,8 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['gpt-5.6-luna', 'GPT 5.6 Luna'],
   ['gpt-5.6-terra-pro', 'GPT 5.6 Terra Pro'],
   ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
+  ['kimi-k3', 'Kimi K3'],
+  ['grok-4.5', 'Grok 4.5'],
 ]);
 
 export function getStrategyModels(strategyValue, serviceValue) {

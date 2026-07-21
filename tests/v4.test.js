@@ -75,13 +75,20 @@ test('RouterLab model metadata is normalized without optimistic capabilities', (
     }, 'model-b'],
   });
   assert.equal(metadata[0].contextWindow, 200000);
+  assert.equal(metadata[0].contextWindowVerified, true);
   assert.deepEqual(metadata[0].inputModalities, ['text', 'image']);
+  assert.equal(metadata[0].inputModalitiesVerified, true);
   assert.equal(metadata[0].supportsReasoning, true);
+  assert.equal(metadata[0].supportsReasoningVerified, true);
   assert.equal(metadata[0].supportsParallelToolCalls, true);
+  assert.equal(metadata[0].supportsParallelToolCallsVerified, true);
   assert.equal(metadata[0].supportsFunctionTools, true);
   assert.equal(metadata[0].supportsHostedTools, false);
   assert.equal(metadata[1].contextWindow, 128000);
+  assert.equal(metadata[1].contextWindowVerified, false);
   assert.deepEqual(metadata[1].inputModalities, ['text']);
+  assert.equal(metadata[1].inputModalitiesVerified, false);
+  assert.equal(metadata[1].supportsReasoningVerified, false);
 });
 
 test('Codex catalog applies metadata conservatively and removes stale runtime files', (t) => {
@@ -101,8 +108,24 @@ test('Codex catalog applies metadata conservatively and removes stale runtime fi
   assert.equal(catalog.models[0].context_window, 200000);
   assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
   assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
+  assert.equal(catalog.models[0].supports_search_tool, false);
   assert.equal(catalog.models[1].context_window, 128000);
   assert.equal(catalog.models[1].supports_search_tool, false);
+
+  const knownFallback = buildCodexModelCatalogFromCache({
+    models: ['gpt-5.6-sol', 'deepseek-v4-pro', 'glm-5.2', 'MiniMax-M3'],
+    modelMetadata: extractModelMetadata({
+      data: ['gpt-5.6-sol', 'deepseek-v4-pro', 'glm-5.2', 'MiniMax-M3'],
+    }),
+  });
+  assert.deepEqual(
+    knownFallback.models.map((entry) => entry.context_window),
+    [372000, 1000000, 200000, 1000000],
+  );
+  assert.deepEqual(knownFallback.models[1].input_modalities, ['text']);
+  assert.deepEqual(knownFallback.models[3].input_modalities, ['text', 'image']);
+  assert.equal(knownFallback.models[3].supports_parallel_tool_calls, true);
+  assert.equal('apply_patch_tool_type' in knownFallback.models[3], false);
 
   const dir = path.join(tempDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
   fs.mkdirSync(dir);

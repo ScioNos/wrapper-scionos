@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Updated the Codex `routerlab` and `llm` catalogs to their requested six-model menus, with `gpt-5.6-sol` as the default for both services.
+- Added cc-switch-aligned per-model Codex context, modality, reasoning, and parallel-tool fallbacks so ID-only discovery no longer collapses every known model to 128k.
+- Switched generated Codex catalogs to cc-switch's native Responses tool profile: file edits use `shell_command`, while freeform `apply_patch`, hosted `web_search`, and inherited model-message declarations are omitted.
+
 ## 4.1.0 - 2026-07-16
 
 ### Added

@@ -50,7 +50,7 @@ export function createLongRunningLlmProxy({
       }
 
       let bodyText = await readRequestBody(req);
-      if (codexServiceValue) bodyText = enforceCodexStoreFalse(req.url, bodyText);
+      if (codexServiceValue) bodyText = normalizeCodexResponsesRequest(req.url, bodyText);
 
       await forwardLongRunningLlmRequest(req, res, {
         targetBaseUrl,
@@ -344,12 +344,13 @@ async function readEncodedStreamText(stream, maxBytes = MAX_ERROR_BODY_BYTES) {
   return body.subarray(0, maxBytes).toString('utf8');
 }
 
-function enforceCodexStoreFalse(reqUrl, bodyText) {
+function normalizeCodexResponsesRequest(reqUrl, bodyText) {
   const url = new URL(reqUrl, 'http://127.0.0.1');
   if (!['/responses', '/v1/responses'].includes(url.pathname) || !bodyText) return bodyText;
   try {
     const body = JSON.parse(bodyText);
     body.store = false;
+    delete body.metadata;
     return JSON.stringify(body);
   } catch {
     throw proxyError('Request body is not valid JSON.', 400, 'invalid_json');

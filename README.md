@@ -137,7 +137,7 @@ For diagnostics only, --direct bypasses the proxy:
 
 The wrapper passes provider, model, base URL, wire API, temporary catalog, and `web_search="disabled"` overrides for the Codex session. The search override is never written to the user's Codex configuration. The wrapper does not override the user's sandbox, approval policy, reasoning effort, MCP configuration, features, hooks, or authentication files. Like cc-switch's native Responses profile, the catalog does not advertise the freeform `apply_patch` tool; file edits use `shell_command`, which native gateways accept. Hosted web search is disabled by the explicit session override rather than inferred from catalog metadata.
 
-In proxy mode, outgoing Responses requests are rewritten with `store: false`. In direct mode the wrapper does not rewrite the body; Codex CLI 0.144.6 itself sends `store: false` to non-Azure custom Responses providers. This request field is not a contractual guarantee about the upstream provider's retention policy.
+In proxy mode, outgoing Responses requests are rewritten with `store: false` and have their top-level `metadata` field removed for upstream compatibility. This rewrite is limited to Codex Responses traffic and does not affect Claude. In direct mode the wrapper does not rewrite the body; Codex CLI 0.144.6 itself sends `store: false` to non-Azure custom Responses providers. These request fields are not contractual guarantees about the upstream provider's retention policy.
 
 When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
 

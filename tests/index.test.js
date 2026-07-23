@@ -29,7 +29,7 @@ function loadEntrypointModule() {
 
 test('entrypoint maps prompt interruptions and runtime failures to stable exit codes', async () => {
   const { entry, output } = await loadEntrypointModule();
-  assert.match(output.join('\n'), /4\.2\.0/);
+  assert.match(output.join('\n'), /4\.2\.1/);
 
   const promptState = {};
   entry.handleTopLevelError(

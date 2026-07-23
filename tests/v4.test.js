@@ -235,7 +235,7 @@ test('central command registry drives non-interactive help and diagnostic comman
     console.log = originalLog;
     console.error = originalError;
   }
-  assert.match(output.join('\n'), /wrapper-scionos v4\.2\.0/);
+  assert.match(output.join('\n'), /wrapper-scionos v4\.2\.1/);
   assert.match(output.join('\n'), /model_provider/);
   assert.equal(output.join('\n').includes('test-token-with-sufficient-length'), false);
 });

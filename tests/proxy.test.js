@@ -237,7 +237,7 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
         const response = await fetch(proxy.baseUrl + '/v1/responses?trace=' + encodeURIComponent(model), {
           method: 'POST',
           headers: { authorization: 'Bearer ' + proxy.gatewayToken, 'content-type': 'application/json' },
-          body: JSON.stringify({ model, input: 'ping', stream, store: true }),
+          body: JSON.stringify({ model, input: 'ping', stream, store: true, metadata: { source: 'codex' } }),
         });
         assert.equal(response.status, 200);
         if (stream) {
@@ -252,6 +252,7 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
     assert.equal(captured.every((entry) => entry.url.startsWith('/v1/responses?trace=')), true);
     assert.equal(captured.every((entry) => entry.authorization === 'Bearer real-routerlab-token'), true);
     assert.equal(captured.every((entry) => entry.body.store === false), true);
+    assert.equal(captured.every((entry) => !Object.hasOwn(entry.body, 'metadata')), true);
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));

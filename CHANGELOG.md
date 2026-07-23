@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 4.2.1 - 2026-07-23
+
+### Fixed
+
+- Removed the top-level Responses request `metadata` field in the Codex session proxy to support upstream providers that reject this standard field. The rewrite is limited to proxied Codex `/responses` requests; Claude traffic and direct Codex transport remain unchanged.
+
 ## 4.2.0 - 2026-07-21
 
 ### Added

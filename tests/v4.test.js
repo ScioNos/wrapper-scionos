@@ -13,7 +13,8 @@ import { printError } from '../src/cli/commands/output.js';
 import { defaultDesktopStrategy, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
 import { extractModelMetadata, fetchModels } from '../src/routerlab/models.js';
 import {
-  buildCodexModelCatalogFromCache,
+  buildCodexCatalogFallback,
+  buildCodexCatalogFromUpstream,
   cleanupStaleCodexRuntimeModelCatalogs,
   CODEX_MODEL_CATALOG_FILENAME,
   CODEX_RUNTIME_MODEL_CATALOG_DIR,
@@ -91,53 +92,47 @@ test('RouterLab model metadata is normalized without optimistic capabilities', (
   assert.equal(metadata[1].supportsReasoningVerified, false);
 });
 
-test('Codex catalog applies metadata conservatively and removes stale runtime files', (t) => {
+test('Codex catalog uses upstream metadata, minimal fallback, and prunes stale runtime files', (t) => {
   const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-v4-catalog-'));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  const catalog = buildCodexModelCatalogFromCache({
-    models: ['model-a', 'model-b'],
-    modelMetadata: [{
-      id: 'model-a',
-      contextWindow: 200000,
-      inputModalities: ['text', 'image'],
-      supportsReasoning: true,
-      supportsParallelToolCalls: true,
-      supportsSearch: true,
-    }],
+
+  const catalog = buildCodexCatalogFromUpstream({
+    serviceValue: 'routerlab',
+    allowedModelIds: ['model-a', 'model-b'],
+    upstreamModels: [
+      {
+        id: 'model-a',
+        contextWindow: 200000,
+        inputModalities: ['text', 'image'],
+        supportsReasoning: true,
+        supportsParallelToolCalls: true,
+        supportsSearch: true,
+      },
+      { id: 'model-b' },
+    ],
   });
   assert.equal(catalog.models[0].context_window, 200000);
   assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
   assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
   assert.equal(catalog.models[0].supports_search_tool, false);
   assert.equal(catalog.models[1].context_window, 128000);
+  assert.deepEqual(catalog.models[1].input_modalities, ['text']);
+  assert.equal(catalog.models[1].supports_parallel_tool_calls, false);
   assert.equal(catalog.models[1].supports_search_tool, false);
 
-  const noReasoning = buildCodexModelCatalogFromCache({
-    models: ['gpt-5.6-sol'],
-    modelMetadata: [{
-      id: 'gpt-5.6-sol',
-      supportsReasoning: false,
-      supportsReasoningVerified: true,
-    }],
+  const filtered = buildCodexCatalogFromUpstream({
+    allowedModelIds: ['model-a'],
+    upstreamModels: [{ id: 'model-a' }, { id: 'not-allowed' }],
   });
-  assert.equal(noReasoning.models[0].default_reasoning_level, null);
-  assert.deepEqual(noReasoning.models[0].supported_reasoning_levels, []);
-  assert.equal(noReasoning.models[0].supports_reasoning_summaries, false);
+  assert.deepEqual(filtered.models.map((entry) => entry.slug), ['model-a']);
 
-  const knownFallback = buildCodexModelCatalogFromCache({
-    models: ['gpt-5.6-sol', 'deepseek-v4-pro', 'glm-5.2', 'MiniMax-M3'],
-    modelMetadata: extractModelMetadata({
-      data: ['gpt-5.6-sol', 'deepseek-v4-pro', 'glm-5.2', 'MiniMax-M3'],
-    }),
+  const fallback = buildCodexCatalogFallback({
+    serviceValue: 'llm',
+    allowedModelIds: ['gpt-5.6-sol', 'kimi-k3'],
   });
-  assert.deepEqual(
-    knownFallback.models.map((entry) => entry.context_window),
-    [372000, 1000000, 200000, 1000000],
-  );
-  assert.deepEqual(knownFallback.models[1].input_modalities, ['text']);
-  assert.deepEqual(knownFallback.models[3].input_modalities, ['text', 'image']);
-  assert.equal(knownFallback.models[3].supports_parallel_tool_calls, true);
-  assert.equal('apply_patch_tool_type' in knownFallback.models[3], false);
+  assert.deepEqual(fallback.models.map((entry) => entry.slug), ['gpt-5.6-sol', 'kimi-k3']);
+  assert.equal(fallback.models.every((entry) => entry.context_window === 128000), true);
+  assert.equal(fallback.models.every((entry) => entry.supports_search_tool === false), true);
 
   const dir = path.join(tempDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
   fs.mkdirSync(dir);
@@ -180,7 +175,7 @@ test('Claude Desktop catalog requires auth and enforces exact CORS origins', asy
   assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://allowed.test');
 });
 
-test('Codex proxy forces store false before forwarding', async (t) => {
+test('Codex proxy forwards Responses bodies without rewriting them', async (t) => {
   let captured;
   const upstream = http.createServer((req, res) => {
     const chunks = [];
@@ -197,7 +192,6 @@ test('Codex proxy forces store false before forwarding', async (t) => {
     targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
     routerlabToken: 'upstream',
     upstreamAuth: 'openai',
-    codexServiceValue: 'llm',
   });
   t.after(() => stopLongRunningLlmProxy(proxy));
   const response = await fetch(proxy.baseUrl + '/v1/responses', {
@@ -206,10 +200,11 @@ test('Codex proxy forces store false before forwarding', async (t) => {
       authorization: 'Bearer ' + proxy.gatewayToken,
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ model: 'gpt-5.5', store: true }),
+    body: JSON.stringify({ model: 'gpt-5.6-sol', store: true, metadata: { session: 'abc' } }),
   });
   assert.equal(response.status, 200);
-  assert.equal(captured.store, false);
+  assert.equal(captured.store, true);
+  assert.deepEqual(captured.metadata, { session: 'abc' });
 });
 test('central command registry drives non-interactive help and diagnostic commands', async () => {
   const originalLog = console.log;
@@ -235,7 +230,7 @@ test('central command registry drives non-interactive help and diagnostic comman
     console.log = originalLog;
     console.error = originalError;
   }
-  assert.match(output.join('\n'), /wrapper-scionos v4\.2\.1/);
+  assert.match(output.join('\n'), /wrapper-scionos v\d+\.\d+\.\d+/);
   assert.match(output.join('\n'), /model_provider/);
   assert.equal(output.join('\n').includes('test-token-with-sufficient-length'), false);
 });

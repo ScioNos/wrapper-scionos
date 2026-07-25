@@ -1,5 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGE_VERSION = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).version;
 
 let entryModulePromise = null;
 
@@ -29,7 +35,7 @@ function loadEntrypointModule() {
 
 test('entrypoint maps prompt interruptions and runtime failures to stable exit codes', async () => {
   const { entry, output } = await loadEntrypointModule();
-  assert.match(output.join('\n'), /4\.2\.1/);
+  assert.equal(output.join('\n').trim(), PACKAGE_VERSION);
 
   const promptState = {};
   entry.handleTopLevelError(

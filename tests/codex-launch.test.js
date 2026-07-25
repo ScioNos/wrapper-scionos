@@ -36,7 +36,6 @@ const SERVICE_CASES = [
     defaultModel: 'gpt-5.6-sol',
     models: [
       'gpt-5.6-sol',
-      'gpt-5.6-luna',
       'gpt-5.6-terra',
       'kimi-k3',
       'grok-4.5',
@@ -74,7 +73,6 @@ test('interactive Codex selection launches through the authenticated local proxy
         assert.equal(capture.model, serviceCase.defaultModel);
         assert.equal(capture.providerName, serviceCase.service);
         assert.match(capture.baseUrl, /^http:\/\/127\.0\.0\.1:\d+\/v1$/);
-        assert.ok(capture.args.includes('web_search="disabled"'));
         assert.notEqual(capture.apiKey, TEST_TOKEN);
         assert.ok(capture.apiKey.length >= 32);
         assert.equal(capture.responseStatus, 200);
@@ -88,7 +86,7 @@ test('interactive Codex selection launches through the authenticated local proxy
         assert.equal(modelsRequest?.apiKey, TEST_TOKEN);
         assert.equal(responsesRequest?.authorization, `Bearer ${TEST_TOKEN}`);
         assert.equal(responsesRequest?.apiKey, null);
-        assert.equal(JSON.parse(responsesRequest.body).store, false);
+        assert.equal(JSON.parse(responsesRequest.body).store, true);
 
         assert.equal(fs.existsSync(capture.catalogPath), false, 'runtime catalog should be removed');
         assert.doesNotMatch(result.stdout + result.stderr, new RegExp(TEST_TOKEN));

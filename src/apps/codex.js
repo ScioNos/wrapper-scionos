@@ -208,8 +208,8 @@ function buildCodexCatalogEntry(model, index) {
 
   return {
     slug: model.id,
-    display_name: model.displayName || model.id,
-    description: model.description || model.displayName || model.id,
+    display_name: model.displayName || codexModelDisplayName(model.id),
+    description: model.description || model.displayName || codexModelDisplayName(model.id),
     default_reasoning_level: model.defaultReasoningLevel || 'medium',
     supported_reasoning_levels: supportedReasoningLevels,
     shell_type: 'shell_command',
@@ -333,19 +333,6 @@ function hasRouterlabEndpoint(config) {
   return Boolean(config && /https:\/\/(api\.|llm-api\.)?routerlab\.ch\/v1/.test(config));
 }
 
-function readCodexModelTemplate(modelsCachePath) {
-  try {
-    const cache = JSON.parse(fs.readFileSync(modelsCachePath, 'utf8'));
-    return cache.models?.find((entry) => entry?.slug === DEFAULT_CODEX_MODEL)
-      ?? cache.models?.[0]
-      ?? null;
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return null;
-    }
-    throw error;
-  }
-}
 
 function readText(filePath) {
   try {
@@ -374,7 +361,7 @@ export function buildCodexConfigPreview({
   providerName = 'routerlab',
   serviceValue = providerName,
   baseUrl,
-  model = DEFAULT_CODEX_MODEL,
+  model = DEFAULT_CODEX_MODEL.routerlab,
   paths = getCodexPaths(),
   modelCatalogModels = CODEX_ROUTERLAB_MODELS,
 } = {}) {

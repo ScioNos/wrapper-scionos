@@ -2,90 +2,311 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { CODEX_LLM_MODELS, CODEX_ROUTERLAB_MODELS, applyCodexConfig, buildCodexConfigPreview, buildCodexModelCatalogFromCache, buildCodexRuntimeArgs, buildCodexThirdPartyConfig, cleanupCodexRuntimeModelCatalog, codexModelsForService, defaultCodexModelForService, readCodexStatus, restoreCodexConfig, writeCodexRuntimeModelCatalog } from '../src/apps/codex.js';
+import {
+  CODEX_ALLOWED_MODELS,
+  CODEX_LLM_MODELS,
+  CODEX_MODEL_CATALOG_FILENAME,
+  CODEX_ROUTERLAB_MODELS,
+  CODEX_RUNTIME_MODEL_CATALOG_DIR,
+  DEFAULT_CODEX_MODEL,
+  buildCodexCatalogFallback,
+  buildCodexCatalogFromUpstream,
+  buildCodexConfigPreview,
+  buildCodexRuntimeArgs,
+  buildCodexThirdPartyConfig,
+  cleanupCodexRuntimeModelCatalog,
+  cleanupStaleCodexRuntimeModelCatalogs,
+  codexModelsForService,
+  defaultCodexModelForService,
+  getCodexPaths,
+  readCodexStatus,
+  restoreCodexConfig,
+  writeCodexRuntimeModelCatalog,
+} from '../src/apps/codex.js';
 
-test('Codex template uses provider-scoped model provider config', () => {
-  assert.deepEqual(CODEX_ROUTERLAB_MODELS, [
-    'gpt-5.6-sol',
-    'gpt-5.6-terra',
-    'gpt-5.6-luna',
-    'deepseek-v4-pro',
-    'kimi-k2.7-code',
-    'glm-5.2',
-  ]);
-  assert.deepEqual(CODEX_LLM_MODELS, [
-    'gpt-5.6-sol',
-    'gpt-5.6-luna',
-    'gpt-5.6-terra',
-    'kimi-k3',
-    'grok-4.5',
-    'MiniMax-M3',
-  ]);
-  assert.deepEqual(codexModelsForService('routerlab'), CODEX_ROUTERLAB_MODELS);
-  assert.deepEqual(codexModelsForService('llm'), CODEX_LLM_MODELS);
+const ROUTERLAB_MODELS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'deepseek-v4-pro',
+  'kimi-k2.7-code',
+  'glm-5.2',
+];
+
+const LLM_MODELS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'kimi-k3',
+  'grok-4.5',
+  'MiniMax-M3',
+];
+
+function tempDirFor(t, label) {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), `.test-codex-${label}-`));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test('Codex model whitelist is service scoped', () => {
+  assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, ROUTERLAB_MODELS);
+  assert.deepEqual(CODEX_ALLOWED_MODELS.llm, LLM_MODELS);
+  assert.deepEqual(CODEX_ROUTERLAB_MODELS, ROUTERLAB_MODELS);
+  assert.deepEqual(CODEX_LLM_MODELS, LLM_MODELS);
+  assert.deepEqual(codexModelsForService('routerlab'), ROUTERLAB_MODELS);
+  assert.deepEqual(codexModelsForService('llm'), LLM_MODELS);
+  assert.deepEqual(codexModelsForService('unknown'), ROUTERLAB_MODELS);
+});
+
+test('Codex default model is gpt-5.6-sol for both services', () => {
+  assert.equal(DEFAULT_CODEX_MODEL.routerlab, 'gpt-5.6-sol');
+  assert.equal(DEFAULT_CODEX_MODEL.llm, 'gpt-5.6-sol');
   assert.equal(defaultCodexModelForService('routerlab'), 'gpt-5.6-sol');
   assert.equal(defaultCodexModelForService('llm'), 'gpt-5.6-sol');
+  assert.equal(defaultCodexModelForService('unknown'), 'gpt-5.6-sol');
+});
+
+test('Codex TOML template only declares provider routing', () => {
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
     model: 'deepseek-v4-pro',
   });
-  assert.match(config, /model_provider = "custom"/);
-  assert.match(config, /model = "deepseek-v4-pro"/);
-  assert.match(config, /\[model_providers\.custom\]/);
-  assert.match(config, /wire_api = "responses"/);
-  assert.match(config, /env_key = "OPENAI_API_KEY"/);
-  assert.doesNotMatch(config, /^web_search\s*=/m);
+  assert.match(config, /^model_provider = "custom"$/m);
+  assert.match(config, /^model = "deepseek-v4-pro"$/m);
+  assert.match(config, /^\[model_providers\.custom\]$/m);
+  assert.match(config, /^name = "routerlab"$/m);
+  assert.match(config, /^base_url = "https:\/\/api\.routerlab\.ch\/v1"$/m);
+  assert.match(config, /^wire_api = "responses"$/m);
+  assert.match(config, /^env_key = "OPENAI_API_KEY"$/m);
+  assert.doesNotMatch(config, /web_search/);
   assert.doesNotMatch(config, /requires_openai_auth/);
-  assert.match(config, /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
+  assert.doesNotMatch(config, /model_catalog_json/);
 });
 
-test('Codex runtime launch args configure provider without writing config', () => {
+test('Codex runtime args pass routing through -c overrides only', () => {
+  const args = buildCodexRuntimeArgs({
+    providerName: 'llm',
+    baseUrl: 'https://llm-api.routerlab.ch/v1',
+    model: 'kimi-k3',
+    modelCatalogPath: '/tmp/catalog.json',
+  });
+
+  assert.equal(args.filter((arg) => arg === '-c').length, 7);
+  assert.deepEqual(args.filter((arg) => arg !== '-c'), [
+    'model_provider="custom"',
+    'model="kimi-k3"',
+    'model_catalog_json="/tmp/catalog.json"',
+    'model_providers.custom.name="llm"',
+    'model_providers.custom.base_url="https://llm-api.routerlab.ch/v1"',
+    'model_providers.custom.wire_api="responses"',
+    'model_providers.custom.env_key="OPENAI_API_KEY"',
+  ]);
+  assert.equal(args.some((arg) => arg.includes('web_search')), false);
+});
+
+test('Codex runtime args omit the catalog override when no catalog exists', () => {
   const args = buildCodexRuntimeArgs({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
     model: 'gpt-5.6-sol',
-    modelCatalogPath: '/tmp/wrapper-scionos-model-catalog.json',
   });
-
-  assert.equal(args.filter((arg) => arg === '-c').length, 8);
-  assert.ok(args.includes('model_provider="custom"'));
-  assert.ok(args.includes('model="gpt-5.6-sol"'));
-  assert.ok(args.includes('model_catalog_json="/tmp/wrapper-scionos-model-catalog.json"'));
-  assert.ok(args.includes('web_search="disabled"'));
-  assert.ok(args.includes('model_providers.custom.name="routerlab"'));
-  assert.ok(args.includes('model_providers.custom.base_url="https://api.routerlab.ch/v1"'));
-  assert.ok(args.includes('model_providers.custom.wire_api="responses"'));
-  assert.ok(args.includes('model_providers.custom.env_key="OPENAI_API_KEY"'));
+  assert.equal(args.filter((arg) => arg === '-c').length, 6);
+  assert.equal(args.some((arg) => arg.startsWith('model_catalog_json')), false);
 });
 
-test('Codex launch args do not touch existing config files', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-launch-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const configPath = path.join(tempDir, 'config.toml');
-  const originalConfig = 'model_provider = "openai"\n';
-  fs.writeFileSync(configPath, originalConfig, 'utf8');
+test('Codex launch args never touch an existing config file', (t) => {
+  const dir = tempDirFor(t, 'launch-args');
+  const configPath = path.join(dir, 'config.toml');
+  const original = 'model_provider = "openai"\nmodel = "gpt-5"\n';
+  fs.writeFileSync(configPath, original, 'utf8');
 
   buildCodexRuntimeArgs({
-    providerName: 'llm',
-    baseUrl: 'https://llm-api.routerlab.ch/v1',
-    model: 'gpt-5.5',
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.6-sol',
+    modelCatalogPath: path.join(dir, 'catalog.json'),
   });
 
-  assert.equal(fs.readFileSync(configPath, 'utf8'), originalConfig);
+  assert.equal(fs.readFileSync(configPath, 'utf8'), original);
+  assert.deepEqual(fs.readdirSync(dir), ['config.toml']);
 });
 
-test('Codex config preview stays pure without touching auth state', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+test('Codex catalog uses upstream metadata when available', () => {
+  const catalog = buildCodexCatalogFromUpstream({
+    serviceValue: 'routerlab',
+    allowedModelIds: ROUTERLAB_MODELS,
+    upstreamModels: [
+      {
+        id: 'gpt-5.6-sol',
+        contextWindow: 372000,
+        inputModalities: ['text', 'image'],
+        supportsReasoning: true,
+        supportsParallelToolCalls: true,
+      },
+      { id: 'not-allowed', contextWindow: 999 },
+      {
+        id: 'glm-5.2',
+        contextWindow: 200000,
+        inputModalities: ['text'],
+        supportsReasoning: false,
+        supportsParallelToolCalls: false,
+      },
+    ],
+  });
 
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), ['gpt-5.6-sol', 'glm-5.2']);
+
+  const [sol, glm] = catalog.models;
+  assert.equal(sol.context_window, 372000);
+  assert.equal(sol.max_context_window, 372000);
+  assert.equal(sol.display_name, 'GPT 5.6 Sol');
+  assert.deepEqual(sol.input_modalities, ['text', 'image']);
+  assert.equal(sol.supports_image_detail_original, true);
+  assert.equal(sol.supports_reasoning_summaries, true);
+  assert.equal(sol.supports_parallel_tool_calls, true);
+  assert.equal(sol.priority, 1000);
+
+  assert.equal(glm.context_window, 200000);
+  assert.equal(glm.display_name, 'GLM 5.2');
+  assert.deepEqual(glm.input_modalities, ['text']);
+  assert.equal(glm.supports_image_detail_original, false);
+  assert.equal(glm.supports_reasoning_summaries, false);
+  assert.equal(glm.priority, 1001);
+});
+
+test('Codex catalog refuses to build when upstream matches nothing', () => {
+  assert.throws(() => buildCodexCatalogFromUpstream({
+    serviceValue: 'llm',
+    allowedModelIds: LLM_MODELS,
+    upstreamModels: [{ id: 'some-other-model' }],
+  }), /No upstream models matched/);
+});
+
+test('Codex fallback catalog stays minimal and neutral', () => {
+  const catalog = buildCodexCatalogFallback({
+    serviceValue: 'llm',
+    allowedModelIds: LLM_MODELS,
+  });
+
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), LLM_MODELS);
+  assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
+    'GPT 5.6 Sol',
+    'GPT 5.6 Terra',
+    'Kimi K3',
+    'Grok 4.5',
+    'MiniMax M3',
+  ]);
+
+  for (const entry of catalog.models) {
+    assert.equal(entry.context_window, 128000);
+    assert.equal(entry.max_context_window, 128000);
+    assert.equal(entry.default_reasoning_level, 'medium');
+    assert.deepEqual(entry.supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high']);
+    assert.deepEqual(entry.input_modalities, ['text']);
+    assert.equal(entry.visibility, 'list');
+    assert.equal(entry.supported_in_api, true);
+    assert.equal(entry.supports_search_tool, false);
+    assert.equal(typeof entry.base_instructions, 'string');
+    assert.ok(entry.base_instructions.length > 0);
+    assert.deepEqual(entry.truncation_policy, { mode: 'bytes', limit: 10000 });
+    assert.equal('model_messages' in entry, false);
+    assert.equal('comp_hash' in entry, false);
+    assert.equal('apply_patch_tool_type' in entry, false);
+    assert.equal('web_search_tool_type' in entry, false);
+  }
+});
+
+test('Codex runtime catalog is temporary, service scoped and upstream driven', (t) => {
+  const dir = tempDirFor(t, 'runtime-catalog');
+
+  const catalog = writeCodexRuntimeModelCatalog({
+    serviceValue: 'llm',
+    tmpDir: dir,
+    models: LLM_MODELS,
+    modelMetadata: LLM_MODELS.map((id, index) => ({
+      id,
+      contextWindow: 200000 + index,
+      inputModalities: ['text'],
+      supportsReasoning: true,
+      supportsParallelToolCalls: true,
+    })),
+  });
+
+  assert.ok(catalog.path.startsWith(path.join(dir, CODEX_RUNTIME_MODEL_CATALOG_DIR)));
+  assert.ok(path.basename(catalog.path).startsWith('llm-'));
+  assert.ok(catalog.path.endsWith(CODEX_MODEL_CATALOG_FILENAME));
+  assert.equal(catalog.modelCount, LLM_MODELS.length);
+  assert.deepEqual(catalog.models, LLM_MODELS);
+
+  const written = JSON.parse(fs.readFileSync(catalog.path, 'utf8'));
+  assert.deepEqual(written.models.map((entry) => entry.slug), LLM_MODELS);
+  assert.equal(written.models[0].context_window, 200000);
+
+  cleanupCodexRuntimeModelCatalog(catalog);
+  assert.equal(fs.existsSync(catalog.path), false);
+});
+
+test('Codex runtime catalog falls back when no upstream metadata is provided', (t) => {
+  const dir = tempDirFor(t, 'runtime-fallback');
+
+  const catalog = writeCodexRuntimeModelCatalog({
+    serviceValue: 'routerlab',
+    tmpDir: dir,
+    models: ROUTERLAB_MODELS,
+  });
+
+  const written = JSON.parse(fs.readFileSync(catalog.path, 'utf8'));
+  assert.deepEqual(written.models.map((entry) => entry.slug), ROUTERLAB_MODELS);
+  assert.equal(written.models[0].context_window, 128000);
+  cleanupCodexRuntimeModelCatalog(catalog);
+});
+
+test('Codex stale runtime catalogs are pruned by age', (t) => {
+  const dir = tempDirFor(t, 'stale-catalog');
+  const catalogDir = path.join(dir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
+  fs.mkdirSync(catalogDir, { recursive: true });
+
+  const stalePath = path.join(catalogDir, `routerlab-stale-${CODEX_MODEL_CATALOG_FILENAME}`);
+  const freshPath = path.join(catalogDir, `routerlab-fresh-${CODEX_MODEL_CATALOG_FILENAME}`);
+  const unrelatedPath = path.join(catalogDir, 'unrelated.json');
+  fs.writeFileSync(stalePath, '{}', 'utf8');
+  fs.writeFileSync(freshPath, '{}', 'utf8');
+  fs.writeFileSync(unrelatedPath, '{}', 'utf8');
+
+  const now = Date.now();
+  const old = new Date(now - (48 * 60 * 60 * 1000));
+  fs.utimesSync(stalePath, old, old);
+
+  const removed = cleanupStaleCodexRuntimeModelCatalogs({ tmpDir: dir, now });
+  assert.equal(removed, 1);
+  assert.equal(fs.existsSync(stalePath), false);
+  assert.equal(fs.existsSync(freshPath), true);
+  assert.equal(fs.existsSync(unrelatedPath), true);
+});
+
+test('Codex stale cleanup tolerates a missing catalog directory', (t) => {
+  const dir = tempDirFor(t, 'stale-missing');
+  assert.equal(cleanupStaleCodexRuntimeModelCatalogs({ tmpDir: dir }), 0);
+});
+
+test('Codex paths honour CODEX_HOME', (t) => {
+  const dir = tempDirFor(t, 'paths');
+  const paths = getCodexPaths({ CODEX_HOME: dir });
+  assert.equal(paths.configDir, dir);
+  assert.equal(paths.configPath, path.join(dir, 'config.toml'));
+  assert.equal(paths.authPath, path.join(dir, 'auth.json'));
+  assert.equal(paths.modelCatalogPath, path.join(dir, CODEX_MODEL_CATALOG_FILENAME));
+});
+
+test('Codex config preview never writes to disk', (t) => {
+  const dir = tempDirFor(t, 'preview');
   const paths = {
-    configDir: tempDir,
-    authPath: path.join(tempDir, 'auth.json'),
-    configPath: path.join(tempDir, 'config.toml'),
+    configDir: dir,
+    authPath: path.join(dir, 'auth.json'),
+    configPath: path.join(dir, 'config.toml'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
   };
-  const auth = { OPENAI_API_KEY: 'existing-key', tokens: { chatgpt: true } };
+  const auth = { OPENAI_API_KEY: 'existing-key' };
   fs.writeFileSync(paths.authPath, JSON.stringify(auth), 'utf8');
 
   const preview = buildCodexConfigPreview({
@@ -94,78 +315,24 @@ test('Codex config preview stays pure without touching auth state', (t) => {
     model: 'gpt-5.6-sol',
     paths,
   });
-  assert.equal(preview.dryRun, true);
-  assert.equal(preview.changed, true);
-  assert.equal(fs.existsSync(paths.configPath), false);
 
-  const compatibilityPreview = applyCodexConfig({
-    providerName: 'routerlab',
-    baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.6-sol',
-    paths,
-    dryRun: false,
-  });
-  assert.equal(compatibilityPreview.dryRun, true);
-  assert.equal(compatibilityPreview.authPreserved, true);
-  assert.equal(compatibilityPreview.backupCreated, false);
-  assert.match(compatibilityPreview.config, /base_url = "https:\/\/api\.routerlab\.ch\/v1"/);
+  assert.equal(preview.dryRun, true);
+  assert.equal(preview.authPreserved, true);
+  assert.equal(preview.catalog.modelCount, ROUTERLAB_MODELS.length);
+  assert.deepEqual(preview.catalog.models, ROUTERLAB_MODELS);
+  assert.match(preview.config, /model_catalog_json = /);
   assert.equal(fs.existsSync(paths.configPath), false);
+  assert.equal(fs.existsSync(paths.modelCatalogPath), false);
   assert.deepEqual(JSON.parse(fs.readFileSync(paths.authPath, 'utf8')), auth);
 });
 
-test('Codex restore brings back the previous config and removes wrapper catalog', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-restore-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
+test('Codex status summarises files without leaking config content', (t) => {
+  const dir = tempDirFor(t, 'status');
   const paths = {
-    configDir: tempDir,
-    authPath: path.join(tempDir, 'auth.json'),
-    configPath: path.join(tempDir, 'config.toml'),
-    backupPath: path.join(tempDir, 'config.toml.wrapper-scionos-backup'),
-    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
-  };
-  const originalConfig = 'model_provider = "openai"\nmodel = "gpt-5"\n';
-  const wrapperConfig = buildCodexThirdPartyConfig({
-    providerName: 'llm',
-    baseUrl: 'https://llm-api.routerlab.ch/v1',
-    model: 'gpt-5.5',
-  });
-  fs.writeFileSync(paths.configPath, `${wrapperConfig}\n`, 'utf8');
-  fs.writeFileSync(paths.backupPath, originalConfig, 'utf8');
-  fs.writeFileSync(paths.modelCatalogPath, JSON.stringify({ models: [] }), 'utf8');
-  fs.writeFileSync(paths.authPath, JSON.stringify({ OPENAI_API_KEY: 'existing-key' }), 'utf8');
-  assert.match(fs.readFileSync(paths.configPath, 'utf8'), /llm-api\.routerlab\.ch/);
-
-  const restored = restoreCodexConfig({ paths, dryRun: false });
-  assert.equal(restored.restoredFromBackup, true);
-  assert.equal(fs.existsSync(restored.paths.backupPath), false);
-  assert.equal(fs.readFileSync(paths.configPath, 'utf8'), originalConfig);
-  assert.equal(fs.existsSync(paths.modelCatalogPath), false);
-  assert.equal(fs.existsSync(paths.authPath), true);
-});
-
-test('Codex restore refuses to remove non-wrapper config without backup', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-restore-refuse-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const paths = {
-    configDir: tempDir,
-    configPath: path.join(tempDir, 'config.toml'),
-  };
-  fs.writeFileSync(paths.configPath, 'model_provider = "openai"\n', 'utf8');
-
-  assert.throws(() => restoreCodexConfig({ paths, dryRun: false }), /Refusing to remove/);
-});
-
-test('Codex status reports summary without raw config content', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-status-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const paths = {
-    configDir: tempDir,
-    authPath: path.join(tempDir, 'auth.json'),
-    configPath: path.join(tempDir, 'config.toml'),
-    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+    configDir: dir,
+    authPath: path.join(dir, 'auth.json'),
+    configPath: path.join(dir, 'config.toml'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
   };
   fs.writeFileSync(paths.configPath, buildCodexThirdPartyConfig({
     providerName: 'routerlab',
@@ -177,216 +344,93 @@ test('Codex status reports summary without raw config content', (t) => {
   assert.equal(status.configExists, true);
   assert.equal(status.wrapperConfig, true);
   assert.equal(status.routerlabEndpoint, true);
+  assert.equal(status.authExists, false);
+  assert.equal(status.modelCatalogExists, false);
   assert.equal(Object.hasOwn(status, 'config'), false);
 });
 
-test('Codex template preview includes model_catalog_json when Codex model cache is available', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-catalog-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
+test('Codex restore reports what it would do in dry-run mode', (t) => {
+  const dir = tempDirFor(t, 'restore-dry');
   const paths = {
-    configDir: tempDir,
-    authPath: path.join(tempDir, 'auth.json'),
-    configPath: path.join(tempDir, 'config.toml'),
-    modelsCachePath: path.join(tempDir, 'models_cache.json'),
-    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
+    configDir: dir,
+    configPath: path.join(dir, 'config.toml'),
+    backupPath: path.join(dir, 'config.toml.wrapper-scionos-backup'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
   };
-  fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
-    models: [{
-      slug: 'gpt-5.6-sol',
-      display_name: 'GPT 5.6 Sol',
-      model_messages: { instructions_template: 'template' },
-      base_instructions: 'base',
-      context_window: 272000,
-      additional_speed_tiers: ['fast'],
-      availability_nux: { message: 'launch' },
-    }],
-  }), 'utf8');
-
-  const catalog = buildCodexModelCatalogFromCache({ paths });
-  assert.equal(catalog.models[3].slug, 'deepseek-v4-pro');
-  assert.equal(catalog.models[3].display_name, 'DeepSeek V4 Pro');
-  assert.deepEqual(catalog.models[3].additional_speed_tiers, []);
-  assert.equal(catalog.models[3].availability_nux, null);
-  assert.equal(catalog.models[3].context_window, 1000000);
-  assert.equal('model_messages' in catalog.models[3], false);
-
-  const preview = buildCodexConfigPreview({
-    providerName: 'routerlab',
-    baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.6-sol',
-    paths,
-    dryRun: false,
-  });
-  assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
-  assert.equal(preview.catalog.models[4], 'kimi-k2.7-code');
-  assert.match(preview.config, /model_catalog_json = /);
-  assert.equal(fs.existsSync(paths.configPath), false);
-  assert.equal(fs.existsSync(paths.modelCatalogPath), false);
-});
-
-test('Codex template preview includes fallback model_catalog_json without local Codex cache', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-fallback-catalog-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const paths = {
-    configDir: tempDir,
-    configPath: path.join(tempDir, 'config.toml'),
-    modelsCachePath: path.join(tempDir, 'missing-models-cache.json'),
-    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
-  };
-
-  const catalog = buildCodexModelCatalogFromCache({ paths });
-  assert.deepEqual(catalog.models.map((entry) => entry.slug), CODEX_ROUTERLAB_MODELS);
-  assert.equal(catalog.models[0].slug, 'gpt-5.6-sol');
-  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol');
-  assert.equal(catalog.models[0].supported_in_api, true);
-  assert.equal(catalog.models[0].default_reasoning_level, 'low');
-  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
-  assert.equal(catalog.models[0].context_window, 372000);
-  assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[1].default_reasoning_level, 'medium');
-  assert.deepEqual(catalog.models[1].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
-  assert.equal(catalog.models[1].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[2].display_name, 'GPT 5.6 Luna');
-  assert.equal(catalog.models[2].default_reasoning_level, 'medium');
-  assert.deepEqual(catalog.models[2].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.equal(catalog.models[2].supports_parallel_tool_calls, true);
-  assert.deepEqual(catalog.models[3].supported_reasoning_levels.map((level) => level.effort), ['none', 'high', 'max']);
-  assert.equal(catalog.models[4].slug, 'kimi-k2.7-code');
-  assert.equal(catalog.models[4].display_name, 'Kimi K2.7 Code');
-  assert.equal(catalog.models[4].visibility, 'list');
-  assert.equal(catalog.models[4].context_window, 262144);
-  assert.equal(typeof catalog.models[4].base_instructions, 'string');
-  assert.equal(catalog.models[4].base_instructions.length > 0, true);
-  assert.equal('model_messages' in catalog.models[4], false);
-  assert.equal('comp_hash' in catalog.models[4], false);
-  assert.deepEqual(catalog.models[4].input_modalities, ['text', 'image']);
-  assert.equal(catalog.models[4].supports_parallel_tool_calls, false);
-  assert.deepEqual(catalog.models[4].supported_reasoning_levels.map((level) => level.effort), ['high']);
-  assert.equal('apply_patch_tool_type' in catalog.models[4], false);
-  assert.equal('web_search_tool_type' in catalog.models[4], false);
-  assert.deepEqual(catalog.models[4].truncation_policy, { mode: 'bytes', limit: 10000 });
-  assert.equal(catalog.models[4].supports_search_tool, false);
-  assert.deepEqual(catalog.models[5].supported_reasoning_levels.map((level) => level.effort), ['none', 'high']);
-
-  const preview = buildCodexConfigPreview({
-    providerName: 'routerlab',
-    baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'gpt-5.6-sol',
-    paths,
-    dryRun: false,
-  });
-  assert.equal(preview.catalog.modelCount, CODEX_ROUTERLAB_MODELS.length);
-  assert.equal(preview.catalog.models[4], 'kimi-k2.7-code');
-  assert.match(preview.config, /model_catalog_json = /);
-
-  const runtimeCatalog = writeCodexRuntimeModelCatalog({ paths, tmpDir: tempDir });
-  assert.deepEqual(runtimeCatalog.models, CODEX_ROUTERLAB_MODELS);
-  const written = JSON.parse(fs.readFileSync(runtimeCatalog.path, 'utf8'));
-  assert.equal(written.models[4].slug, 'kimi-k2.7-code');
-  assert.equal(typeof written.models[4].base_instructions, 'string');
-  assert.equal('model_messages' in written.models[4], false);
-  cleanupCodexRuntimeModelCatalog(runtimeCatalog);
-  assert.equal(fs.existsSync(runtimeCatalog.path), false);
-});
-
-test('Codex template preview builds LLM-specific model catalog for llm service', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-llm-catalog-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const paths = {
-    configDir: tempDir,
-    configPath: path.join(tempDir, 'config.toml'),
-    modelsCachePath: path.join(tempDir, 'models_cache.json'),
-    modelCatalogPath: path.join(tempDir, 'wrapper-scionos-model-catalog.json'),
-  };
-  fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
-    models: [{
-      slug: 'gpt-5.6-sol',
-      display_name: 'GPT 5.6 Sol',
-      context_window: 272000,
-    }],
-  }), 'utf8');
-
-  const preview = buildCodexConfigPreview({
+  fs.writeFileSync(paths.configPath, buildCodexThirdPartyConfig({
     providerName: 'llm',
     baseUrl: 'https://llm-api.routerlab.ch/v1',
-    model: defaultCodexModelForService('llm'),
-    modelCatalogModels: codexModelsForService('llm'),
-    paths,
-    dryRun: false,
-  });
-  assert.match(preview.config, /model = "gpt-5\.6-sol"/);
-  assert.deepEqual(preview.catalog.models, CODEX_LLM_MODELS);
-  const catalog = buildCodexModelCatalogFromCache({
-    paths,
-    models: CODEX_LLM_MODELS,
-    serviceValue: 'llm',
-  });
-  assert.equal(catalog.models[0].display_name, 'GPT 5.6 Sol');
-  assert.equal(catalog.models[0].default_reasoning_level, 'low');
-  assert.deepEqual(catalog.models[0].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
-  assert.equal(catalog.models[0].context_window, 372000);
-  assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
-  assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[0].supported_in_api, true);
-  assert.equal(catalog.models[1].display_name, 'GPT 5.6 Luna');
-  assert.equal(catalog.models[1].default_reasoning_level, 'medium');
-  assert.deepEqual(catalog.models[1].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max']);
-  assert.equal(catalog.models[1].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[1].supported_in_api, true);
-  assert.equal(catalog.models[2].default_reasoning_level, 'medium');
-  assert.deepEqual(catalog.models[2].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
-  assert.equal(catalog.models[2].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[3].display_name, 'Kimi K3');
-  assert.equal(catalog.models[3].context_window, 1048576);
-  assert.equal(catalog.models[3].default_reasoning_level, 'max');
-  assert.deepEqual(catalog.models[3].supported_reasoning_levels.map((level) => level.effort), ['low', 'high', 'max']);
-  assert.equal(catalog.models[4].display_name, 'Grok 4.5');
-  assert.equal(catalog.models[4].context_window, 500000);
-  assert.equal(catalog.models[4].default_reasoning_level, 'high');
-  assert.deepEqual(catalog.models[4].supported_reasoning_levels.map((level) => level.effort), ['low', 'medium', 'high']);
-  assert.equal(catalog.models[4].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[5].display_name, 'MiniMax M3');
-  assert.equal(catalog.models[5].context_window, 1000000);
-  assert.equal(catalog.models[5].default_reasoning_level, 'high');
-  assert.deepEqual(catalog.models[5].supported_reasoning_levels.map((level) => level.effort), ['none', 'high']);
-  assert.equal(catalog.models[5].supports_parallel_tool_calls, true);
-  assert.equal('apply_patch_tool_type' in catalog.models[5], false);
-  assert.equal('web_search_tool_type' in catalog.models[5], false);
-  assert.equal('model_messages' in catalog.models[5], false);
-  assert.equal(fs.existsSync(paths.configPath), false);
-  assert.equal(fs.existsSync(paths.modelCatalogPath), false);
-});
-
-test('Codex runtime catalog is temporary and service-scoped', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-runtime-catalog-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const paths = {
-    configDir: tempDir,
-    modelsCachePath: path.join(tempDir, 'models_cache.json'),
-  };
-  fs.writeFileSync(paths.modelsCachePath, JSON.stringify({
-    models: [{
-      slug: 'gpt-5.5',
-      display_name: 'GPT 5.5',
-      context_window: 272000,
-    }],
+    model: 'kimi-k3',
   }), 'utf8');
 
-  const catalog = writeCodexRuntimeModelCatalog({
-    serviceValue: 'llm',
-    paths,
-    tmpDir: tempDir,
-  });
-
-  assert.ok(catalog.path.startsWith(tempDir));
-  assert.deepEqual(catalog.models, CODEX_LLM_MODELS);
-  const written = JSON.parse(fs.readFileSync(catalog.path, 'utf8'));
-  assert.deepEqual(written.models.map((entry) => entry.slug), CODEX_LLM_MODELS);
-
-  cleanupCodexRuntimeModelCatalog(catalog);
-  assert.equal(fs.existsSync(catalog.path), false);
+  const result = restoreCodexConfig({ paths, dryRun: true });
+  assert.equal(result.dryRun, true);
+  assert.equal(result.canRestore, true);
+  assert.equal(result.wrapperConfig, true);
+  assert.equal(result.backupExists, false);
+  assert.equal(fs.existsSync(paths.configPath), true);
 });
+
+test('Codex restore brings back a backup and drops the wrapper catalog', (t) => {
+  const dir = tempDirFor(t, 'restore-apply');
+  const paths = {
+    configDir: dir,
+    authPath: path.join(dir, 'auth.json'),
+    configPath: path.join(dir, 'config.toml'),
+    backupPath: path.join(dir, 'config.toml.wrapper-scionos-backup'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
+  };
+  const original = 'model_provider = "openai"\nmodel = "gpt-5"\n';
+  fs.writeFileSync(paths.configPath, `${buildCodexThirdPartyConfig({
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.6-sol',
+  })}\n`, 'utf8');
+  fs.writeFileSync(paths.backupPath, original, 'utf8');
+  fs.writeFileSync(paths.modelCatalogPath, '{"models":[]}', 'utf8');
+  fs.writeFileSync(paths.authPath, '{"OPENAI_API_KEY":"existing-key"}', 'utf8');
+
+  const result = restoreCodexConfig({ paths, dryRun: false });
+  assert.equal(result.restoredFromBackup, true);
+  assert.equal(result.removedModelCatalog, true);
+  assert.equal(result.authPreserved, true);
+  assert.equal(fs.readFileSync(paths.configPath, 'utf8'), original);
+  assert.equal(fs.existsSync(paths.backupPath), false);
+  assert.equal(fs.existsSync(paths.modelCatalogPath), false);
+  assert.equal(fs.existsSync(paths.authPath), true);
+});
+
+test('Codex restore removes a wrapper config when no backup exists', (t) => {
+  const dir = tempDirFor(t, 'restore-wrapper');
+  const paths = {
+    configDir: dir,
+    configPath: path.join(dir, 'config.toml'),
+    backupPath: path.join(dir, 'config.toml.wrapper-scionos-backup'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
+  };
+  fs.writeFileSync(paths.configPath, buildCodexThirdPartyConfig({
+    providerName: 'routerlab',
+    baseUrl: 'https://api.routerlab.ch/v1',
+    model: 'gpt-5.6-sol',
+  }), 'utf8');
+
+  const result = restoreCodexConfig({ paths, dryRun: false });
+  assert.equal(result.removedWrapperConfig, true);
+  assert.equal(result.restoredFromBackup, false);
+  assert.equal(fs.existsSync(paths.configPath), false);
+});
+
+test('Codex restore refuses to delete a foreign config without backup', (t) => {
+  const dir = tempDirFor(t, 'restore-refuse');
+  const paths = {
+    configDir: dir,
+    configPath: path.join(dir, 'config.toml'),
+    backupPath: path.join(dir, 'config.toml.wrapper-scionos-backup'),
+    modelCatalogPath: path.join(dir, CODEX_MODEL_CATALOG_FILENAME),
+  };
+  fs.writeFileSync(paths.configPath, 'model_provider = "openai"\n', 'utf8');
+
+  assert.throws(() => restoreCodexConfig({ paths, dryRun: false }), /Refusing to remove/);
+  assert.equal(fs.existsSync(paths.configPath), true);
+});
+

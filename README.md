@@ -127,7 +127,7 @@ The default Codex path is the session-local proxy:
 The Codex catalogs are restricted to these models, in menu order:
 
 - `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
-- `llm`: `gpt-5.6-sol`, `gpt-5.6-luna`, `gpt-5.6-terra`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
+- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
 
 Before resolving a token or opening the proxy, Codex validates the selected service endpoint as HTTP(S) and validates an explicit `--token`. An HTTP 401/403 from model discovery stops the launch with service-specific `auth status`, `auth test`, and `auth login` guidance. If discovery succeeds, the requested or default model must be present in the verified Codex-compatible service catalog; otherwise the wrapper lists the available models and refuses to launch. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings and use the conservative local catalog.
 

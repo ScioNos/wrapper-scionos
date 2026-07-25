@@ -150,7 +150,7 @@ function isWrapperCodexConfig(config) {
 }
 
 function hasRouterlabEndpoint(config) {
-  return Boolean(config && /https:\/\/(api\.|llm-api\.)?routerlab\.ch\/v1/.test(config));
+  return Boolean(config && /^\s*base_url\s*=\s*["']https:\/\/(?:api|llm-api)\.routerlab\.ch\/v1\/?["']\s*(?:#.*)?$/m.test(config));
 }
 
 
@@ -209,26 +209,25 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
   const backupConfig = readText(resolvedPaths.backupPath);
   const wrapperConfig = isWrapperCodexConfig(currentConfig);
   const catalogExists = fs.existsSync(resolvedPaths.modelCatalogPath);
+  const backupExists = backupConfig !== null;
+  const manualCleanupRequired = Boolean(wrapperConfig && !backupExists);
 
   if (dryRun) {
     return {
       dryRun: true,
       paths: resolvedPaths,
-      canRestore: Boolean(backupConfig || wrapperConfig || catalogExists),
-      backupExists: Boolean(backupConfig),
+      canRestore: Boolean(backupExists || catalogExists),
+      backupExists,
       wrapperConfig,
       modelCatalogExists: catalogExists,
+      manualCleanupRequired,
       authPreserved: true,
     };
   }
 
-  if (backupConfig) {
+  if (backupExists) {
     writeTextAtomic(resolvedPaths.configPath, `${backupConfig}\n`);
     fs.rmSync(resolvedPaths.backupPath, { force: true });
-  } else if (wrapperConfig) {
-    fs.rmSync(resolvedPaths.configPath, { force: true });
-  } else if (currentConfig) {
-    throw new Error('Codex config does not look like a wrapper-scionos config, and no backup exists. Refusing to remove it automatically.');
   }
 
   if (catalogExists) {
@@ -238,9 +237,11 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
   return {
     dryRun: false,
     paths: resolvedPaths,
-    restoredFromBackup: Boolean(backupConfig),
-    removedWrapperConfig: !backupConfig && wrapperConfig,
+    restoredFromBackup: backupExists,
+    removedWrapperConfig: false,
     removedModelCatalog: catalogExists,
+    preservedConfig: Boolean(currentConfig && !backupExists),
+    manualCleanupRequired,
     authPreserved: true,
   };
 }
@@ -250,13 +251,16 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
 export function readCodexStatus(paths = getCodexPaths()) {
   const resolvedPaths = resolveCodexPaths(paths);
   const config = readText(resolvedPaths.configPath);
+  const backupExists = fs.existsSync(resolvedPaths.backupPath);
+  const wrapperConfig = isWrapperCodexConfig(config);
   return {
     paths: resolvedPaths,
     configExists: fs.existsSync(resolvedPaths.configPath),
-    backupExists: fs.existsSync(resolvedPaths.backupPath),
+    backupExists,
     authExists: fs.existsSync(resolvedPaths.authPath),
     modelCatalogExists: fs.existsSync(resolvedPaths.modelCatalogPath),
-    wrapperConfig: isWrapperCodexConfig(config),
+    wrapperConfig,
     routerlabEndpoint: hasRouterlabEndpoint(config),
+    manualCleanupRequired: Boolean(wrapperConfig && !backupExists),
   };
 }

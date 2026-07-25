@@ -143,6 +143,15 @@ test('central command registry drives non-interactive help and diagnostic comman
   assert.equal(output.join('\n').includes('test-token-with-sufficient-length'), false);
 });
 test('model discovery handles metadata, invalid JSON, auth failures, and timeouts', async (t) => {
+  let redirectedRequestHeaders = null;
+  const redirectTarget = http.createServer((req, res) => {
+    redirectedRequestHeaders = req.headers;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"data":[{"id":"redirected"}]}');
+  });
+  await new Promise((resolve) => redirectTarget.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => redirectTarget.close(resolve)));
+
   const server = http.createServer((req, res) => {
     if (req.url === '/valid/v1/models') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -152,6 +161,11 @@ test('model discovery handles metadata, invalid JSON, auth failures, and timeout
       res.end('not json');
     } else if (req.url === '/auth/v1/models') {
       res.writeHead(403);
+      res.end();
+    } else if (req.url === '/redirect/v1/models') {
+      res.writeHead(302, {
+        location: `http://127.0.0.1:${redirectTarget.address().port}/v1/models`,
+      });
       res.end();
     }
   });
@@ -163,6 +177,10 @@ test('model discovery handles metadata, invalid JSON, auth failures, and timeout
   assert.equal(valid.modelMetadata[0].contextWindow, 64000);
   assert.equal((await fetchModels('token', { baseUrl: base + '/invalid' })).reason, 'invalid_response');
   assert.equal((await fetchModels('token', { baseUrl: base + '/auth' })).reason, 'auth_failed');
+  const redirected = await fetchModels('sensitive-token', { baseUrl: base + '/redirect' });
+  assert.equal(redirected.reason, 'redirect_not_allowed');
+  assert.equal(redirected.status, 302);
+  assert.equal(redirectedRequestHeaders, null);
   assert.equal((await fetchModels('token', { baseUrl: base + '/missing', timeoutMs: 20 })).reason, 'timeout');
 });
 

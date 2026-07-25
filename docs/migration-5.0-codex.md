@@ -26,13 +26,19 @@ Version 5.0 fundamentally changes how wrapper-scionos interacts with Codex:
 - the RouterLab token passed unchanged as child-only `OPENAI_API_KEY`;
 - no catalog or behavioral metadata.
 
+Arguments after `--` remain native Codex arguments, but provider, model, profile, alternate-provider, and remote-transport overrides are rejected because they would bypass the RouterLab routing selected by the wrapper. Model discovery also rejects every HTTP redirect instead of forwarding the service token to another origin.
+
 **Impact:**
 
 Codex owns its context window, instructions, reasoning, modalities, tools, and compaction behavior. RouterLab/LiteLLM remains authoritative if the model is changed after launch.
 
+The RouterLab-only destination guarantee is limited to model discovery and inference traffic configured by the wrapper. It does not cover independent network activity from the official Codex binary or user-configured native features such as update checks, MCP, tools, and search. Version 5.0 deliberately leaves those Codex features unchanged.
+
 **Migration:**
 
 Remove any automation that expects a local Codex proxy or a generated catalog.
+
+Legacy `codex restore` restores a known wrapper backup when present. Without that backup it preserves `config.toml`, reports that manual cleanup is required, and only removes the dedicated legacy model catalog.
 
 ---
 

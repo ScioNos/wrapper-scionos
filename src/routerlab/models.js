@@ -170,12 +170,22 @@ export async function fetchModels(apiKey, options = {}) {
   try {
     const response = await fetch(`${normalizedBaseUrl}/v1/models`, {
       method: 'GET',
+      redirect: 'manual',
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': anthropicVersion,
       },
       signal: controller.signal,
     });
+
+    if (response.status >= 300 && response.status < 400) {
+      return {
+        valid: false,
+        reason: 'redirect_not_allowed',
+        status: response.status,
+        message: 'Model discovery redirects are not allowed',
+      };
+    }
 
     if (response.ok) {
       let payload;

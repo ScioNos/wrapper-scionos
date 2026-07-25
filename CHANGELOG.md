@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0-beta.1] - 2026-07-25
+
+### Security
+
+- Reject Codex passthrough options that can replace the RouterLab provider, selected model, configuration profile, local provider, or remote app-server transport.
+- Reject every `/v1/models` redirect without forwarding the RouterLab token or discovery headers to another origin.
+- Preserve `config.toml` when no known wrapper backup exists; legacy status/restore now reports that manual cleanup is required while retaining independent catalog cleanup.
+
+### Documentation
+
+- Define the RouterLab-only guarantee as the model discovery and inference traffic configured by the wrapper, without changing unrelated native Codex networking or integrations.
+
 ## [5.0.0-alpha.1] - 2026-07-25
 
 ### Breaking Changes

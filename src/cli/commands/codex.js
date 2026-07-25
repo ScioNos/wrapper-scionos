@@ -7,6 +7,7 @@ import {
 } from '../../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
+import { CliUsageError } from '../args.js';
 import {
   assertCodexCliAvailable,
   buildCodexConfigPreview,
@@ -31,6 +32,7 @@ const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
 
 export async function launchCodexForService(options, dependencies = {}) {
   const deps = { ...DEFAULT_CODEX_DEPENDENCIES, ...dependencies };
+  const forwarded = validateCodexForwardedArgs(options.forwarded ?? []);
   const codex = deps.assertCodexCliAvailable();
   const serviceConfig = requireServiceConfig(options.service);
   const baseResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
@@ -89,7 +91,7 @@ export async function launchCodexForService(options, dependencies = {}) {
   });
   return deps.launchCodex({
     apiKey: resolvedToken.token,
-    codexArgs: [...codexArgs, ...(options.forwarded ?? [])],
+    codexArgs: [...codexArgs, ...forwarded],
     codex,
     updateProcessExitCode: options.updateProcessExitCode ?? true,
   });
@@ -130,6 +132,38 @@ export async function handleCodex(action, options) {
 export function availableCodexModels(serviceValue, discoveredModelIds = []) {
   const discovered = new Set(discoveredModelIds);
   return codexModelsForService(serviceValue).filter((model) => discovered.has(model));
+}
+
+const BLOCKED_CODEX_FORWARDED_OPTIONS = new Set([
+  '-c',
+  '--config',
+  '-m',
+  '--model',
+  '--oss',
+  '--local-provider',
+  '-p',
+  '--profile',
+  '--remote',
+  '--remote-auth-token-env',
+]);
+
+const BLOCKED_CODEX_ATTACHED_SHORT_OPTIONS = ['-c', '-m', '-p'];
+
+export function validateCodexForwardedArgs(forwarded = []) {
+  for (const argument of forwarded) {
+    const value = String(argument);
+    const option = value.match(/^(--[^=]+)=/)?.[1] ?? value;
+    const attachedShortOption = BLOCKED_CODEX_ATTACHED_SHORT_OPTIONS.find(
+      (candidate) => value.startsWith(candidate) && value.length > candidate.length,
+    );
+    if (BLOCKED_CODEX_FORWARDED_OPTIONS.has(option) || attachedShortOption) {
+      const blocked = attachedShortOption ?? option;
+      throw new CliUsageError(
+        `${blocked} cannot be forwarded to Codex because RouterLab controls the model provider and model selection. Use the wrapper --model option before --.`,
+      );
+    }
+  }
+  return [...forwarded];
 }
 
 export async function resolveCodexLaunchModel({

@@ -8,6 +8,7 @@ import {
   codexModelUnavailableError,
   handleCodex,
   resolveCodexLaunchModel,
+  validateCodexForwardedArgs,
 } from '../src/cli/commands/codex.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 
@@ -20,6 +21,39 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
     availableCodexModels('llm', ['MiniMax-M3', 'gpt-5.6-luna']),
     ['gpt-5.6-luna', 'MiniMax-M3'],
   );
+});
+
+test('Codex forwarded arguments preserve native options but cannot replace RouterLab routing', () => {
+  const allowed = ['exec', '--sandbox', 'workspace-write', '--enable', 'feature-a', 'prompt'];
+  assert.deepEqual(validateCodexForwardedArgs(allowed), allowed);
+
+  for (const blocked of [
+    ['-c', 'model="other"'],
+    ['-cmodel="other"'],
+    ['--config', 'model="other"'],
+    ['--config=model="other"'],
+    ['-m', 'other'],
+    ['-mother'],
+    ['--model', 'other'],
+    ['--model=other'],
+    ['--oss'],
+    ['--oss=true'],
+    ['--local-provider', 'ollama'],
+    ['--local-provider=ollama'],
+    ['-p', 'other'],
+    ['-pother'],
+    ['--profile', 'other'],
+    ['--profile=other'],
+    ['--remote', 'wss://example.test'],
+    ['--remote=wss://example.test'],
+    ['--remote-auth-token-env', 'OPENAI_API_KEY'],
+    ['--remote-auth-token-env=OPENAI_API_KEY'],
+  ]) {
+    assert.throws(
+      () => validateCodexForwardedArgs(blocked),
+      (error) => error.exitCode === 2 && /cannot be forwarded/.test(error.message),
+    );
+  }
 });
 
 test('Codex exact requested model is preserved and never substituted', async () => {
@@ -86,6 +120,7 @@ test('Codex discovery and authentication errors are explicit', () => {
     { reason: 'network_error', message: 'connection refused' },
     { reason: 'timeout', message: 'timed out' },
     { reason: 'invalid_response', message: 'invalid JSON' },
+    { reason: 'redirect_not_allowed', status: 302, message: 'redirect refused' },
     { reason: 'server_error', status: 500, statusText: 'Internal Server Error' },
     { reason: 'models_unavailable', message: 'No allowed Codex model is currently available' },
   ]) {

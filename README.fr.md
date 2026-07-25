@@ -129,15 +129,19 @@ Avant le lancement, `GET /v1/models` sert uniquement à croiser cette liste avec
 
 Tous les échecs de découverte bloquent le lancement : erreur réseau, timeout, JSON invalide, HTTP 401/403, erreur serveur ou intersection vide. Les options `--direct`, `--proxy` et `--transport` ont été supprimées, car l’accès direct est désormais le seul transport Codex.
 
-La session reçoit seulement six surcharges Codex : `model_provider`, `model`, le `name` du fournisseur, son `base_url`, `wire_api="responses"` et `env_key="OPENAI_API_KEY"`. Le token RouterLab est transmis sans modification au processus Codex via `OPENAI_API_KEY` ; les arguments après `--` sont conservés.
+La session reçoit seulement six surcharges Codex : `model_provider`, `model`, le `name` du fournisseur, son `base_url`, `wire_api="responses"` et `env_key="OPENAI_API_KEY"`. Le token RouterLab est transmis sans modification au processus Codex via `OPENAI_API_KEY`. Les arguments natifs après `--` sont conservés, sauf ceux qui peuvent remplacer le routage ou la sélection validés par le wrapper : `-c`/`--config`, `-m`/`--model`, `--oss`, `--local-provider`, `-p`/`--profile`, `--remote` et `--remote-auth-token-env`. Utilise `--model` avant `--` pour choisir un modèle RouterLab autorisé.
 
 Le wrapper ne génère aucun catalogue. Il ne fournit ni fenêtre de contexte, ni instructions, ni niveaux de raisonnement, ni modalités, ni déclaration de shell/outils, ni recherche, troncature ou priorité. Il ne modifie pas non plus le sandbox, les approbations, MCP, les hooks ou les fichiers d’authentification. Codex conserve son comportement natif et son propre sélecteur après le démarrage ; RouterLab/LiteLLM reste l’autorité finale pour tout changement ultérieur de modèle.
 
 Les destinations de production sont fixes : `routerlab` utilise `https://api.routerlab.ch/v1` et `llm` utilise `https://llm-api.routerlab.ch/v1`. Les valeurs utilisateur de `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL` et `ANTHROPIC_BASE_URL` sont ignorées avec un avertissement. Les variables de token restent prises en charge.
 
+### Périmètre de l’exclusivité RouterLab
+
+L’exclusivité RouterLab concerne uniquement le trafic de découverte et d’inférence des modèles configuré par le wrapper : liste des modèles et requêtes Responses du fournisseur sélectionné. Elle ne limite pas les fonctions réseau indépendantes du binaire officiel Codex, notamment ses vérifications de mise à jour, MCP, outils, recherche ou autres intégrations natives configurées par l’utilisateur. Le wrapper ne désactive, ne remplace et n’enrichit pas ces fonctions natives.
+
 Quand Codex est choisi depuis le menu interactif, un échec de démarrage ou une sortie Codex non nulle affiche l’erreur et revient au menu principal. Une sortie Codex normale ferme le wrapper. Les commandes directes `codex launch` conservent le code de sortie du processus Codex.
 
-`codex template` affiche la configuration native non persistante du fournisseur, sans catalogue. `codex status` et `codex restore` restent disponibles uniquement pour inspecter et nettoyer les configurations ou catalogues créés par d’anciennes versions.
+`codex template` affiche la configuration native non persistante du fournisseur, sans catalogue. `codex status` et `codex restore` restent disponibles uniquement pour inspecter et nettoyer les configurations ou catalogues créés par d’anciennes versions. Un backup historique est restauré automatiquement ; sans backup, `config.toml` est toujours conservé et un nettoyage manuel est signalé. Le catalogue historique propre au wrapper peut être supprimé séparément.
 
 ## Compatibilité 4.x
 

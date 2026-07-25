@@ -101,10 +101,14 @@ test('Codex status and restore retain legacy catalog cleanup', (t) => {
   }), 'utf8');
   fs.writeFileSync(paths.modelCatalogPath, '{"models":[]}', 'utf8');
 
-  assert.equal(readCodexStatus(paths).modelCatalogExists, true);
+  const status = readCodexStatus(paths);
+  assert.equal(status.modelCatalogExists, true);
+  assert.equal(status.manualCleanupRequired, true);
   const restored = restoreCodexConfig({ paths, dryRun: false });
-  assert.equal(restored.removedWrapperConfig, true);
+  assert.equal(restored.removedWrapperConfig, false);
   assert.equal(restored.removedModelCatalog, true);
+  assert.equal(restored.manualCleanupRequired, true);
+  assert.equal(fs.existsSync(paths.configPath), true);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
   assert.equal(path.basename(paths.modelCatalogPath), CODEX_MODEL_CATALOG_FILENAME);
 });
@@ -138,7 +142,7 @@ test('Codex restore brings back a backup and drops the wrapper catalog', (t) => 
   assert.equal(fs.existsSync(paths.authPath), true);
 });
 
-test('Codex restore removes a wrapper config when no backup exists', (t) => {
+test('Codex restore preserves a wrapper config when no backup exists', (t) => {
   const dir = nativeTempDir(t, 'restore-wrapper');
   const paths = {
     configDir: dir,
@@ -153,12 +157,14 @@ test('Codex restore removes a wrapper config when no backup exists', (t) => {
   }), 'utf8');
 
   const result = restoreCodexConfig({ paths, dryRun: false });
-  assert.equal(result.removedWrapperConfig, true);
+  assert.equal(result.removedWrapperConfig, false);
   assert.equal(result.restoredFromBackup, false);
-  assert.equal(fs.existsSync(paths.configPath), false);
+  assert.equal(result.preservedConfig, true);
+  assert.equal(result.manualCleanupRequired, true);
+  assert.equal(fs.existsSync(paths.configPath), true);
 });
 
-test('Codex restore refuses to delete a foreign config without backup', (t) => {
+test('Codex restore preserves a foreign config without backup', (t) => {
   const dir = nativeTempDir(t, 'restore-refuse');
   const paths = {
     configDir: dir,
@@ -168,6 +174,24 @@ test('Codex restore refuses to delete a foreign config without backup', (t) => {
   };
   fs.writeFileSync(paths.configPath, 'model_provider = "openai"\n', 'utf8');
 
-  assert.throws(() => restoreCodexConfig({ paths, dryRun: false }), /Refusing to remove/);
+  const result = restoreCodexConfig({ paths, dryRun: false });
+  assert.equal(result.preservedConfig, true);
+  assert.equal(result.manualCleanupRequired, false);
   assert.equal(fs.existsSync(paths.configPath), true);
+});
+
+test('Codex legacy detection requires an exact official base_url assignment', (t) => {
+  const dir = nativeTempDir(t, 'status-exact-endpoint');
+  const paths = getCodexPaths({ CODEX_HOME: dir });
+  fs.writeFileSync(paths.configPath, [
+    'model_provider = "custom"',
+    '[model_providers.custom]',
+    '# base_url = "https://api.routerlab.ch/v1"',
+    'base_url = "https://routerlab.ch/v1"',
+  ].join('\n'), 'utf8');
+
+  const status = readCodexStatus(paths);
+  assert.equal(status.routerlabEndpoint, false);
+  assert.equal(status.wrapperConfig, false);
+  assert.equal(status.manualCleanupRequired, false);
 });

@@ -64,6 +64,32 @@ test('Codex launch is direct, native, and forwards the original RouterLab token'
   assert.equal(launch.codexArgs.some((value) => /^http:\/\/127\.0\.0\.1/.test(value)), false);
 });
 
+test('Codex rejects routing overrides before CLI detection, token use, or model discovery', async () => {
+  const forbiddenDependencies = {
+    assertCodexCliAvailable: () => {
+      throw new Error('Codex detection must not run');
+    },
+    fetchModels: async () => {
+      throw new Error('Model discovery must not run');
+    },
+    launchCodex: async () => {
+      throw new Error('Codex must not launch');
+    },
+    resolveTokenWithSource: async () => {
+      throw new Error('Token resolution must not run');
+    },
+  };
+
+  await assert.rejects(
+    launchCodexForService({
+      service: 'routerlab',
+      token: NATIVE_TEST_TOKEN,
+      forwarded: ['--config', 'model_providers.custom.base_url="https://example.test/v1"'],
+    }, forbiddenDependencies),
+    (error) => error.exitCode === 2 && /cannot be forwarded/.test(error.message),
+  );
+});
+
 test('Codex no-prompt launches the default only when discovered', async () => {
   const fixture = launchDependencies({
     valid: true,
@@ -98,6 +124,7 @@ test('Codex refuses every model discovery failure without launching', async () =
     { valid: false, reason: 'network_error', message: 'network down' },
     { valid: false, reason: 'timeout', message: 'request timed out' },
     { valid: false, reason: 'invalid_response', message: 'invalid JSON' },
+    { valid: false, reason: 'redirect_not_allowed', status: 302 },
     { valid: false, reason: 'auth_failed', status: 401 },
     { valid: false, reason: 'auth_failed', status: 403 },
     { valid: false, reason: 'server_error', status: 500 },

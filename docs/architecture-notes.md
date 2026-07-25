@@ -38,7 +38,11 @@ Codex always connects directly to the fixed service `/v1` endpoint. There is no 
 
 Runtime overrides contain exactly six values: `model_provider`, `model`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged through that child-only environment variable. User sandbox, approvals, instructions, context, reasoning effort, modalities, tools, search, truncation, priorities, features, MCP settings, hooks, auth files, and other active policy remain native to Codex. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
 
-`codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path writes neither.
+Forwarded Codex arguments are validated before CLI detection, token resolution, or network access. Provider/model overrides, alternate local providers, configuration profiles, and remote app-server transports are rejected; route-neutral native arguments remain byte-for-byte unchanged. Model discovery uses manual redirect handling and treats every 3xx response as fatal so the service token is never forwarded to another origin.
+
+The RouterLab destination invariant is scoped to model traffic configured by the wrapper: `GET /v1/models` discovery and Responses inference requests for the selected provider. It is not a process-wide network sandbox. Independent network activity owned by the official Codex binary or its user-configured native integrations—such as update checks, MCP, tools, and search—remains outside the wrapper transport boundary and is neither disabled nor modified.
+
+`codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path writes neither. A known backup may be restored automatically, but a current `config.toml` without that backup is never deleted; legacy wrapper detection then reports `manualCleanupRequired`. The dedicated legacy model catalog remains independently removable.
 
 An interactive non-zero Codex exit or startup exception is reported and returns to the main menu without retaining the child exit code. A successful interactive session closes the wrapper, while direct launches preserve the Codex exit code.
 

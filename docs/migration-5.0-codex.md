@@ -89,35 +89,6 @@ web_search = "disabled"
 
 ---
 
-### 4. Model List Changes for LLM Service
-
-**4.2.1 allowed models (llm):**
-```
-gpt-5.6-sol
-gpt-5.6-luna
-gpt-5.6-terra
-kimi-k3
-grok-4.5
-MiniMax-M3
-```
-
-**5.0 allowed models (llm):**
-```
-gpt-5.6-sol
-gpt-5.6-terra
-kimi-k3
-grok-4.5
-MiniMax-M3
-```
-
-**Impact:**
-`gpt-5.6-luna` is no longer available on the `llm` service.
-
-**Migration:**
-Switch to `gpt-5.6-terra` or another model from the list above.
-
----
-
 ### 5. Hardcoded Fallbacks Removed
 
 **4.2.1 behavior:**

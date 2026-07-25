@@ -21,6 +21,7 @@ export const CODEX_ALLOWED_MODELS = {
   llm: [
     'gpt-5.6-sol',
     'gpt-5.6-terra',
+    'gpt-5.6-luna',
     'kimi-k3',
     'grok-4.5',
     'MiniMax-M3',
@@ -145,22 +146,23 @@ export function buildCodexAuth(apiKey = '') {
 }
 
 /**
- * Build Codex catalog from upstream /v1/models metadata.
- * Uses upstream values when available, falls back to conservative defaults.
+ * Build a Codex catalog from upstream /v1/models metadata.
+ * Menu order follows the wrapper allowlist, not the upstream response order.
  */
 export function buildCodexCatalogFromUpstream({
   serviceValue = 'routerlab',
   upstreamModels = [],
   allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
 } = {}) {
-  const filtered = upstreamModels.filter(model => allowedModelIds.includes(model.id));
-  
-  if (filtered.length === 0) {
+  const upstreamById = new Map(upstreamModels.map((model) => [model.id, model]));
+  const ordered = allowedModelIds.map((id) => upstreamById.get(id)).filter(Boolean);
+
+  if (ordered.length === 0) {
     throw new Error(`No upstream models matched the allowed list for ${serviceValue}`);
   }
 
   return {
-    models: filtered.map((model, index) => buildCodexCatalogEntry(model, index)),
+    models: ordered.map((model, index) => buildCodexCatalogEntry(model, index)),
   };
 }
 
@@ -173,14 +175,23 @@ export function buildCodexCatalogFallback({
   allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
 } = {}) {
   console.error(`WARN Using minimal Codex catalog fallback for ${serviceValue}`);
-  
+  return buildCodexMinimalCatalog({ allowedModelIds });
+}
+
+/**
+ * Same conservative catalog as buildCodexCatalogFallback, without the warning.
+ * Used by preview paths where nothing has actually failed.
+ */
+function buildCodexMinimalCatalog({
+  allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
+} = {}) {
   return {
     models: allowedModelIds.map((id, index) => buildCodexCatalogEntry(
       {
         id,
         contextWindow: FALLBACK_CONTEXT_WINDOW,
         inputModalities: ['text'],
-        supportsReasoning: true,
+        supportsReasoning: false,
         supportsParallelToolCalls: false,
         defaultReasoningLevel: 'medium',
         supportedReasoningLevels: FALLBACK_REASONING_LEVELS,
@@ -193,6 +204,7 @@ export function buildCodexCatalogFallback({
 
 /**
  * Build a single Codex catalog entry from normalized metadata.
+ * Upstream values win; wrapper constants only fill genuine gaps.
  */
 function buildCodexCatalogEntry(model, index) {
   const contextWindow = model.contextWindow || FALLBACK_CONTEXT_WINDOW;
@@ -205,11 +217,12 @@ function buildCodexCatalogEntry(model, index) {
   const supportedReasoningLevels = Array.isArray(model.supportedReasoningLevels) && model.supportedReasoningLevels.length > 0
     ? model.supportedReasoningLevels
     : FALLBACK_REASONING_LEVELS;
+  const displayName = model.displayName || codexModelDisplayName(model.id);
 
   return {
     slug: model.id,
-    display_name: model.displayName || codexModelDisplayName(model.id),
-    description: model.description || model.displayName || codexModelDisplayName(model.id),
+    display_name: displayName,
+    description: model.description || displayName,
     default_reasoning_level: model.defaultReasoningLevel || 'medium',
     supported_reasoning_levels: supportedReasoningLevels,
     shell_type: 'shell_command',
@@ -236,7 +249,7 @@ function buildCodexCatalogEntry(model, index) {
     effective_context_window_percent: 95,
     experimental_supported_tools: [],
     input_modalities: inputModalities,
-    supports_search_tool: false,
+    supports_search_tool: model.supportsSearch === true,
   };
 }
 
@@ -466,6 +479,6 @@ export function buildCodexModelCatalogFromCache({
   serviceValue = 'routerlab',
   models = codexModelsForService(serviceValue),
 } = {}) {
-  // Legacy function - now delegates to buildCodexCatalogFallback
-  return buildCodexCatalogFallback({ serviceValue, allowedModelIds: models });
+  // Legacy preview path: nothing has failed here, so stay silent.
+  return buildCodexMinimalCatalog({ allowedModelIds: models });
 }

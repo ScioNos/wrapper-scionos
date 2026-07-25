@@ -35,7 +35,7 @@ export function createLongRunningLlmProxy({
   gatewayToken = generateLlmProxyGatewayToken(),
   upstreamAuth = 'both',
   beforeForward = null,
-  
+  codexServiceValue = null,
 }) {
   const server = http.createServer(async (req, res) => {
     try {
@@ -49,15 +49,14 @@ export function createLongRunningLlmProxy({
         return;
       }
 
-      let bodyText = await readRequestBody(req);
-      
+      const bodyText = await readRequestBody(req);
 
       await forwardLongRunningLlmRequest(req, res, {
         targetBaseUrl,
         routerlabToken,
         body: bodyText,
         upstreamAuth,
-        errorContext: null,
+        errorContext: buildCodexErrorContext(req, bodyText, codexServiceValue),
       });
     } catch (error) {
       if (!res.headersSent) {
@@ -284,6 +283,43 @@ function proxyError(message, statusCode, code) {
   error.code = code;
   error.type = 'invalid_request_error';
   return error;
+}
+
+const CODEX_RESPONSES_PATHS = new Set(['/responses', '/v1/responses']);
+
+export function buildCodexErrorContext(req, bodyText, codexServiceValue) {
+  if (!codexServiceValue) {
+    return null;
+  }
+  if (!isCodexResponsesRequest(req)) {
+    return null;
+  }
+  return {
+    requestLabel: 'Codex Responses request',
+    serviceValue: codexServiceValue,
+    model: extractRequestModel(bodyText),
+  };
+}
+
+function isCodexResponsesRequest(req) {
+  try {
+    const pathname = new URL(req?.url ?? '/', 'http://127.0.0.1').pathname.replace(/\/+$/, '');
+    return CODEX_RESPONSES_PATHS.has(pathname || '/');
+  } catch {
+    return false;
+  }
+}
+
+function extractRequestModel(bodyText) {
+  if (typeof bodyText !== 'string' || bodyText.trim() === '') {
+    return null;
+  }
+  try {
+    const model = JSON.parse(bodyText)?.model;
+    return typeof model === 'string' && model.trim() !== '' ? model : null;
+  } catch {
+    return null;
+  }
 }
 export function writeJson(res, payload, status = 200, headers = {}) {
   res.writeHead(status, {

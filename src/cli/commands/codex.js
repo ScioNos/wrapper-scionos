@@ -55,7 +55,7 @@ export async function launchCodexForService(options) {
     }
     if (!modelResult.valid) warnCodexModelFallback(modelResult);
     const modelMetadata = modelResult.valid ? modelResult.modelMetadata : [];
-    
+
     if (modelResult.valid && !modelMetadata.some((m) => m.id === model)) {
       const verifiedIds = modelMetadata.map((m) => m.id).filter((id) => allowedModels.includes(id));
       throw codexModelUnavailableError(model, service, verifiedIds);
@@ -68,7 +68,7 @@ export async function launchCodexForService(options) {
         targetBaseUrl: service.baseUrl,
         routerlabToken: resolvedToken.token,
         upstreamAuth: 'openai',
-        
+        codexServiceValue: service.value,
       });
       baseUrl = proxy.baseUrl;
       apiKey = proxy.gatewayToken;

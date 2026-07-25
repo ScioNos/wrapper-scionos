@@ -338,7 +338,11 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
 
     assert.equal(response.status, 403);
     assert.equal(payload.error.type, 'forbidden');
-    assert.equal(payload.error.message, 'model access denied');
+    assert.match(payload.error.message, /^Codex Responses request failed with HTTP 403\./);
+    assert.match(payload.error.message, /Service: llm\./);
+    assert.match(payload.error.message, /Model: gpt-5\.5\./);
+    assert.match(payload.error.message, /Upstream message: model access denied/);
+    assert.match(payload.error.message, /secure-storage token takes precedence/);
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));

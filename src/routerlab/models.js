@@ -25,6 +25,38 @@ function explicitBoolean(entry, ...keys) {
   return { value: false, verified: false };
 }
 
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function normalizeReasoningLevels(entry = {}) {
+  const raw = entry.supported_reasoning_levels
+    ?? entry.reasoning_levels
+    ?? entry.capabilities?.reasoning_levels;
+  if (!Array.isArray(raw)) {
+    return { values: null, verified: false };
+  }
+
+  const values = raw.map((level) => {
+    if (typeof level === 'string') {
+      const effort = level.trim();
+      return effort ? { effort, description: effort } : null;
+    }
+    const effort = firstNonEmptyString(level?.effort, level?.level, level?.name, level?.id);
+    if (!effort) {
+      return null;
+    }
+    return { effort, description: firstNonEmptyString(level?.description, level?.label) ?? effort };
+  }).filter(Boolean);
+
+  return values.length > 0 ? { values, verified: true } : { values: null, verified: false };
+}
+
 function normalizeModelEntry(entry) {
   const source = typeof entry === 'string' ? { id: entry } : entry ?? {};
   const id = source.id ?? source.name;
@@ -63,9 +95,26 @@ function normalizeModelEntry(entry) {
     'capabilities.hosted_tools',
   );
   const supportsSearch = explicitBoolean(source, 'supports_search', 'capabilities.search');
+  const reasoningLevels = normalizeReasoningLevels(source);
+  const defaultReasoningLevel = firstNonEmptyString(
+    source.default_reasoning_level,
+    source.default_reasoning_effort,
+    source.reasoning?.default_level,
+  );
+  const displayName = firstNonEmptyString(source.display_name, source.displayName, source.label);
+  const description = firstNonEmptyString(source.description, source.summary);
+  const baseInstructions = firstNonEmptyString(source.base_instructions, source.baseInstructions);
 
   return {
     id: String(id),
+    displayName,
+    description,
+    baseInstructions,
+    baseInstructionsVerified: baseInstructions !== null,
+    defaultReasoningLevel,
+    defaultReasoningLevelVerified: defaultReasoningLevel !== null,
+    supportedReasoningLevels: reasoningLevels.values,
+    supportedReasoningLevelsVerified: reasoningLevels.verified,
     contextWindow: contextWindow ?? 128000,
     contextWindowVerified: contextWindow !== undefined,
     inputModalities: inputModalities.values,

@@ -127,7 +127,7 @@ The default Codex path is the session-local proxy:
 The Codex catalogs are restricted to these models, in menu order:
 
 - `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
-- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
+- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
 
 Before resolving a token or opening the proxy, Codex validates the selected service endpoint as HTTP(S) and validates an explicit `--token`. An HTTP 401/403 from model discovery stops the launch with service-specific `auth status`, `auth test`, and `auth login` guidance. If discovery succeeds, the requested or default model must be present in the verified Codex-compatible service catalog; otherwise the wrapper lists the available models and refuses to launch. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings and use the conservative local catalog.
 
@@ -135,15 +135,15 @@ For diagnostics only, --direct bypasses the proxy:
 
     wrapper-scionos codex launch --service llm --direct
 
-The wrapper passes provider, model, base URL, wire API, temporary catalog, and `web_search="disabled"` overrides for the Codex session. The search override is never written to the user's Codex configuration. The wrapper does not override the user's sandbox, approval policy, reasoning effort, MCP configuration, features, hooks, or authentication files. Like cc-switch's native Responses profile, the catalog does not advertise the freeform `apply_patch` tool; file edits use `shell_command`, which native gateways accept. Hosted web search is disabled by the explicit session override rather than inferred from catalog metadata.
+The wrapper overrides the Codex session provider, model, URL, wire API, and temporary catalog. It does not modify sandbox, approval policy, reasoning effort, MCP, features, hooks, or auth files. Like cc-switch's native Responses profile, the catalog does not advertise the freeform `apply_patch` tool: file edits use `shell_command`, which is gateway-compatible. Hosted web search availability is no longer forced by the wrapper: it is derived from upstream model metadata (`supports_search`), and Codex then decides whether to use it.
 
-In proxy mode, outgoing Responses requests are rewritten with `store: false` and have their top-level `metadata` field removed for upstream compatibility. This rewrite is limited to Codex Responses traffic and does not affect Claude. In direct mode the wrapper does not rewrite the body; Codex CLI 0.144.6 itself sends `store: false` to non-Azure custom Responses providers. These request fields are not contractual guarantees about the upstream provider's retention policy.
+In both proxy and direct modes, the wrapper no longer rewrites Responses request bodies: `store` and `metadata` are forwarded as Codex sends them. The proxy is limited to local authentication and upstream token substitution. The retention policy applied remains that of the upstream provider.
 
 When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
 
 The temporary model catalog is generated from normalized upstream metadata, and explicit verified RouterLab values take precedence. When only model IDs are available, known models intentionally use conservative cc-switch-derived context profiles: GPT-5.6 at 372,000 tokens, DeepSeek V4 Pro and MiniMax M3 at 1,000,000, Kimi K2.7 Code at 262,144, GLM-5.2 at 200,000, Kimi K3 at 1,048,576, and Grok 4.5 at 500,000. These fallback values are RouterLab compatibility assumptions, not claims about each provider's public maximum. Unknown IDs retain the conservative 128k, text-only, sequential fallback. Codex receives 95% of each context window as its effective budget. Catalog files older than 24 hours are removed at startup and the active catalog is removed when Codex exits.
 
-Every RouterLab and RouterLab LLM model is sent unchanged to the native `/v1/responses` endpoint with `wire_api="responses"`, for streaming and non-streaming requests. RouterLab provides model-level Responses compatibility; the wrapper performs no protocol translation. It retains local authentication, upstream token replacement, `store: false`, temporary catalogs, and contextual 401/403 diagnostics. Relayed compressed responses keep their encoding and length, while intercepted compressed errors are decoded safely before normalization.
+All RouterLab and RouterLab LLM models are sent without transformation to the native `/v1/responses` endpoint with `wire_api="responses"`, streaming and non-streaming. RouterLab provides model-specific Responses compatibility; the wrapper performs no protocol translation. It preserves local authentication, upstream token substitution, temporary catalogs, and contextualized 401/403 diagnostics on the Codex Responses path. Relayed compressed responses preserve encoding and length; intercepted compressed errors are bounded-decoded before normalization.
 
 codex template prints a non-persistent template. codex restore exists only to recover a configuration written by an older wrapper release.
 

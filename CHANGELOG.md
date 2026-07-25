@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - **BREAKING**: Removed hardcoded `CODEX_MODEL_PROFILES` and `CODEX_REASONING_PROFILES`. Model metadata (context windows, reasoning levels, input modalities, base instructions) now comes from RouterLab's `/v1/models` endpoint.
 - **BREAKING**: Removed request body rewriting in proxy mode. `metadata` field is no longer deleted, `store` is no longer forced to `false`.
 - **BREAKING**: Removed `web_search="disabled"` override. Codex now controls web search based on its own configuration.
-- **BREAKING**: Updated LLM service model list. Removed `gpt-5.6-luna`, keeping 5 models: `gpt-5.6-sol`, `gpt-5.6-terra`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
+- LLM service model list: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3` (6 models).
 - **BREAKING**: Fallback catalog (when `/v1/models` fails) now uses minimal conservative defaults (128K context, medium reasoning, text-only) instead of detailed hardcoded profiles.
 
 ### Changed

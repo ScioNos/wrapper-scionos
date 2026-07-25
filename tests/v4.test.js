@@ -114,7 +114,7 @@ test('Codex catalog uses upstream metadata, minimal fallback, and prunes stale r
   assert.equal(catalog.models[0].context_window, 200000);
   assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
   assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[0].supports_search_tool, false);
+  assert.equal(catalog.models[0].supports_search_tool, true);
   assert.equal(catalog.models[1].context_window, 128000);
   assert.deepEqual(catalog.models[1].input_modalities, ['text']);
   assert.equal(catalog.models[1].supports_parallel_tool_calls, false);

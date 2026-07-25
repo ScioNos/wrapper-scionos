@@ -23,6 +23,7 @@ import {
   restoreCodexConfig,
   writeCodexRuntimeModelCatalog,
 } from '../src/apps/codex.js';
+import { extractModelMetadata } from '../src/routerlab/models.js';
 
 const ROUTERLAB_MODELS = [
   'gpt-5.6-sol',
@@ -36,6 +37,7 @@ const ROUTERLAB_MODELS = [
 const LLM_MODELS = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'kimi-k3',
   'grok-4.5',
   'MiniMax-M3',
@@ -174,6 +176,46 @@ test('Codex catalog uses upstream metadata when available', () => {
   assert.equal(glm.priority, 1001);
 });
 
+test('Codex catalog propagates upstream reasoning metadata and base instructions', () => {
+  const metadata = extractModelMetadata({
+    data: [
+      {
+        id: 'gpt-5.6-sol',
+        display_name: 'Sol (upstream)',
+        description: 'Upstream described flagship',
+        base_instructions: 'You are Codex running through RouterLab.',
+        default_reasoning_level: 'xhigh',
+        supported_reasoning_levels: [
+          { effort: 'minimal', description: 'Fastest' },
+          'xhigh',
+        ],
+        context_window: 372000,
+        input_modalities: ['text', 'image'],
+        supports_reasoning: true,
+        supports_search: true,
+      },
+    ],
+  });
+
+  const catalog = buildCodexCatalogFromUpstream({
+    serviceValue: 'routerlab',
+    allowedModelIds: ['gpt-5.6-sol'],
+    upstreamModels: metadata,
+  });
+
+  const [sol] = catalog.models;
+  assert.equal(sol.display_name, 'Sol (upstream)');
+  assert.equal(sol.description, 'Upstream described flagship');
+  assert.equal(sol.base_instructions, 'You are Codex running through RouterLab.');
+  assert.equal(sol.default_reasoning_level, 'xhigh');
+  assert.deepEqual(sol.supported_reasoning_levels, [
+    { effort: 'minimal', description: 'Fastest' },
+    { effort: 'xhigh', description: 'xhigh' },
+  ]);
+  assert.equal(sol.supports_search_tool, true);
+  assert.equal(sol.context_window, 372000);
+});
+
 test('Codex catalog refuses to build when upstream matches nothing', () => {
   assert.throws(() => buildCodexCatalogFromUpstream({
     serviceValue: 'llm',
@@ -192,6 +234,7 @@ test('Codex fallback catalog stays minimal and neutral', () => {
   assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
     'GPT 5.6 Sol',
     'GPT 5.6 Terra',
+    'GPT 5.6 Luna',
     'Kimi K3',
     'Grok 4.5',
     'MiniMax M3',

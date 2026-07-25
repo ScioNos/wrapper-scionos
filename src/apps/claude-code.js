@@ -1,27 +1,80 @@
 import { password, select, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
-import { detectClaudeCode } from '../platform/detect.js';
+import { detectClaudeCode, MINIMUM_CLAUDE_CODE_VERSION } from '../platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
-import { requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, validateServiceBaseUrl } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
-import { fetchModels, validateTokenFormat } from '../routerlab/models.js';
+import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
+import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 
 export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
   CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+  CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
 };
 
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
+  const { env: sourceEnv = process.env, ...strategyOptions } = options;
+  const environment = {};
+  for (const [key, value] of Object.entries(sourceEnv)) {
+    if (!isClaudeCodeRoutingEnvironmentKey(key)) {
+      environment[key] = value;
+    }
+  }
+  const noProxy = mergeNoProxyValues(sourceEnv, new URL(service.baseUrl).hostname);
   return {
-    ...process.env,
+    ...environment,
     ...CLAUDE_CODE_TEMPORARY_ENVIRONMENT,
+    NO_PROXY: noProxy,
+    no_proxy: noProxy,
     ANTHROPIC_BASE_URL: service.baseUrl,
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
-    ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, options),
+    ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, strategyOptions),
   };
+}
+
+function isClaudeCodeRoutingEnvironmentKey(key) {
+  const normalized = String(key).toUpperCase();
+  const routerLabTokenKeys = new Set([
+    LEGACY_TOKEN_ENV_KEY,
+    ...Object.values(SERVICES).flatMap((service) => service.tokenEnvKeys ?? []),
+  ]);
+  if (routerLabTokenKeys.has(normalized)) return true;
+  if (normalized === 'NO_PROXY') return true;
+  if ([
+    'ANTHROPIC_API_KEY',
+    'ANTHROPIC_AUTH_TOKEN',
+    'ANTHROPIC_BASE_URL',
+    'ANTHROPIC_BETAS',
+    'ANTHROPIC_CUSTOM_HEADERS',
+    'ANTHROPIC_MODEL',
+    'ANTHROPIC_SMALL_FAST_MODEL',
+    'ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION',
+    'ANTHROPIC_WORKSPACE_ID',
+    'AWS_BEARER_TOKEN_BEDROCK',
+    'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
+    'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_USE_MANTLE',
+    'CLAUDE_CODE_USE_VERTEX',
+  ].includes(normalized)) return true;
+  return /^ANTHROPIC_(?:AWS|BEDROCK|FOUNDRY|VERTEX)_/.test(normalized)
+    || /^ANTHROPIC_CUSTOM_MODEL_OPTION(?:_|$)/.test(normalized)
+    || /^ANTHROPIC_DEFAULT_(?:FABLE|HAIKU|OPUS|SONNET)_MODEL(?:_|$)/.test(normalized);
+}
+
+function mergeNoProxyValues(environment, loopbackHost) {
+  const values = Object.entries(environment)
+    .filter(([key]) => key.toUpperCase() === 'NO_PROXY')
+    .flatMap(([, value]) => String(value ?? '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  values.push('127.0.0.1', 'localhost', '::1', loopbackHost);
+  return [...new Set(values.map((value) => value.toLowerCase()))].join(',');
 }
 
 export function selectTokenCandidate({
@@ -133,6 +186,16 @@ export function claudeCodeAuthenticationError(validation, service, resolvedToken
   return error;
 }
 
+export function claudeCodeModelDiscoveryError(validation, service) {
+  const detail = validation.message || validation.reason || 'model availability could not be verified';
+  const error = new Error(`${service.availabilityLabel} model discovery failed: ${detail}. Claude Code was not started.`);
+  error.code = validation.reason === 'no_authorized_models'
+    ? 'no_authorized_models'
+    : 'model_discovery_failed';
+  error.statusCode = validation.status;
+  return error;
+}
+
 export async function chooseStrategy({
   serviceValue,
   noPrompt = false,
@@ -233,7 +296,7 @@ export async function launchClaudeCode(
   {
     chooseStrategyFn = chooseStrategy,
     detectClaudeCodeFn = detectClaudeCode,
-    fetchModelsFn = fetchModels,
+    fetchModelsFn = fetchModelsDirect,
     resolveTokenWithSourceFn = resolveTokenWithSource,
     runInteractiveCliFn = runInteractiveCli,
     startLongRunningLlmProxyFn = startLongRunningLlmProxy,
@@ -253,6 +316,11 @@ export async function launchClaudeCode(
   const claude = detectClaudeCodeFn();
   if (!claude.installed) {
     throw new Error('Claude Code CLI not found. Install @anthropic-ai/claude-code first.');
+  }
+  if (!claude.versionSupported) {
+    const error = new Error(`Claude Code ${MINIMUM_CLAUDE_CODE_VERSION} or newer is required; detected ${claude.version ?? 'an unknown version'}.`);
+    error.code = 'unsupported_claude_version';
+    throw error;
   }
 
   const override = tokenOverride?.trim();
@@ -275,10 +343,16 @@ export async function launchClaudeCode(
   if (!validation.valid && validation.reason === 'auth_failed') {
     throw claudeCodeAuthenticationError(validation, service, resolvedToken);
   }
-  const modelIds = validation.valid ? validation.models : [];
-  if (!validation.valid && !noPrompt) {
-    const detail = validation.message || validation.reason || 'model availability could not be verified';
-    console.log(chalk.yellow(`WARN ${service.availabilityLabel} model list unavailable: ${detail}.`));
+  if (!validation.valid) {
+    throw claudeCodeModelDiscoveryError(validation, service);
+  }
+  const authorizedModels = new Set(getAuthorizedClaudeCodeModels(service.value));
+  const modelIds = [...new Set(validation.models.filter((model) => authorizedModels.has(model)))];
+  if (modelIds.length === 0) {
+    throw claudeCodeModelDiscoveryError({
+      reason: 'no_authorized_models',
+      message: `the verified catalog contains none of the ${authorizedModels.size} authorized Claude Code models`,
+    }, service);
   }
 
   const selectedStrategy = await chooseStrategyFn({
@@ -300,6 +374,7 @@ export async function launchClaudeCode(
       targetBaseUrl: service.baseUrl,
       routerlabToken: token,
       upstreamAuth: 'anthropic',
+      allowedModels: modelIds,
     });
     const proxiedService = { ...service, baseUrl: proxy.baseUrl };
     const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy);
@@ -317,8 +392,20 @@ export async function launchClaudeCode(
 
     await runInteractiveCliFn(claude.cliPath, claudeArgs, { env });
     return { kind: 'launched' };
+  } catch (error) {
+    if (proxy) {
+      try {
+        await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
+      } catch (cleanupError) {
+        error.cleanupError = cleanupError;
+      }
+      proxy = null;
+    }
+    throw error;
   } finally {
-    await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
+    if (proxy) {
+      await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
+    }
   }
 }
 

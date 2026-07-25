@@ -8,7 +8,7 @@ The command registry and common option definitions are the source for parser beh
 
 ## Local transport security
 
-All HTTP listeners are loopback-only. A proxy credential is generated from 32 random bytes and must authenticate every route. Claude Desktop stores that credential in its managed profile; legacy scionos-local profiles are replaced atomically. On Linux/macOS, configuration directories are verified as 0700 and every credential-bearing JSON as 0600. Profile writes occur only after the token is resolved and the listener is active; failure closes the listener and preserves the previous profile. Profiles and status output redact credentials.
+All HTTP listeners are loopback-only. A proxy credential is generated from 32 random bytes and must authenticate every route. Claude Desktop stores that credential in its managed profile; legacy scionos-local profiles are replaced atomically. On Linux/macOS, configuration directories are verified as 0700 and every credential-bearing JSON as 0600. Linux token persistence requires Secret Service: plaintext legacy token files are detected but never read, and a verified Secret Service write precedes their deletion. Profile writes occur only after the token is resolved and the listener is active; failure closes the listener and preserves the previous profile. Profiles and status output redact credentials.
 
 Production service destinations are constants: `routerlab` is `https://api.routerlab.ch` and `llm` is `https://llm-api.routerlab.ch`. User URL variables are detected only to emit an ignored-value warning; they never affect routing. Gateway profiles derive their Cowork egress allowlist from the fixed service hostname or from the wrapper-generated loopback URL; wildcard egress is not written.
 
@@ -18,15 +18,31 @@ Request bodies are capped at 64 MiB in compressed and decompressed form. Identit
 
 ## Claude Code lifecycle
 
-Claude Code uses the service selected before entering the interactive menu. The default service is `routerlab`; `--service llm` carries the LLM service, token namespace, endpoint, strategy catalog, and model environment through the same launch path. Executable discovery runs `claude --version` with a five-second limit per candidate and continues to the next candidate after a failure or timeout.
+Claude Code uses the service selected before entering the interactive menu. The default service is `routerlab`; `--service llm` carries the LLM service, token namespace, endpoint, strategy catalog, and model environment through the same launch path. Executable discovery runs `claude --version` with a five-second limit per candidate and continues to the next candidate after a failure or timeout. Version 2.1.220 is the minimum supported release; absence, an unparseable version, or an older version is fatal before credential resolution or network access.
 
 The LLM `claude` strategy is launchable when discovery reports `claude-opus-4-8`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`. All LLM Claude Code strategies force `CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-5`; service-scoped environment construction prevents that policy from changing the `routerlab` subagent model.
 
-Service bases are fixed before credential use. `ANTHROPIC_BASE_URL` and service-specific base URL variables are ignored with a credential-free warning. `ANTHROPIC_AUTH_TOKEN` remains a deprecated token fallback. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both token sources are present.
+Service bases are fixed before credential use. `ANTHROPIC_BASE_URL` and service-specific base URL variables are ignored with a credential-free warning. `ANTHROPIC_AUTH_TOKEN` remains a deprecated input-token fallback. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both token sources are present. `--token` is rejected for Claude Code before launch because process command lines are externally observable.
 
-Model discovery occurs before proxy startup. A 401/403 is fatal and reports the service, token source, and matching auth recovery commands without including the token. Network, timeout, malformed-response, and non-authentication server failures retain the existing unverified-availability fallback.
+Model discovery occurs before proxy startup through a direct HTTP(S) transport that does not consult environment proxy variables. Every failure is fatal, including 3xx, 401/403, network, timeout, malformed response, server failure, an empty catalog, or an empty intersection with the service's authorized Claude Code models. Authentication failures report the service, token source, and matching auth recovery commands without including the token.
 
-After strategy selection, the wrapper creates a loopback proxy with a random local credential and injects that credential, the proxy URL, and the selected model mapping only into the Claude child environment. The proxy replaces local authentication with the service-scoped RouterLab token. Cleanup begins immediately after proxy creation, runs for child success, startup errors, and signals, waits two seconds for normal closure, then force-closes lingering connections.
+After strategy selection, the wrapper creates a loopback proxy with a random local credential and injects that credential, the proxy URL, and the selected model mapping only into the Claude child environment. All raw RouterLab token variables and Anthropic routing, provider, authentication, custom-header, and model-selection overrides are removed case-insensitively. `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1` prevents settings-file environment entries from replacing the managed provider, while unrelated environment needed by native tools, MCP, certificates, and networking is retained. Loopback entries are merged into both `NO_PROXY` spellings.
+
+The proxy replaces local authentication with the service-scoped RouterLab token and enforces the verified service-wide model intersection on Messages, token-counting, and batch requests. Native `/model`, resume, and subagent selection may use any model inside that intersection. Missing, malformed, and denied model requests fail locally without upstream traffic; no model is silently substituted. Cleanup begins immediately after proxy creation, runs exactly once for child success, startup errors, and signals, waits two seconds for normal closure, then force-closes lingering connections. A cleanup failure is attached to, but never masks, an earlier child failure.
+
+### Claude Code experimental-beta compatibility
+
+Claude Code children always receive `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`. This is an official Claude Code gateway-compatibility control, not a wrapper-defined capability or instruction. Anthropic documents that it removes Anthropic-specific `anthropic-beta` request headers and beta tool-schema fields such as `defer_loading` and `eager_input_streaming`, while preserving standard tool fields including `name`, `description`, `input_schema`, and `cache_control`.
+
+RouterLab exposes the Claude Messages protocol across Anthropic and non-Anthropic routed models. Keeping provider-specific experimental fields out of that common protocol avoids upstream HTTP 400 failures when a selected gateway or model does not implement them. This is a deliberate, fail-conservative interoperability decision. It does not inject a system prompt, modify user instructions, add tools, or grant Claude Code a capability.
+
+The tradeoff is explicit: Anthropic documents that this flag disables MCP tool search and causes all MCP tools to load upfront, even when `ENABLE_TOOL_SEARCH` is set. It also prevents use of the stripped beta fields. Consequently, this variable must not be described as behavior-neutral. It is an accepted reduction of experimental behavior at the RouterLab model-transport boundary. Remove it only after RouterLab offers equivalent per-route beta capability negotiation and compatibility has been verified across every allowed model.
+
+References:
+
+- [Claude Code environment variables — `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`](https://code.claude.com/docs/en/env-vars)
+- [Claude Code changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md)
+- [RouterLab API documentation](https://routerlab.ch/docs)
 
 ## Codex lifecycle
 

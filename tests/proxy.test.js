@@ -156,6 +156,96 @@ test('shared long-running LLM proxy forces lingering connections closed after it
   }
 });
 
+test('Claude Code proxy enforces the discovered service model allowlist before forwarding', async () => {
+  const captured = [];
+  const upstream = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      captured.push({ url: req.url, body: JSON.parse(body) });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
+    routerlabToken: 'routerlab-token-with-enough-length',
+    upstreamAuth: 'anthropic',
+    allowedModels: ['allowed-primary', 'allowed-other-strategy'],
+  });
+  const headers = {
+    authorization: `Bearer ${proxy.gatewayToken}`,
+    'content-type': 'application/json',
+  };
+
+  try {
+    const allowed = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'allowed-primary', messages: [] }),
+    });
+    assert.equal(allowed.status, 200);
+
+    const compressed = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: { ...headers, 'content-encoding': 'gzip' },
+      body: zlib.gzipSync(JSON.stringify({
+        model: 'allowed-other-strategy',
+        messages: [],
+      })),
+    });
+    assert.equal(compressed.status, 200);
+
+    const counted = await fetch(`${proxy.baseUrl}/v1/messages/count_tokens`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'allowed-primary', messages: [] }),
+    });
+    assert.equal(counted.status, 200);
+
+    const denied = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'not-announced-by-routerlab', messages: [] }),
+    });
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).error.code, 'model_not_allowed');
+
+    const missing = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messages: [] }),
+    });
+    assert.equal(missing.status, 400);
+    assert.equal((await missing.json()).error.code, 'missing_model');
+
+    const invalid = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: '{not-json',
+    });
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error.code, 'invalid_json');
+
+    assert.deepEqual(captured.map((entry) => entry.body.model), [
+      'allowed-primary',
+      'allowed-other-strategy',
+      'allowed-primary',
+    ]);
+    assert.deepEqual(captured.map((entry) => entry.url), [
+      '/v1/messages',
+      '/v1/messages',
+      '/v1/messages/count_tokens',
+    ]);
+  } finally {
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
 test('shared long-running proxy preserves generic OpenAI-compatible requests', async () => {
   const captured = [];
   const upstream = http.createServer((req, res) => {

@@ -16,6 +16,7 @@ import {
   detectOS,
   findExecutable,
   findWindowsExecutable,
+  isClaudeCodeVersionSupported,
   isCodexVersionSupported,
 } from '../src/platform/detect.js';
 
@@ -225,9 +226,22 @@ test('Claude and Codex detection factories preserve platform-specific results', 
     },
   });
   assert.equal(claude.installed, false);
+  assert.equal(claude.minimumVersion, '2.1.220');
+  assert.equal(claude.versionSupported, false);
   assert.equal(claudeOptions.command, 'claude');
   assert.equal(claudeOptions.configPath, path.join('/home/tester', '.claude', 'settings.json'));
   assert.deepEqual(claudeOptions.candidates, claudeCodeCandidates('linux', '/home/tester'));
+
+  const supportedClaude = detectClaudeCode({
+    platform: 'darwin',
+    home: '/Users/tester',
+    detectCliFn: () => ({
+      installed: true,
+      cliPath: '/opt/homebrew/bin/claude',
+      version: '2.1.220 (Claude Code)',
+    }),
+  });
+  assert.equal(supportedClaude.versionSupported, true);
 
   let codexOptions = null;
   const windowsCodex = detectCodexCli({
@@ -329,6 +343,13 @@ test('platform detection skips a version command that exceeds its timeout', (t) 
   assert.equal(detected.cliPath, working);
   assert.equal(detected.version, 'wrapper-test 1.0.0');
   assert.equal(calls, 2);
+});
+
+test('Claude Code version policy accepts only 2.1.220 or newer semantic versions', () => {
+  assert.equal(isClaudeCodeVersionSupported('2.1.219 (Claude Code)'), false);
+  assert.equal(isClaudeCodeVersionSupported('2.1.220 (Claude Code)'), true);
+  assert.equal(isClaudeCodeVersionSupported('2.2.0'), true);
+  assert.equal(isClaudeCodeVersionSupported('unknown'), false);
 });
 test('interactive child startup errors are surfaced', async () => {
   await assert.rejects(

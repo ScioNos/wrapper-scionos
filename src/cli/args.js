@@ -5,7 +5,7 @@ export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--service'], value: '<routerlab|llm>', description: 'Select the RouterLab service.' },
   { flags: ['--strategy'], value: '<value>', description: 'Select a model-routing strategy.' },
   { flags: ['--model'], value: '<value>', description: 'Select the initial Codex model.' },
-  { flags: ['--token'], value: '<value>', description: 'Override the service token (visible in shell history).' },
+  { flags: ['--token'], value: '<value>', description: 'Override the service token for supported commands (not Claude Code; visible in shell history).' },
   { flags: ['--host'], value: '<loopback>', description: 'Bind a local proxy to a loopback address.' },
   { flags: ['--port'], value: '<1-65535>', description: 'Select the Claude Desktop proxy port.' },
   { flags: ['--allow-origin'], value: '<origin>', description: 'Allow an exact CORS origin; repeatable.' },

@@ -8,7 +8,7 @@ ScioNos command-line wrapper for RouterLab-backed Claude Code, Claude Desktop, a
 
 - Node.js ^22.13.0 or >=23.5.0.
 - A service-scoped RouterLab token.
-- Claude Code for Claude Code launches.
+- Claude Code >=2.1.220 for Claude Code launches.
 - Codex CLI >=0.144.1 for Codex launches.
 - Windows, macOS, or claude-desktop-debian on Linux for Claude Desktop profiles.
 
@@ -69,21 +69,23 @@ Preferred environment variables:
 
 `ANTHROPIC_AUTH_TOKEN` remains a deprecated token fallback. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL`, and `ANTHROPIC_BASE_URL` values are ignored with a warning; they never change the production destination.
 
-Secure storage reads both wrapper-scionos and the legacy claude-scionos namespace; logout deletes both. On Linux, the file fallback creates directories as `0700` and verifies token files as `0600`, failing closed if those permissions cannot be guaranteed.
+Secure storage reads both wrapper-scionos and the legacy claude-scionos namespace; logout deletes both. Linux persistence requires `secret-tool` and an available Secret Service. Legacy plaintext token files are reported as requiring migration but are never read; a successful, verified `auth login` migrates them to Secret Service before deleting them.
 
-auth login uses a masked prompt. The --token option works with all clients, including auth test and strategies. Their token order is --token, service environment variable, then secure storage. Claude Code warns when an environment token masks an available stored token but preserves that order for compatibility. Codex intentionally keeps its special order of --token, secure storage, then environment. A token passed on the command line may remain visible in shell history and process inspection.
+auth login uses a masked prompt. The --token option remains available to supported commands such as auth test, strategies, Codex, and Claude Desktop, but Claude Code launches reject it because command lines are visible in shell history and process inspection. Claude Code token order is the service environment variable followed by secure storage or the masked prompt. Codex intentionally keeps its special order of --token, secure storage, then environment.
 
 ## Claude Code
 
-Claude Code is launched through a loopback proxy. Wrapper-owned credentials and model mappings are injected only into the child process; unknown arguments after -- are forwarded to Claude Code. CLI detection gives each `claude --version` candidate five seconds before trying the next executable.
+Claude Code 2.1.220 or newer is launched through a loopback proxy. Wrapper-owned credentials and model mappings are injected only into the child process; unknown arguments after -- are forwarded to Claude Code. CLI detection gives each `claude --version` candidate five seconds before trying the next executable, and an unsupported or unparseable version fails before token resolution or network access.
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
 
 For `--service llm`, the `claude` strategy is active and maps Opus to `claude-opus-4-8`, Sonnet to `claude-sonnet-5`, and Haiku to `claude-haiku-4-5-20251001`. Claude Code subagents use `claude-sonnet-5` for every LLM strategy.
 
-Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted with its deprecation warning.
+Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted as an input token source with its deprecation warning, but the raw token and every RouterLab token variable are removed from the child environment. Claude receives only a random, process-local proxy credential. Provider, endpoint, authentication, header, and model-routing variables are sanitized; unrelated native tool, MCP, certificate, and network variables remain inherited. Loopback is merged into `NO_PROXY`/`no_proxy`.
 
-An HTTP 401/403 from model discovery stops the launch before the local proxy or Claude child starts. The error identifies the token source without exposing it and prints service-specific `auth status`, `auth test`, and `auth login` commands. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings; the user may continue with unverified model availability.
+The child also receives `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`. This official Claude Code variable strips Anthropic-specific `anthropic-beta` request headers and beta tool-schema fields that some gateways or routed models do not support. It adds no prompt, instruction, or tool. Anthropic documents the tradeoff: MCP tool search is disabled and all MCP tools are loaded upfront. This setting is an intentional RouterLab compatibility exception; see [Architecture Notes](./docs/architecture-notes.md#claude-code-experimental-beta-compatibility).
+
+Every model-discovery failure stops the launch before the local proxy or Claude child starts, including authentication, redirect, network, timeout, invalid-response, server, empty-catalog, and empty-authorized-intersection failures. Discovery uses a direct transport to the fixed service endpoint. The proxy accepts only the intersection of the service's authorized Claude Code models and the verified RouterLab catalog. Native `/model`, resume, and subagent choices remain usable inside that intersection; any other model is rejected locally with HTTP 403 and is never forwarded.
 
 The proxy has no total generation timeout and closes its upstream request if the client disconnects. Cleanup starts as soon as the proxy is created, waits up to two seconds for normal shutdown, then force-closes lingering local connections.
 

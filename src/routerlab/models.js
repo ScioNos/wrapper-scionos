@@ -1,4 +1,8 @@
+import http from 'node:http';
+import https from 'node:https';
 import { DEFAULT_ANTHROPIC_VERSION, resolveServiceBaseUrl } from './services.js';
+
+const MAX_MODEL_DISCOVERY_BYTES = 16 * 1024 * 1024;
 
 function firstFiniteNumber(...values) {
   return values.find((value) => Number.isFinite(value) && value > 0);
@@ -228,6 +232,118 @@ export async function fetchModels(apiKey, options = {}) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+export async function fetchModelsDirect(apiKey, options = {}) {
+  const {
+    serviceValue,
+    baseUrl = resolveServiceBaseUrl(serviceValue),
+    anthropicVersion = DEFAULT_ANTHROPIC_VERSION,
+    timeoutMs = 30000,
+  } = options;
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+  const url = new URL(`${normalizedBaseUrl}/v1/models`);
+  const transport = url.protocol === 'http:' ? http : https;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const request = transport.request(url, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': anthropicVersion,
+      },
+    }, (response) => {
+      const status = response.statusCode ?? 0;
+      if (status >= 300 && status < 400) {
+        response.resume();
+        finish({
+          valid: false,
+          reason: 'redirect_not_allowed',
+          status,
+          message: 'Model discovery redirects are not allowed',
+        });
+        return;
+      }
+      if (status === 401 || status === 403) {
+        response.resume();
+        finish({ valid: false, reason: 'auth_failed', status });
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        response.resume();
+        finish({
+          valid: false,
+          reason: 'server_error',
+          status,
+          statusText: response.statusMessage,
+          message: `Server responded with ${status} ${response.statusMessage ?? ''}`.trim(),
+        });
+        return;
+      }
+
+      const chunks = [];
+      let size = 0;
+      response.on('data', (chunk) => {
+        if (settled) return;
+        size += chunk.length;
+        if (size > MAX_MODEL_DISCOVERY_BYTES) {
+          response.destroy();
+          finish({
+            valid: false,
+            reason: 'invalid_response',
+            message: 'Model list response exceeds the local size limit',
+          });
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.once('error', (error) => finish({
+        valid: false,
+        reason: 'network_error',
+        message: error.message,
+      }));
+      response.once('end', () => {
+        if (settled) return;
+        let payload;
+        try {
+          payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        } catch {
+          finish({ valid: false, reason: 'invalid_response', message: 'Model list response is not valid JSON' });
+          return;
+        }
+        const modelMetadata = extractModelMetadata(payload);
+        const models = modelMetadata.map((model) => model.id);
+        if (models.length === 0) {
+          finish({
+            valid: false,
+            reason: 'models_unavailable',
+            message: 'Model list response did not include any model ids',
+            models,
+            modelMetadata,
+          });
+          return;
+        }
+        finish({ valid: true, models, modelMetadata, modelsVerified: true });
+      });
+    });
+    request.setTimeout(timeoutMs, () => {
+      const error = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
+      error.code = 'ETIMEDOUT';
+      request.destroy(error);
+    });
+    request.once('error', (error) => finish({
+      valid: false,
+      reason: error.code === 'ETIMEDOUT' ? 'timeout' : 'network_error',
+      message: error.message,
+    }));
+    request.end();
+  });
 }
 
 export function validateTokenFormat(apiKey) {

@@ -19,9 +19,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npm install --global @anthropic-ai/claude-code@2.1.220
       - run: npm test
       - run: npm run test:coverage
       - run: npm run test:entry-modes
+      - run: npm run test:claude-real
       - run: npm audit
       - run: npm pack --dry-run
       - name: Packed CLI smoke for RouterLab and LLM

@@ -106,7 +106,7 @@ export async function main(argv) {
     return;
   }
   if (options.json) throw usageError('--json cannot be used while launching Claude Code.');
-  validateOptions('claude-code', null, options, new Set(['service', 'strategy', 'token', 'noPrompt']));
+  validateOptions('claude-code', null, options, new Set(['service', 'strategy', 'noPrompt']));
   validateClaudeOptions(options);
   options.command = 'claude-code';
   await handleClaudeCode(options, pkg.version);
@@ -151,7 +151,7 @@ const COMMAND_OPTIONS = {
 function validateCommand(name, action, options) {
   if (name === 'claude-code') {
     if (options.json) throw usageError('--json cannot be used while launching Claude Code.');
-    validateOptions(name, null, options, new Set(['service', 'strategy', 'token', 'noPrompt']));
+    validateOptions(name, null, options, new Set(['service', 'strategy', 'noPrompt']));
     validateClaudeOptions(options);
     return;
   }

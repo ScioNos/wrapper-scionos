@@ -330,6 +330,25 @@ export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = D
   return applySubagentModelOverride(strategy, env, options);
 }
 
+export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
+  const modelKeys = [
+    'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
+  ];
+  const models = new Set();
+  for (const strategy of getServiceStrategies(serviceValue)) {
+    const environment = getClaudeCodeStrategyEnvironment(strategy.value, serviceValue);
+    for (const key of modelKeys) {
+      const model = environment[key]?.trim();
+      if (model) models.add(model);
+    }
+  }
+  return [...models];
+}
+
 export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAULT_SERVICE) {
   const strategy = findStrategy(strategyValue, serviceValue);
   if (!strategy) {

@@ -259,3 +259,18 @@ test('Codex apply command is rejected before writing config', async () => {
     /codex apply was removed/,
   );
 });
+
+test('Claude Code rejects command-line tokens without changing other command interfaces', async () => {
+  await assert.rejects(
+    () => main(['claude-code', '--token', 'visible-token-with-enough-length']),
+    (error) => error.exitCode === 2 && /--token is not valid for claude-code/.test(error.message),
+  );
+  assert.equal(
+    parseOptions(['codex', 'launch', '--token', 'codex-token-with-enough-length']).token,
+    'codex-token-with-enough-length',
+  );
+  assert.equal(
+    parseOptions(['auth', 'test', '--token', 'auth-token-with-enough-length']).token,
+    'auth-token-with-enough-length',
+  );
+});

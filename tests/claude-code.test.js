@@ -21,21 +21,59 @@ import {
 import { parseOptions } from '../src/cli/args.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 
-test('Claude Code launch environment disables experimental betas only for the child process', () => {
-  const original = process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
-  delete process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
-  try {
-    const env = buildClaudeCodeEnvironment('valid-token-with-enough-length', requireServiceConfig('llm'), 'glm-5.2');
-    assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
-    assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-sonnet-5');
-    assert.equal(process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, undefined);
-  } finally {
-    if (original === undefined) {
-      delete process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS;
-    } else {
-      process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = original;
-    }
-  }
+test('Claude Code launch environment is sanitized without changing native tool variables', () => {
+  const service = {
+    ...requireServiceConfig('llm'),
+    baseUrl: 'http://127.0.0.1:43123',
+  };
+  const sourceEnv = {
+    PATH: 'native-path',
+    HTTPS_PROXY: 'http://corporate-proxy.example',
+    NO_PROXY: 'Existing.Example',
+    no_proxy: 'second.example',
+    ROUTERLAB_API_KEY: 'raw-routerlab-secret',
+    routerlab_llm_api_key: 'raw-llm-secret',
+    WRAPPER_SCIONOS_LLM_TOKEN: 'raw-wrapper-secret',
+    ANTHROPIC_AUTH_TOKEN: 'raw-anthropic-secret',
+    ANTHROPIC_API_KEY: 'raw-api-secret',
+    ANTHROPIC_BASE_URL: 'https://untrusted.example',
+    ANTHROPIC_MODEL: 'unapproved-model',
+    ANTHROPIC_CUSTOM_HEADERS: 'x-secret: raw-header-secret',
+    ANTHROPIC_CUSTOM_MODEL_OPTION: 'unapproved-custom-model',
+    ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: 'hostile-label',
+    ANTHROPIC_BEDROCK_BASE_URL: 'https://bedrock.example',
+    CLAUDE_CODE_USE_BEDROCK: '1',
+    CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '0',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'unapproved-subagent',
+    MCP_NATIVE_SETTING: 'preserved',
+  };
+  const env = buildClaudeCodeEnvironment(
+    'generated-local-token-with-enough-length',
+    service,
+    'glm-5.2',
+    { env: sourceEnv },
+  );
+
+  assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
+  assert.equal(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-sonnet-5');
+  assert.equal(env.ANTHROPIC_BASE_URL, service.baseUrl);
+  assert.equal(env.ANTHROPIC_AUTH_TOKEN, 'generated-local-token-with-enough-length');
+  assert.equal(env.ANTHROPIC_API_KEY, '');
+  assert.equal(env.PATH, 'native-path');
+  assert.equal(env.HTTPS_PROXY, 'http://corporate-proxy.example');
+  assert.equal(env.MCP_NATIVE_SETTING, 'preserved');
+  assert.equal(env.CLAUDE_CODE_USE_BEDROCK, undefined);
+  assert.equal(env.ANTHROPIC_MODEL, undefined);
+  assert.equal(env.ANTHROPIC_CUSTOM_HEADERS, undefined);
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, undefined);
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME, undefined);
+  assert.equal(env.ANTHROPIC_BEDROCK_BASE_URL, undefined);
+  assert.equal(env.ROUTERLAB_API_KEY, undefined);
+  assert.equal(env.routerlab_llm_api_key, undefined);
+  assert.equal(env.WRAPPER_SCIONOS_LLM_TOKEN, undefined);
+  assert.equal(env.NO_PROXY, 'existing.example,second.example,127.0.0.1,localhost,::1');
+  assert.equal(env.no_proxy, env.NO_PROXY);
 });
 
 test('Claude Code launch screens use wrapper-branded guided layout', () => {

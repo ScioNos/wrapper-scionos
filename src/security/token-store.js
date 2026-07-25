@@ -11,8 +11,8 @@ const WINDOWS_POWERSHELL_MODULE_PATHS = [
   'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\Modules',
 ];
 
-export function getSecureStorageBackend(backend = currentTokenBackend()) {
-  return backend.status();
+export function getSecureStorageBackend(backend = currentTokenBackend(), service = null) {
+  return backend.status(service);
 }
 
 function commandExists(command) {
@@ -73,40 +73,6 @@ function hasNonEmptyFile(filePath, fileSystem = fs) {
   }
 }
 
-function writePlainTokenFile(tokenFile, token) {
-  const directory = path.dirname(tokenFile);
-  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  try {
-    if (process.platform !== 'win32') fs.chmodSync(directory, 0o700);
-    fs.writeFileSync(tokenFile, token, { encoding: 'utf8', mode: 0o600 });
-    if (process.platform !== 'win32') {
-      fs.chmodSync(tokenFile, 0o600);
-      assertPrivateMode(directory, 0o700, 'token directory');
-      assertPrivateMode(tokenFile, 0o600, 'token file');
-    }
-    if (!hasNonEmptyFile(tokenFile)) {
-      throw new Error('Token file was created but no content was written.');
-    }
-  } catch (error) {
-    fs.rmSync(tokenFile, { force: true });
-    throw error;
-  }
-}
-
-function assertPrivateMode(filePath, expectedMode, label) {
-  const actualMode = fs.statSync(filePath).mode & 0o777;
-  if (actualMode !== expectedMode) {
-    throw new Error('Refusing insecure ' + label + ' ' + filePath + ': expected mode ' + expectedMode.toString(8) + ', found ' + actualMode.toString(8) + '.');
-  }
-}
-function readPlainTokenFile(tokenFile) {
-  if (!hasNonEmptyFile(tokenFile)) {
-    return null;
-  }
-  const token = fs.readFileSync(tokenFile, 'utf8').trim();
-  return token || null;
-}
-
 function deletePlainTokenFile(tokenFile) {
   if (!fs.existsSync(tokenFile)) {
     return false;
@@ -127,7 +93,7 @@ export function storeToken(token, serviceValue, { backend = currentTokenBackend(
 
 export function getStoredToken(serviceValue, { backend = currentTokenBackend() } = {}) {
   const service = requireServiceConfig(serviceValue);
-  const storage = getSecureStorageBackend(backend);
+  const storage = getSecureStorageBackend(backend, service);
   if (!storage.supported) {
     return null;
   }
@@ -168,16 +134,16 @@ function readLinuxSecretServiceToken(account, namespace, runCommandFn = runComma
 
 export function deleteStoredToken(serviceValue, { backend = currentTokenBackend() } = {}) {
   const service = requireServiceConfig(serviceValue);
-  const storage = getSecureStorageBackend(backend);
-  if (!storage.supported) {
+  const storage = getSecureStorageBackend(backend, service);
+  if (!storage.supported && !backend.deleteWhenUnsupported) {
     return false;
   }
-
   return backend.delete(service);
 }
 
 export function getStoredTokenStatus(serviceValue, { backend = currentTokenBackend() } = {}) {
-  const storage = getSecureStorageBackend(backend);
+  const service = requireServiceConfig(serviceValue);
+  const storage = getSecureStorageBackend(backend, service);
   return {
     ...storage,
     stored: Boolean(getStoredToken(serviceValue, { backend })),
@@ -200,8 +166,27 @@ function linuxSecretServiceStatus() {
   return { supported: true, backend: 'Linux Secret Service' };
 }
 
-function linuxFileStatus(reason = '`secret-tool` not found; using user-only file storage') {
-  return { supported: true, backend: 'Linux user-only file', reason };
+function linuxSecretServiceUnavailableStatus() {
+  return {
+    supported: false,
+    backend: 'Linux Secret Service',
+    reason: '`secret-tool` and an available Linux Secret Service are required; plaintext token-file fallback is disabled.',
+  };
+}
+
+function linuxPlainTokenPaths(service) {
+  return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
+    .map((namespace) => getTokenFile(service.value, namespace));
+}
+
+function hasLinuxPlainToken(service) {
+  return linuxPlainTokenPaths(service).some((tokenFile) => hasNonEmptyFile(tokenFile));
+}
+
+function deleteLinuxPlainTokens(service) {
+  return linuxPlainTokenPaths(service)
+    .map((tokenFile) => deletePlainTokenFile(tokenFile))
+    .some(Boolean);
 }
 
 export function createLinuxTokenBackend({
@@ -209,7 +194,11 @@ export function createLinuxTokenBackend({
   runCommandFn = runCommand,
 } = {}) {
   return {
-    status: () => (hasSecretToolCommand() ? linuxSecretServiceStatus() : linuxFileStatus()),
+    deleteWhenUnsupported: true,
+    status: (service = null) => ({
+      ...(hasSecretToolCommand() ? linuxSecretServiceStatus() : linuxSecretServiceUnavailableStatus()),
+      ...(service && hasLinuxPlainToken(service) ? { migrationRequired: true } : {}),
+    }),
     store: (token, service) => storeLinuxToken(token, service, hasSecretToolCommand(), runCommandFn),
     get: (service) => getLinuxToken(service, hasSecretToolCommand(), runCommandFn),
     delete: (service) => deleteLinuxToken(service, hasSecretToolCommand(), runCommandFn),
@@ -334,36 +323,28 @@ function storeLinuxSecretServiceToken(token, service, runCommandFn = runCommand)
   }
 }
 
-function storeLinuxFileToken(token, service, reason = null) {
-  writePlainTokenFile(getTokenFile(service.value), token);
-  return linuxFileStatus(reason ?? '`secret-tool` not found; using user-only file storage');
-}
-
-function getLinuxFileToken(service) {
-  return readPlainTokenFile(getTokenFile(service.value))
-    ?? readPlainTokenFile(getTokenFile(service.value, LEGACY_SECURE_STORAGE_SERVICE));
-}
-
 function storeLinuxToken(token, service, secretToolAvailable, runCommandFn = runCommand) {
-  if (secretToolAvailable) {
-    try {
-      storeLinuxSecretServiceToken(token, service, runCommandFn);
-      return linuxSecretServiceStatus();
-    } catch (error) {
-      return storeLinuxFileToken(token, service, `Linux Secret Service failed; using user-only file storage: ${error.message}`);
-    }
+  if (!secretToolAvailable) {
+    throw new Error(linuxSecretServiceUnavailableStatus().reason);
   }
 
-  return storeLinuxFileToken(token, service);
+  storeLinuxSecretServiceToken(token, service, runCommandFn);
+  const verified = readLinuxSecretServiceToken(
+    service.secureStorageAccount,
+    SECURE_STORAGE_SERVICE,
+    runCommandFn,
+  );
+  if (verified !== token) {
+    throw new Error('Linux Secret Service did not return the token after storing it; legacy plaintext files were preserved.');
+  }
+  const migratedLegacyFiles = deleteLinuxPlainTokens(service);
+  return { ...linuxSecretServiceStatus(), migratedLegacyFiles };
 }
 
 function getLinuxToken(service, secretToolAvailable, runCommandFn = runCommand) {
-  const secretServiceToken = secretToolAvailable
-    ? readLinuxSecretServiceToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn)
-      ?? readLinuxSecretServiceToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE, runCommandFn)
-    : null;
-
-  return secretServiceToken ?? getLinuxFileToken(service);
+  if (!secretToolAvailable) return null;
+  return readLinuxSecretServiceToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn)
+    ?? readLinuxSecretServiceToken(service.secureStorageAccount, LEGACY_SECURE_STORAGE_SERVICE, runCommandFn);
 }
 
 function deleteLinuxToken(service, secretToolAvailable, runCommandFn = runCommand) {
@@ -372,8 +353,6 @@ function deleteLinuxToken(service, secretToolAvailable, runCommandFn = runComman
       'clear', 'service', namespace, 'account', service.secureStorageAccount,
     ]).status === 0)
     .some(Boolean);
-  const fileDeleted = [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
-    .map((namespace) => deletePlainTokenFile(getTokenFile(service.value, namespace)))
-    .some(Boolean);
+  const fileDeleted = deleteLinuxPlainTokens(service);
   return Boolean(secretDeleted || fileDeleted);
 }

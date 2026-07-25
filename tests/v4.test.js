@@ -11,7 +11,7 @@ import { parseOptions, isLoopbackHost } from '../src/cli/args.js';
 import { main, resolveCommandInvocation } from '../src/cli/main.js';
 import { printError } from '../src/cli/commands/output.js';
 import { defaultDesktopStrategy, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
-import { extractModelMetadata, fetchModels } from '../src/routerlab/models.js';
+import { extractModelMetadata, fetchModels, fetchModelsDirect } from '../src/routerlab/models.js';
 import { isCodexVersionSupported } from '../src/platform/detect.js';
 import { assertSupportedNodeVersion, isSupportedNodeVersion } from '../src/platform/runtime.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
@@ -182,6 +182,23 @@ test('model discovery handles metadata, invalid JSON, auth failures, and timeout
   assert.equal(redirected.status, 302);
   assert.equal(redirectedRequestHeaders, null);
   assert.equal((await fetchModels('token', { baseUrl: base + '/missing', timeoutMs: 20 })).reason, 'timeout');
+
+  const direct = await fetchModelsDirect('direct-sensitive-token', {
+    baseUrl: base + '/valid',
+    timeoutMs: 1000,
+  });
+  assert.equal(direct.valid, true);
+  assert.deepEqual(direct.models, ['m']);
+  const directRedirect = await fetchModelsDirect('direct-sensitive-token', {
+    baseUrl: base + '/redirect',
+    timeoutMs: 1000,
+  });
+  assert.equal(directRedirect.reason, 'redirect_not_allowed');
+  assert.equal(redirectedRequestHeaders, null);
+  assert.equal((await fetchModelsDirect('token', {
+    baseUrl: base + '/missing',
+    timeoutMs: 20,
+  })).reason, 'timeout');
 });
 
 test('generated Desktop credentials are strong, readable only for loopback, and redact cleanly', (t) => {

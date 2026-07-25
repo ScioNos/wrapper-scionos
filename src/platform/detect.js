@@ -134,16 +134,28 @@ export function detectClaudeCode({
   home = os.homedir(),
   detectCliFn = detectCli,
 } = {}) {
-  return detectCliFn({
+  const detected = detectCliFn({
     command: 'claude',
     candidates: claudeCodeCandidates(platform, home),
     configPath: path.join(home, '.claude', 'settings.json'),
   });
+  detected.minimumVersion = MINIMUM_CLAUDE_CODE_VERSION;
+  detected.versionSupported = detected.installed && isClaudeCodeVersionSupported(detected.version);
+  return detected;
 }
 
+export const MINIMUM_CLAUDE_CODE_VERSION = '2.1.220';
 export const MINIMUM_CODEX_VERSION = '0.144.1';
 
+export function isClaudeCodeVersionSupported(version, minimum = MINIMUM_CLAUDE_CODE_VERSION) {
+  return isSemanticVersionSupported(version, minimum);
+}
+
 export function isCodexVersionSupported(version, minimum = MINIMUM_CODEX_VERSION) {
+  return isSemanticVersionSupported(version, minimum);
+}
+
+function isSemanticVersionSupported(version, minimum) {
   const actual = String(version ?? '').match(/(\d+)\.(\d+)\.(\d+)/);
   const required = String(minimum).match(/(\d+)\.(\d+)\.(\d+)/);
   if (!actual || !required) {

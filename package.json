@@ -19,11 +19,12 @@
   ],
   "scripts": {
     "test": "node --test",
+    "test:claude-real": "node --test tests/claude-real-cli.integration.mjs",
     "test:codex-real": "node --test tests/codex-real-cli.integration.mjs",
     "start": "node index.js",
     "test:entry-modes": "node tests/run-entry-mode-smokes.mjs",
     "test:coverage": "node tests/run-coverage.mjs",
-    "release:check": "npm run test:coverage && npm run test:entry-modes && npm audit && npm pack --dry-run"
+    "release:check": "npm run test:coverage && npm run test:entry-modes && npm run test:claude-real && npm audit && npm pack --dry-run"
   },
   "keywords": [
     "scionos",

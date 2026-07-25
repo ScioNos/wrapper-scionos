@@ -9,10 +9,20 @@ All notable changes to this project will be documented in this file.
 - Reject Codex passthrough options that can replace the RouterLab provider, selected model, configuration profile, local provider, or remote app-server transport.
 - Reject every `/v1/models` redirect without forwarding the RouterLab token or discovery headers to another origin.
 - Preserve `config.toml` when no known wrapper backup exists; legacy status/restore now reports that manual cleanup is required while retaining independent catalog cleanup.
+- Require Claude Code 2.1.220 or newer and make every Claude model-discovery failure fatal before proxy or child startup.
+- Sanitize Claude's child environment, remove raw RouterLab credentials and alternate-provider routing, mark the provider as wrapper-managed, and bypass environment proxies for loopback and discovery.
+- Enforce the verified RouterLab Claude model intersection inside the local proxy; denied models receive a local 403 and never reach the upstream service.
+- Reject `--token` for Claude Code launches and require Linux Secret Service for persisted tokens; legacy plaintext files are never read and are deleted only after a verified migration.
+
+### Tests
+
+- Add real Claude Code 2.1.220 gateway coverage with hostile settings and no production API access, plus cross-platform CI installation of the pinned CLI.
+- Cover fail-closed discovery, child-environment redaction, model enforcement, compressed requests, token counting, cleanup error precedence, and Linux Secret Service migration.
 
 ### Documentation
 
 - Define the RouterLab-only guarantee as the model discovery and inference traffic configured by the wrapper, without changing unrelated native Codex networking or integrations.
+- Document `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` as an intentional Claude Code gateway-compatibility exception, including its suppression scope and MCP tool-search tradeoff.
 
 ## [5.0.0-alpha.1] - 2026-07-25
 

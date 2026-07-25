@@ -28,57 +28,61 @@ function withTokenDirectory(t, prefix) {
   return tempDir;
 }
 
-test('Linux token backend falls back to a user-only file without secret-tool', (t) => {
+test('Linux token backend fails closed without secret-tool and reports legacy plaintext', (t) => {
   const tempDir = withTokenDirectory(t, '.test-linux-token-');
 
   const service = requireServiceConfig('routerlab');
   const backend = createLinuxTokenBackend({ hasSecretToolCommand: () => false });
   assert.deepEqual(backend.status(), {
-    supported: true,
-    backend: 'Linux user-only file',
-    reason: '`secret-tool` not found; using user-only file storage',
+    supported: false,
+    backend: 'Linux Secret Service',
+    reason: '`secret-tool` and an available Linux Secret Service are required; plaintext token-file fallback is disabled.',
   });
 
-  const token = 'valid-token-with-enough-length';
   const tokenPath = path.join(tempDir, SECURE_STORAGE_SERVICE, service.secureStorageFileName);
-  if (process.platform !== 'win32') {
-    fs.mkdirSync(path.dirname(tokenPath), { recursive: true, mode: 0o777 });
-    fs.chmodSync(path.dirname(tokenPath), 0o777);
-    fs.writeFileSync(tokenPath, 'old-token', { mode: 0o666 });
-    fs.chmodSync(tokenPath, 0o666);
-  }
-  const stored = backend.store(token, service);
-  assert.equal(stored.backend, 'Linux user-only file');
-  assert.equal(backend.get(service), token);
-
-  assert.equal(fs.readFileSync(tokenPath, 'utf8'), token);
-  if (process.platform !== 'win32') {
-    assert.equal(fs.statSync(tokenPath).mode & 0o777, 0o600);
-    assert.equal(fs.statSync(path.dirname(tokenPath)).mode & 0o777, 0o700);
-  }
-
+  fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+  fs.writeFileSync(tokenPath, 'legacy-plaintext-token');
+  assert.equal(backend.status(service).migrationRequired, true);
+  assert.deepEqual(getStoredTokenStatus(service.value, { backend }), {
+    supported: false,
+    backend: 'Linux Secret Service',
+    reason: '`secret-tool` and an available Linux Secret Service are required; plaintext token-file fallback is disabled.',
+    migrationRequired: true,
+    stored: false,
+  });
+  assert.equal(backend.get(service), null);
+  assert.throws(
+    () => backend.store('valid-token-with-enough-length', service),
+    /Secret Service.*required/i,
+  );
+  assert.equal(fs.readFileSync(tokenPath, 'utf8'), 'legacy-plaintext-token');
   assert.equal(backend.delete(service), true);
   assert.equal(backend.get(service), null);
 });
 
-test('token backends expose unsupported behavior and Linux Secret Service fallback', (t) => {
+test('token backends expose unsupported behavior and never fall back after Secret Service errors', (t) => {
   const unsupported = getTokenBackend('freebsd');
   assert.equal(unsupported.status().supported, false);
   assert.equal(unsupported.store('x', {}), undefined);
   assert.equal(unsupported.get({}), null);
   assert.equal(unsupported.delete({}), false);
 
-  withTokenDirectory(t, '.test-linux-token-fallback-');
+  const tempDir = withTokenDirectory(t, '.test-linux-token-fallback-');
   const service = requireServiceConfig('llm');
-  const fallback = createLinuxTokenBackend({ hasSecretToolCommand: () => true });
-  assert.equal(fallback.status().backend, 'Linux Secret Service');
-  const stored = fallback.store('fallback-token-with-enough-length', service);
-  assert.equal(stored.backend, 'Linux user-only file');
-  assert.match(stored.reason, /Secret Service failed/);
-  const files = createLinuxTokenBackend({ hasSecretToolCommand: () => false });
-  assert.equal(files.get(service), 'fallback-token-with-enough-length');
-  assert.equal(files.delete(service), true);
-  assert.equal(files.delete(service), false);
+  const legacyPath = path.join(tempDir, SECURE_STORAGE_SERVICE, service.secureStorageFileName);
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.writeFileSync(legacyPath, 'preserved-legacy-token');
+  const failing = createLinuxTokenBackend({
+    hasSecretToolCommand: () => true,
+    runCommandFn: () => ({ status: 1, stdout: '', stderr: 'service unavailable' }),
+  });
+  assert.equal(failing.status().backend, 'Linux Secret Service');
+  assert.throws(
+    () => failing.store('new-token-with-enough-length', service),
+    /service unavailable/,
+  );
+  assert.equal(fs.readFileSync(legacyPath, 'utf8'), 'preserved-legacy-token');
+  assert.equal(failing.get(service), null);
 });
 
 test('public token storage APIs handle supported, unsupported, and failing backends', () => {
@@ -212,9 +216,12 @@ test('macOS token backend covers Keychain success, fallback, deletion, and error
   assert.equal(failing.delete(service), false);
 });
 
-test('Linux Secret Service backend covers successful commands and file fallback', (t) => {
-  withTokenDirectory(t, '.test-linux-secret-service-');
+test('Linux Secret Service backend verifies writes and migrates legacy plaintext only after success', (t) => {
+  const tempDir = withTokenDirectory(t, '.test-linux-secret-service-');
   const service = requireServiceConfig('routerlab');
+  const legacyPath = path.join(tempDir, 'claude-scionos', service.secureStorageFileName);
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.writeFileSync(legacyPath, 'legacy-plaintext-token');
   const calls = [];
   const backend = createLinuxTokenBackend({
     hasSecretToolCommand: () => true,
@@ -235,19 +242,24 @@ test('Linux Secret Service backend covers successful commands and file fallback'
   assert.deepEqual(backend.store('secret-service-token', service), {
     supported: true,
     backend: 'Linux Secret Service',
+    migratedLegacyFiles: true,
   });
+  assert.equal(fs.existsSync(legacyPath), false);
   assert.equal(backend.get(service), 'secret-service-token');
   assert.equal(backend.delete(service), true);
   assert.equal(calls[0].input, 'secret-service-token');
 
-  const fallback = createLinuxTokenBackend({
+  fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
+  fs.writeFileSync(legacyPath, 'must-survive-failure');
+  const failingStore = createLinuxTokenBackend({
     hasSecretToolCommand: () => true,
     runCommandFn: () => ({ status: 1, stdout: '', stderr: 'service unavailable' }),
   });
-  const status = fallback.store('file-fallback-token', service);
-  assert.equal(status.backend, 'Linux user-only file');
-  assert.match(status.reason, /service unavailable/);
-  assert.equal(fallback.get(service), 'file-fallback-token');
+  assert.throws(
+    () => failingStore.store('file-fallback-token', service),
+    /service unavailable/,
+  );
+  assert.equal(fs.readFileSync(legacyPath, 'utf8'), 'must-survive-failure');
 
   const autoDetected = createLinuxTokenBackend();
   assert.equal(typeof autoDetected.status().supported, 'boolean');

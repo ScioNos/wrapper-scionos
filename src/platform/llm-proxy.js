@@ -33,7 +33,9 @@ export function createLongRunningLlmProxy({
   gatewayToken = generateLlmProxyGatewayToken(),
   upstreamAuth = 'both',
   beforeForward = null,
+  allowedModels = null,
 }) {
+  const effectiveAllowedModels = allowedModels ? new Set(allowedModels) : null;
   const server = http.createServer(async (req, res) => {
     try {
       const handled = await beforeForward?.(req, res);
@@ -47,6 +49,7 @@ export function createLongRunningLlmProxy({
       }
 
       const bodyText = await readRequestBody(req);
+      validateAllowedModelRequest(req, bodyText, effectiveAllowedModels);
 
       await forwardLongRunningLlmRequest(req, res, {
         targetBaseUrl,
@@ -68,6 +71,38 @@ export function createLongRunningLlmProxy({
 
   configureLongRunningHttpServer(server);
   return { server };
+}
+
+export function validateAllowedModelRequest(req, bodyText, allowedModels) {
+  if (!allowedModels) return;
+  const pathname = new URL(req.url, 'http://127.0.0.1').pathname.replace(/\/+$/, '');
+  if (String(req.method).toUpperCase() !== 'POST') return;
+
+  const isMessageRequest = pathname.endsWith('/v1/messages')
+    || pathname.endsWith('/v1/messages/count_tokens');
+  const isBatchRequest = pathname.endsWith('/v1/messages/batches');
+  if (!isMessageRequest && !isBatchRequest) return;
+
+  let payload;
+  try {
+    payload = JSON.parse(bodyText);
+  } catch {
+    throw proxyError('Claude model request body must be valid JSON.', 400, 'invalid_json');
+  }
+
+  const models = isBatchRequest
+    ? (Array.isArray(payload?.requests)
+        ? payload.requests.map((entry) => entry?.params?.model)
+        : [])
+    : [payload?.model];
+  if (models.length === 0 || models.some((model) => typeof model !== 'string' || !model.trim())) {
+    throw proxyError('Claude model request must include a model.', 400, 'missing_model');
+  }
+
+  const denied = models.find((model) => !allowedModels.has(model));
+  if (denied) {
+    throw proxyError(`Model "${denied}" is not allowed for this RouterLab Claude Code session.`, 403, 'model_not_allowed');
+  }
 }
 
 export async function startLongRunningLlmProxy({

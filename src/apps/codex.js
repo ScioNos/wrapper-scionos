@@ -40,6 +40,7 @@ export const DEFAULT_CODEX_LLM_MODEL = DEFAULT_CODEX_MODEL.llm;
 
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
+export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
 
 // Fallback constants when upstream metadata is unavailable
 const FALLBACK_CONTEXT_WINDOW = 128000;
@@ -475,22 +476,11 @@ export function readCodexStatus(paths = getCodexPaths()) {
 
 
 export function buildCodexModelCatalogFromCache({
-  paths = getCodexPaths(),
-  models = CODEX_ROUTERLAB_MODELS,
-  modelMetadata = [],
   serviceValue = 'routerlab',
+  models = codexModelsForService(serviceValue),
 } = {}) {
-  // The Codex cache schema is not stable. Use only normalized upstream metadata.
-  resolveCodexPaths(paths);
-  const metadataById = new Map(modelMetadata.map((entry) => [entry.id, entry]));
-  return {
-    models: models.map((model, index) => buildCodexModelCatalogEntry(
-      model,
-      index,
-      metadataById.get(model),
-      serviceValue,
-    )),
-  };
+  // Legacy function - now delegates to buildCodexCatalogFallback
+  return buildCodexCatalogFallback({ serviceValue, allowedModelIds: models });
 }
 
 function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue = 'routerlab') {

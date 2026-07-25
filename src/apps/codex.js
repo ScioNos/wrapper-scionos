@@ -61,6 +61,23 @@ export function assertCodexCliAvailable() {
 }
 
 
+export async function launchCodex({
+  apiKey = null,
+  codexArgs = [],
+  codex = null,
+  updateProcessExitCode = true,
+} = {}) {
+  const resolvedCodex = codex ?? assertCodexCliAvailable();
+  return runInteractiveCli(resolvedCodex.cliPath, codexArgs, {
+    env: {
+      ...process.env,
+      ...(apiKey ? buildCodexAuth(apiKey) : {}),
+    },
+    updateProcessExitCode,
+  });
+}
+
+
 export function getCodexPaths(env = process.env) {
   const configDir = env.CODEX_HOME || path.join(os.homedir(), '.codex');
   return {
@@ -438,5 +455,127 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
     removedModelCatalog: catalogExists,
     authPreserved: true,
   };
+}
+
+
+
+export function readCodexStatus(paths = getCodexPaths()) {
+  const resolvedPaths = resolveCodexPaths(paths);
+  const config = readText(resolvedPaths.configPath);
+  return {
+    paths: resolvedPaths,
+    configExists: fs.existsSync(resolvedPaths.configPath),
+    backupExists: fs.existsSync(resolvedPaths.backupPath),
+    authExists: fs.existsSync(resolvedPaths.authPath),
+    modelCatalogExists: fs.existsSync(resolvedPaths.modelCatalogPath),
+    wrapperConfig: isWrapperCodexConfig(config),
+    routerlabEndpoint: hasRouterlabEndpoint(config),
+  };
+}
+
+
+export function buildCodexModelCatalogFromCache({
+  paths = getCodexPaths(),
+  models = CODEX_ROUTERLAB_MODELS,
+  modelMetadata = [],
+  serviceValue = 'routerlab',
+} = {}) {
+  // The Codex cache schema is not stable. Use only normalized upstream metadata.
+  resolveCodexPaths(paths);
+  const metadataById = new Map(modelMetadata.map((entry) => [entry.id, entry]));
+  return {
+    models: models.map((model, index) => buildCodexModelCatalogEntry(
+      model,
+      index,
+      metadataById.get(model),
+      serviceValue,
+    )),
+  };
+}
+
+function buildCodexModelCatalogEntry(model, index, metadata = {}, serviceValue = 'routerlab') {
+  const modelProfile = CODEX_MODEL_PROFILES.get(model) ?? {};
+  const contextWindow = resolveCatalogMetadataValue(
+    metadata,
+    'contextWindow',
+    'contextWindowVerified',
+    modelProfile.contextWindow ?? CODEX_FALLBACK_CONTEXT_WINDOW,
+  );
+  const declaredModalities = resolveCatalogMetadataValue(
+    metadata,
+    'inputModalities',
+    'inputModalitiesVerified',
+    modelProfile.inputModalities ?? ['text'],
+  );
+  const inputModalities = declaredModalities?.includes('image') ? ['text', 'image'] : ['text'];
+  const supportsReasoning = resolveCatalogBoolean(
+    metadata,
+    'supportsReasoning',
+    'supportsReasoningVerified',
+    modelProfile.supportsReasoning === true,
+  );
+  const supportsParallelToolCalls = resolveCatalogBoolean(
+    metadata,
+    'supportsParallelToolCalls',
+    'supportsParallelToolCallsVerified',
+    modelProfile.supportsParallelToolCalls === true,
+  );
+  const reasoningProfile = supportsReasoning
+    ? CODEX_REASONING_PROFILES.get(model) ?? {
+        defaultLevel: 'medium',
+        levels: CODEX_FALLBACK_REASONING_LEVELS,
+      }
+    : null;
+  const unavailableNotice = serviceValue === 'llm'
+    ? CODEX_LLM_MODEL_NOTICES.get(model) ?? null
+    : null;
+  const displayName = unavailableNotice ? '🔴 ' + codexModelDisplayName(model) : codexModelDisplayName(model);
+
+  return {
+    slug: model,
+    display_name: displayName,
+    description: unavailableNotice ?? displayName,
+    default_reasoning_level: reasoningProfile?.defaultLevel ?? null,
+    supported_reasoning_levels: reasoningProfile
+      ? structuredClone(reasoningProfile.levels)
+      : [],
+    shell_type: 'shell_command',
+    visibility: 'list',
+    supported_in_api: !unavailableNotice,
+    priority: 1000 + index,
+    additional_speed_tiers: [],
+    service_tiers: [],
+    default_service_tier: null,
+    availability_nux: unavailableNotice ? { message: '🔴 ' + unavailableNotice } : null,
+    upgrade: null,
+    base_instructions: modelProfile.baseInstructions ?? CODEX_FALLBACK_BASE_INSTRUCTIONS,
+    supports_reasoning_summaries: supportsReasoning,
+    default_reasoning_summary: 'none',
+    support_verbosity: false,
+    default_verbosity: null,
+    truncation_policy: { mode: 'bytes', limit: 10000 },
+    supports_parallel_tool_calls: supportsParallelToolCalls,
+    supports_image_detail_original: inputModalities.includes('image'),
+    context_window: contextWindow,
+    max_context_window: contextWindow,
+    effective_context_window_percent: 95,
+    experimental_supported_tools: [],
+    input_modalities: inputModalities,
+    supports_search_tool: false,
+  };
+}
+
+function resolveCatalogMetadataValue(metadata, valueKey, verifiedKey, fallback) {
+  if (metadata?.[verifiedKey] === false) {
+    return fallback;
+  }
+  return metadata?.[valueKey] ?? fallback;
+}
+
+function resolveCatalogBoolean(metadata, valueKey, verifiedKey, fallback) {
+  if (metadata?.[verifiedKey] === false) {
+    return fallback;
+  }
+  return typeof metadata?.[valueKey] === 'boolean' ? metadata[valueKey] : fallback;
 }
 

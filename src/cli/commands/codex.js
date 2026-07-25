@@ -49,12 +49,9 @@ export async function launchCodexForService(options) {
     if (!modelResult.valid && modelResult.reason === 'auth_failed') {
       throw codexAuthenticationError(modelResult, service, resolvedToken);
     }
-    const supportedModels = codexModelsForService(service.value);
-    const availableModels = modelResult.valid
-      ? supportedModels.filter((candidate) => modelResult.models.includes(candidate))
-      : supportedModels;
-    if (modelResult.valid && !availableModels.includes(model)) {
-      throw codexModelUnavailableError(model, service, availableModels);
+    const allowedModels = codexModelsForService(service.value);
+    if (!allowedModels.includes(model)) {
+      throw codexModelUnavailableError(model, service, allowedModels);
     }
     if (!modelResult.valid) warnCodexModelFallback(modelResult);
     const modelMetadata = modelResult.valid ? modelResult.modelMetadata : [];
@@ -66,7 +63,7 @@ export async function launchCodexForService(options) {
         targetBaseUrl: service.baseUrl,
         routerlabToken: resolvedToken.token,
         upstreamAuth: 'openai',
-        codexServiceValue: service.value,
+        
       });
       baseUrl = proxy.baseUrl;
       apiKey = proxy.gatewayToken;
@@ -75,7 +72,7 @@ export async function launchCodexForService(options) {
     catalog = writeCodexRuntimeModelCatalog({
       serviceValue: service.value,
       modelMetadata,
-      models: availableModels,
+      models: allowedModels,
     });
     const codexArgs = buildCodexRuntimeArgs({
       providerName: service.value,

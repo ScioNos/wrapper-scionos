@@ -35,7 +35,7 @@ export function createLongRunningLlmProxy({
   gatewayToken = generateLlmProxyGatewayToken(),
   upstreamAuth = 'both',
   beforeForward = null,
-  codexServiceValue = null,
+  
 }) {
   const server = http.createServer(async (req, res) => {
     try {
@@ -50,16 +50,14 @@ export function createLongRunningLlmProxy({
       }
 
       let bodyText = await readRequestBody(req);
-      if (codexServiceValue) bodyText = normalizeCodexResponsesRequest(req.url, bodyText);
+      
 
       await forwardLongRunningLlmRequest(req, res, {
         targetBaseUrl,
         routerlabToken,
         body: bodyText,
         upstreamAuth,
-        errorContext: codexServiceValue
-          ? buildCodexResponsesErrorContext(req, bodyText, codexServiceValue)
-          : null,
+        errorContext: null,
       });
     } catch (error) {
       if (!res.headersSent) {
@@ -157,26 +155,6 @@ export async function forwardLongRunningLlmRequest(req, res, {
   }
 
   await writeLongRunningHttpResponse(res, upstream, responseHeaders);
-}
-
-function buildCodexResponsesErrorContext(req, bodyText, serviceValue) {
-  if (!isCodexResponsesEndpoint(req.url)) {
-    return null;
-  }
-  return {
-    requestLabel: 'Codex Responses request',
-    serviceValue,
-    model: modelFromRequestBody(bodyText),
-  };
-}
-
-function modelFromRequestBody(bodyText) {
-  try {
-    const body = bodyText ? JSON.parse(bodyText) : {};
-    return typeof body?.model === 'string' ? body.model : null;
-  } catch {
-    return null;
-  }
 }
 
 export function configureLongRunningHttpServer(server) {
@@ -343,24 +321,6 @@ async function readEncodedStreamText(stream, maxBytes = MAX_ERROR_BODY_BYTES) {
   }
   return body.subarray(0, maxBytes).toString('utf8');
 }
-
-function normalizeCodexResponsesRequest(reqUrl, bodyText) {
-  const url = new URL(reqUrl, 'http://127.0.0.1');
-  if (!['/responses', '/v1/responses'].includes(url.pathname) || !bodyText) return bodyText;
-  try {
-    const body = JSON.parse(bodyText);
-    body.store = false;
-    delete body.metadata;
-    return JSON.stringify(body);
-  } catch {
-    throw proxyError('Request body is not valid JSON.', 400, 'invalid_json');
-  }
-}
-function isCodexResponsesEndpoint(reqUrl) {
-  const url = new URL(reqUrl, 'http://127.0.0.1');
-  return ['/responses', '/v1/responses', '/responses/compact', '/v1/responses/compact'].includes(url.pathname);
-}
-
 
 async function requestLongRunningHttp(url, { method, headers, body, signal }) {
   return new Promise((resolve, reject) => {

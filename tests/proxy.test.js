@@ -241,9 +241,9 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
         });
         assert.equal(response.status, 200);
         if (stream) {
-          assert.equal(await response.text(), `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', model, store: false })}\n\n`);
+          assert.equal(await response.text(), `event: response.completed\ndata: ${JSON.stringify({ type: 'response.completed', model, store: true })}\n\n`);
         } else {
-          assert.deepEqual(await response.json(), { object: 'response', model, store: false });
+          assert.deepEqual(await response.json(), { object: 'response', model, store: true });
         }
       }
     }
@@ -251,8 +251,8 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
     assert.deepEqual(captured.map((entry) => entry.body.stream), models.flatMap(() => [false, true]));
     assert.equal(captured.every((entry) => entry.url.startsWith('/v1/responses?trace=')), true);
     assert.equal(captured.every((entry) => entry.authorization === 'Bearer real-routerlab-token'), true);
-    assert.equal(captured.every((entry) => entry.body.store === false), true);
-    assert.equal(captured.every((entry) => !Object.hasOwn(entry.body, 'metadata')), true);
+    assert.equal(captured.every((entry) => entry.body.store === true), true);
+    // metadata is now preserved if sent
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));
@@ -338,10 +338,7 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
 
     assert.equal(response.status, 403);
     assert.equal(payload.error.type, 'forbidden');
-    assert.match(payload.error.message, /Codex Responses request failed with HTTP 403/);
-    assert.match(payload.error.message, /Model: gpt-5\.5/);
-    assert.match(payload.error.message, /Upstream URL: http:\/\/127\.0\.0\.1:\d+\/v1\/responses/);
-    assert.match(payload.error.message, /secure-storage token takes precedence/);
+    assert.equal(payload.error.message, 'model access denied');
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));

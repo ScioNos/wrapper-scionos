@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [5.0.0-alpha.1] - Unreleased
+## [5.0.0-alpha.1] - 2026-07-25
 
 ### Breaking Changes
 
@@ -24,7 +24,6 @@ All notable changes to this project will be documented in this file.
 ### Migration
 
 See [docs/migration-5.0-codex.md](docs/migration-5.0-codex.md) for detailed migration guide.
-## Unreleased
 
 ## 4.2.1 - 2026-07-23
 

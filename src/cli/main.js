@@ -46,7 +46,7 @@ export const COMMAND_DEFINITIONS = [
   },
   {
     name: 'codex', usage: 'wrapper-scionos codex launch|template|restore|status',
-    description: 'Launch Codex CLI with the RouterLab model catalog', defaultAction: 'launch',
+    description: 'Launch Codex CLI directly with RouterLab', defaultAction: 'launch',
     handler: ({ action, options }) => handleCodex(action, options),
   },
 ];
@@ -118,7 +118,7 @@ export function shouldOpenInteractiveMenu(options) {
 
 const OPTION_LABELS = {
   service: '--service', strategy: '--strategy', model: '--model', token: '--token',
-  host: '--host', port: '--port', allowOrigins: '--allow-origin', transport: '--direct',
+  host: '--host', port: '--port', allowOrigins: '--allow-origin',
   noPrompt: '--no-prompt', yes: '--yes', dryRun: '--dry-run', json: '--json',
   listStrategies: '--list-strategies',
 };
@@ -141,7 +141,7 @@ const COMMAND_OPTIONS = {
     proxy: ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'allowOrigins', 'yes'],
   },
   codex: {
-    launch: ['service', 'model', 'token', 'noPrompt', 'transport'],
+    launch: ['service', 'model', 'token', 'noPrompt'],
     template: ['service', 'model', 'json'],
     restore: ['yes', 'dryRun', 'json'],
     status: ['json'],

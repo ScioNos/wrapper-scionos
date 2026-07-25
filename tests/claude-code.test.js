@@ -15,7 +15,6 @@ import {
   launchClaudeCode,
   resolveToken,
   resolveTokenWithSource,
-  warnClaudeCodeBaseUrlOverride,
   warnClaudeCodeTokenConflict,
   withSeparators,
 } from '../src/apps/claude-code.js';
@@ -168,21 +167,6 @@ test('Claude Code diagnostics cover endpoint warnings and every token source', (
   const warnings = [];
   console.error = (...values) => warnings.push(stripVTControlCharacters(values.join(' ')));
   try {
-    warnClaudeCodeBaseUrlOverride(service, {
-      source: 'default',
-      envKey: null,
-      baseUrl: service.baseUrl,
-    });
-    warnClaudeCodeBaseUrlOverride(service, {
-      source: 'env',
-      envKey: 'ROUTERLAB_LLM_BASE_URL',
-      baseUrl: 'https://example.test/gateway',
-    });
-    warnClaudeCodeBaseUrlOverride(service, {
-      source: 'legacy-env',
-      envKey: 'ANTHROPIC_BASE_URL',
-      baseUrl: 'https://legacy.example.test',
-    });
     warnClaudeCodeTokenConflict(service, {
       source: 'secure-storage',
       envTokenPresent: true,
@@ -197,10 +181,8 @@ test('Claude Code diagnostics cover endpoint warnings and every token source', (
   } finally {
     console.error = originalError;
   }
-  assert.equal(warnings.length, 3);
-  assert.match(warnings[0], /ROUTERLAB_LLM_BASE_URL/);
-  assert.match(warnings[1], /deprecated ANTHROPIC_BASE_URL/);
-  assert.match(warnings[2], /stored RouterLab LLM token/);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /stored RouterLab LLM token/);
 });
 
 test('interactive Claude strategy selection covers separators, Back, and selected choices', async () => {

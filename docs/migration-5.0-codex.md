@@ -6,136 +6,71 @@ This guide covers breaking changes in the Codex integration for wrapper-scionos 
 
 Version 5.0 fundamentally changes how wrapper-scionos interacts with Codex:
 
-- **Before (4.x)**: The wrapper imposed model identities through hardcoded profiles
-- **After (5.0)**: The wrapper uses upstream metadata from RouterLab's `/v1/models`
+- **Before (4.x)**: Codex used a wrapper-managed proxy and model catalog.
+- **After (5.0)**: Codex connects directly to RouterLab and keeps its native behavior.
 
 ## Breaking Changes
 
-### 1. Model Metadata Now Comes from Upstream
+### 1. Proxy and catalog removed
 
 **4.2.1 behavior:**
-```javascript
-// Hardcoded in src/apps/codex.js
-const CODEX_MODEL_PROFILES = {
-  'gpt-5.6-sol': {
-    contextWindow: 372000,
-    inputModalities: ['text', 'image'],
-    baseInstructions: 'You are Codex, a coding agent...',
-  }
-};
-```
+
+- a local session proxy;
+- a temporary `model_catalog_json`;
+- wrapper-provided context, instructions, reasoning, modality, shell/tool, search, truncation, and priority fields.
 
 **5.0 behavior:**
-```javascript
-// Fetched from GET /v1/models
-const upstream = await fetchModels(token, { serviceValue, baseUrl });
-// Used directly in catalog generation
-```
+
+- direct `https://api.routerlab.ch/v1` or `https://llm-api.routerlab.ch/v1`;
+- exactly six provider/model routing overrides;
+- the RouterLab token passed unchanged as child-only `OPENAI_API_KEY`;
+- no catalog or behavioral metadata.
 
 **Impact:**
-- Context windows may differ if RouterLab reports different values
-- Base instructions come from upstream or use Codex defaults
-- Reasoning levels reflect upstream capabilities
+
+Codex owns its context window, instructions, reasoning, modalities, tools, and compaction behavior. RouterLab/LiteLLM remains authoritative if the model is changed after launch.
 
 **Migration:**
-None required for most users. If you relied on specific hardcoded values, verify them against RouterLab's actual responses.
+
+Remove any automation that expects a local Codex proxy or a generated catalog.
 
 ---
 
-### 2. Request Body No Longer Rewritten
+### 2. Model discovery is fail-closed
 
-**4.2.1 behavior:**
-```javascript
-// In proxy mode, every /v1/responses request was modified:
-body.store = false;
-delete body.metadata;
-```
+`GET /v1/models` is used only to intersect returned identifiers with the fixed service allowlist.
 
-**5.0 behavior:**
-```javascript
-// Request body passed through unchanged
-```
+- `--model` requires an exact available identifier.
+- Interactive launch prompts among available allowed models and auto-selects a single result.
+- `--no-prompt` without `--model` requires `gpt-5.6-sol`.
+- Network failure, timeout, invalid JSON, HTTP 401/403, server failure, or an empty intersection prevents launch.
 
-**Impact:**
-- `metadata` field is preserved (if Codex sends it)
-- `store` is no longer forced to `false`
+There is no fallback model and no fallback catalog.
 
-**Migration:**
-None required. This change makes the wrapper transparent.
+### 3. Transport options removed
 
----
+`--direct`, `--proxy`, and `--transport` are invalid. Direct RouterLab access is the only Codex mode.
 
-### 3. web_search No Longer Forced to "disabled"
+### 4. Production destinations are immutable
 
-**4.2.1 behavior:**
-```javascript
-// Always injected via -c flag:
-web_search="disabled"
-```
+These variables no longer redirect traffic and are ignored with a warning:
 
-**5.0 behavior:**
-```javascript
-// Not injected, Codex decides
-```
+- `ROUTERLAB_BASE_URL`;
+- `ROUTERLAB_LLM_BASE_URL`;
+- `WRAPPER_SCIONOS_ROUTERLAB_BASE_URL`;
+- `WRAPPER_SCIONOS_LLM_BASE_URL`;
+- `ANTHROPIC_BASE_URL`.
 
-**Impact:**
-Codex can now use web search if configured and supported by the model.
+Token variables continue to work. Claude Code and Claude Desktop still receive an internally generated `ANTHROPIC_BASE_URL` pointing to their dedicated local proxy; their upstream target is always the official RouterLab domain.
 
-**Migration:**
-If you want to disable web search, add it to your `~/.codex/config.toml`:
-```toml
-web_search = "disabled"
-```
-
----
-
-### 5. Hardcoded Fallbacks Removed
-
-**4.2.1 behavior:**
-```javascript
-// If /v1/models failed, used detailed hardcoded profiles
-CODEX_MODEL_PROFILES['deepseek-v4-pro'] = {
-  contextWindow: 1000000,
-  supportsReasoning: true,
-  // ... 15+ fields
-};
-```
-
-**5.0 behavior:**
-```javascript
-// If /v1/models fails, uses minimal conservative fallback:
-{
-  context_window: 128000,
-  default_reasoning_level: 'medium',
-  input_modalities: ['text'],
-  // ... minimal safe defaults
-}
-```
-
-**Impact:**
-If RouterLab's `/v1/models` endpoint is unreachable, models will have conservative defaults (128K context, text-only).
-
-**Migration:**
-Ensure RouterLab's `/v1/models` endpoint is reachable. If you see the fallback warning, verify network connectivity.
-
----
-
-## Non-Breaking Changes
-
-### Context Window Still Pinned
-
-Both 4.2.1 and 5.0 report a fixed context window to Codex (1M tokens, 90% auto-compact = 900K) to ensure smaller models don't cap the catalog. This behavior is unchanged.
-
-### Authentication Unchanged
+## Unchanged
 
 Token resolution order and storage remain identical:
 - `--token` flag
 - Secure storage
 - Environment variables
 
-### Runtime Injection Unchanged
-
-5.0 still uses `-c` runtime overrides, not `config.toml` modification. Your `~/.codex/config.toml` is never touched.
+The launch still uses temporary `-c` overrides and never writes `~/.codex/config.toml`. `codex status` and `codex restore` remain for legacy cleanup.
 
 ---
 
@@ -147,9 +82,9 @@ After upgrading to 5.0, verify the migration:
 # Check available models
 wrapper-scionos codex launch --service llm
 
-# In Codex, inspect the model catalog
-# Context windows should match RouterLab's reported values
-# Base instructions should come from upstream
+# Verify that the displayed choices are the currently available allowlisted models
+wrapper-scionos codex template --service llm
+# The output must not contain model_catalog_json
 ```
 
 ---
@@ -176,6 +111,6 @@ Or pin your `package.json`:
 ## Questions
 
 For issues or questions about this migration:
-- Check the [RAPPORT-CODEX-WRAPPER.md](../RAPPORT-CODEX-WRAPPER.md) analysis
+- Check the [archived 4.2.1 audit](./archive/RAPPORT-CODEX-WRAPPER-4.2.1.md)
 - Open an issue on GitHub
 - Review the [CHANGELOG.md](../CHANGELOG.md)

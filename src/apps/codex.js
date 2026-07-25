@@ -39,18 +39,9 @@ export const CODEX_ROUTERLAB_MODELS = CODEX_ALLOWED_MODELS.routerlab;
 export const CODEX_LLM_MODELS = CODEX_ALLOWED_MODELS.llm;
 export const DEFAULT_CODEX_LLM_MODEL = DEFAULT_CODEX_MODEL.llm;
 
+// Kept only so status/restore can detect and remove files created by older releases.
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
-export const CODEX_RUNTIME_MODEL_CATALOG_DIR = 'wrapper-scionos-codex';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
-
-// Fallback constants when upstream metadata is unavailable
-const FALLBACK_CONTEXT_WINDOW = 128000;
-const FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
-const FALLBACK_REASONING_LEVELS = [
-  { effort: 'low', description: 'Fast responses with lighter reasoning' },
-  { effort: 'medium', description: 'Balances speed and reasoning depth for everyday tasks' },
-  { effort: 'high', description: 'Greater reasoning depth for complex problems' },
-];
 export function assertCodexCliAvailable() {
   const codex = detectCodexCli();
   if (!codex.installed) {
@@ -97,13 +88,11 @@ export function buildCodexThirdPartyConfig({
   providerName = 'routerlab',
   baseUrl,
   model = DEFAULT_CODEX_MODEL.routerlab,
-  modelCatalogPath = null,
 }) {
   const q = (value) => JSON.stringify(value);
   return [
     'model_provider = "custom"',
     `model = ${q(model)}`,
-    ...(modelCatalogPath ? [`model_catalog_json = ${q(modelCatalogPath)}`] : []),
     '',
     '[model_providers.custom]',
     `name = ${q(providerName)}`,
@@ -117,13 +106,11 @@ export function buildCodexRuntimeArgs({
   providerName = 'routerlab',
   baseUrl,
   model = DEFAULT_CODEX_MODEL.routerlab,
-  modelCatalogPath = null,
 } = {}) {
   const q = (value) => JSON.stringify(value);
   const overrides = [
     `model_provider=${q('custom')}`,
     `model=${q(model)}`,
-    ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
     `model_providers.custom.name=${q(providerName)}`,
     `model_providers.custom.base_url=${q(baseUrl)}`,
     `model_providers.custom.wire_api=${q('responses')}`,
@@ -145,186 +132,6 @@ export function buildCodexAuth(apiKey = '') {
   return { OPENAI_API_KEY: apiKey };
 }
 
-/**
- * Build a Codex catalog from upstream /v1/models metadata.
- * Menu order follows the wrapper allowlist, not the upstream response order.
- */
-export function buildCodexCatalogFromUpstream({
-  serviceValue = 'routerlab',
-  upstreamModels = [],
-  allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
-} = {}) {
-  const upstreamById = new Map(upstreamModels.map((model) => [model.id, model]));
-  const ordered = allowedModelIds.map((id) => upstreamById.get(id)).filter(Boolean);
-
-  if (ordered.length === 0) {
-    throw new Error(`No upstream models matched the allowed list for ${serviceValue}`);
-  }
-
-  return {
-    models: ordered.map((model, index) => buildCodexCatalogEntry(model, index)),
-  };
-}
-
-/**
- * Build minimal fallback catalog when upstream is unavailable.
- * Uses conservative defaults to ensure Codex can start.
- */
-export function buildCodexCatalogFallback({
-  serviceValue = 'routerlab',
-  allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
-} = {}) {
-  console.error(`WARN Using minimal Codex catalog fallback for ${serviceValue}`);
-  return buildCodexMinimalCatalog({ allowedModelIds });
-}
-
-/**
- * Same conservative catalog as buildCodexCatalogFallback, without the warning.
- * Used by preview paths where nothing has actually failed.
- */
-function buildCodexMinimalCatalog({
-  allowedModelIds = CODEX_ALLOWED_MODELS.routerlab,
-} = {}) {
-  return {
-    models: allowedModelIds.map((id, index) => buildCodexCatalogEntry(
-      {
-        id,
-        contextWindow: FALLBACK_CONTEXT_WINDOW,
-        inputModalities: ['text'],
-        supportsReasoning: false,
-        supportsParallelToolCalls: false,
-        defaultReasoningLevel: 'medium',
-        supportedReasoningLevels: FALLBACK_REASONING_LEVELS,
-        baseInstructions: FALLBACK_BASE_INSTRUCTIONS,
-      },
-      index,
-    )),
-  };
-}
-
-/**
- * Build a single Codex catalog entry from normalized metadata.
- * Upstream values win; wrapper constants only fill genuine gaps.
- */
-function buildCodexCatalogEntry(model, index) {
-  const contextWindow = model.contextWindow || FALLBACK_CONTEXT_WINDOW;
-  const inputModalities = Array.isArray(model.inputModalities) && model.inputModalities.length > 0
-    ? model.inputModalities
-    : ['text'];
-  const supportsReasoning = typeof model.supportsReasoning === 'boolean'
-    ? model.supportsReasoning
-    : false;
-  const supportedReasoningLevels = Array.isArray(model.supportedReasoningLevels) && model.supportedReasoningLevels.length > 0
-    ? model.supportedReasoningLevels
-    : FALLBACK_REASONING_LEVELS;
-  const displayName = model.displayName || codexModelDisplayName(model.id);
-
-  return {
-    slug: model.id,
-    display_name: displayName,
-    description: model.description || displayName,
-    default_reasoning_level: model.defaultReasoningLevel || 'medium',
-    supported_reasoning_levels: supportedReasoningLevels,
-    shell_type: 'shell_command',
-    visibility: 'list',
-    supported_in_api: true,
-    priority: 1000 + index,
-    additional_speed_tiers: [],
-    service_tiers: [],
-    default_service_tier: null,
-    availability_nux: null,
-    upgrade: null,
-    base_instructions: model.baseInstructions || FALLBACK_BASE_INSTRUCTIONS,
-    supports_reasoning_summaries: supportsReasoning,
-    default_reasoning_summary: 'none',
-    support_verbosity: false,
-    default_verbosity: null,
-    truncation_policy: { mode: 'bytes', limit: 10000 },
-    supports_parallel_tool_calls: typeof model.supportsParallelToolCalls === 'boolean'
-      ? model.supportsParallelToolCalls
-      : false,
-    supports_image_detail_original: inputModalities.includes('image'),
-    context_window: contextWindow,
-    max_context_window: contextWindow,
-    effective_context_window_percent: 95,
-    experimental_supported_tools: [],
-    input_modalities: inputModalities,
-    supports_search_tool: model.supportsSearch === true,
-  };
-}
-
-export function writeCodexRuntimeModelCatalog({
-  serviceValue = 'routerlab',
-  paths = getCodexPaths(),
-  tmpDir = os.tmpdir(),
-  modelMetadata = [],
-  models = codexModelsForService(serviceValue),
-} = {}) {
-  cleanupStaleCodexRuntimeModelCatalogs({ tmpDir });
-  const catalog = modelMetadata.length > 0
-    ? buildCodexCatalogFromUpstream({
-        serviceValue,
-        upstreamModels: modelMetadata,
-        allowedModelIds: models,
-      })
-    : buildCodexCatalogFallback({
-        serviceValue,
-        allowedModelIds: models,
-      });
-
-  const catalogDir = path.join(tmpDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
-  fs.mkdirSync(catalogDir, { recursive: true });
-  const catalogPath = path.join(catalogDir, `${serviceValue}-${randomUUID()}-${CODEX_MODEL_CATALOG_FILENAME}`);
-  writeJsonAtomic(catalogPath, catalog);
-
-  return {
-    path: catalogPath,
-    modelCount: catalog.models.length,
-    models: catalog.models.map((entry) => entry.slug),
-  };
-}
-export function cleanupCodexRuntimeModelCatalog(catalog) {
-  if (catalog?.path) {
-    fs.rmSync(catalog.path, { force: true });
-  }
-}
-
-export function cleanupStaleCodexRuntimeModelCatalogs({
-  tmpDir = os.tmpdir(),
-  maxAgeMs = 24 * 60 * 60 * 1000,
-  now = Date.now(),
-} = {}) {
-  const catalogDir = path.join(tmpDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
-  let entries;
-  try {
-    entries = fs.readdirSync(catalogDir, { withFileTypes: true });
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      return 0;
-    }
-    throw error;
-  }
-
-  let removed = 0;
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(CODEX_MODEL_CATALOG_FILENAME)) {
-      continue;
-    }
-    const filePath = path.join(catalogDir, entry.name);
-    try {
-      const stat = fs.statSync(filePath);
-      if (now - stat.mtimeMs > maxAgeMs) {
-        fs.rmSync(filePath, { force: true });
-        removed += 1;
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') {
-        throw error;
-      }
-    }
-  }
-  return removed;
-}
 function resolveCodexPaths(paths) {
   const defaults = getCodexPaths();
   const configPath = paths.configPath ?? defaults.configPath;
@@ -364,48 +171,28 @@ function writeTextAtomic(filePath, value) {
   fs.renameSync(tmp, filePath);
 }
 
-function writeJsonAtomic(filePath, value) {
-  writeTextAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-
 // Legacy functions for compatibility
 export function buildCodexConfigPreview({
   providerName = 'routerlab',
-  serviceValue = providerName,
   baseUrl,
   model = DEFAULT_CODEX_MODEL.routerlab,
   paths = getCodexPaths(),
-  modelCatalogModels = CODEX_ROUTERLAB_MODELS,
 } = {}) {
   const resolvedPaths = resolveCodexPaths(paths);
-  const catalog = buildCodexModelCatalogFromCache({
-    paths: resolvedPaths,
-    models: modelCatalogModels,
-    serviceValue,
-  });
   const config = buildCodexThirdPartyConfig({
     providerName,
     baseUrl,
     model,
-    modelCatalogPath: catalog ? resolvedPaths.modelCatalogPath : null,
   });
   const previousConfig = readText(resolvedPaths.configPath);
   const changed = previousConfig !== config;
   const backupExists = fs.existsSync(resolvedPaths.backupPath);
   const backupCreated = Boolean(previousConfig && !backupExists && changed);
-  const catalogSummary = catalog ? {
-    path: resolvedPaths.modelCatalogPath,
-    modelCount: catalog.models.length,
-    models: catalog.models.map((entry) => entry.slug),
-  } : null;
-
   return {
     dryRun: true,
     changed,
     paths: resolvedPaths,
     config,
-    catalog: catalogSummary,
     backupExists,
     backupCreated,
     authPreserved: true,
@@ -472,13 +259,4 @@ export function readCodexStatus(paths = getCodexPaths()) {
     wrapperConfig: isWrapperCodexConfig(config),
     routerlabEndpoint: hasRouterlabEndpoint(config),
   };
-}
-
-
-export function buildCodexModelCatalogFromCache({
-  serviceValue = 'routerlab',
-  models = codexModelsForService(serviceValue),
-} = {}) {
-  // Legacy preview path: nothing has failed here, so stay silent.
-  return buildCodexMinimalCatalog({ allowedModelIds: models });
 }

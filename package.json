@@ -23,7 +23,7 @@
     "start": "node index.js",
     "test:entry-modes": "node tests/run-entry-mode-smokes.mjs",
     "test:coverage": "node tests/run-coverage.mjs",
-    "release:check": "npm test && npm run test:coverage && npm run test:entry-modes && npm audit && npm pack --dry-run"
+    "release:check": "npm run test:coverage && npm run test:entry-modes && npm audit && npm pack --dry-run"
   },
   "keywords": [
     "scionos",

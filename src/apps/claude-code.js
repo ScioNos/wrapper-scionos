@@ -98,14 +98,6 @@ export async function resolveToken(options = {}, dependencies = {}) {
   return resolved.token;
 }
 
-export function warnClaudeCodeBaseUrlOverride(service, resolution) {
-  if (resolution.source !== 'env' && resolution.source !== 'legacy-env') return;
-  const legacy = resolution.source === 'legacy-env' ? 'deprecated ' : '';
-  console.error(chalk.yellow(
-    `WARN Claude Code is using ${legacy}${resolution.envKey} for the ${service.label} endpoint: ${resolution.baseUrl}`,
-  ));
-}
-
 export function formatClaudeCodeTokenConflictWarning(service, resolvedToken) {
   if (!resolvedToken.envTokenPresent || !resolvedToken.storedTokenPresent) return;
   if (resolvedToken.source !== 'env' && resolvedToken.source !== 'legacy-env') return;
@@ -238,7 +230,15 @@ export async function chooseSubagentModel({
 
 export async function launchClaudeCode(
   { serviceValue, strategyValue, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false },
-  { detectClaudeCodeFn = detectClaudeCode } = {},
+  {
+    chooseStrategyFn = chooseStrategy,
+    detectClaudeCodeFn = detectClaudeCode,
+    fetchModelsFn = fetchModels,
+    resolveTokenWithSourceFn = resolveTokenWithSource,
+    runInteractiveCliFn = runInteractiveCli,
+    startLongRunningLlmProxyFn = startLongRunningLlmProxy,
+    stopLongRunningLlmProxyFn = stopLongRunningLlmProxy,
+  } = {},
 ) {
   const serviceConfig = requireServiceConfig(serviceValue);
   const baseUrlResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
@@ -246,7 +246,6 @@ export async function launchClaudeCode(
     ...serviceConfig,
     baseUrl: validateServiceBaseUrl(baseUrlResolution.baseUrl, serviceConfig.value),
   };
-  warnClaudeCodeBaseUrlOverride(service, baseUrlResolution);
   if (!noPrompt) {
     console.log(formatClaudeCodeIntro(version));
   }
@@ -265,14 +264,14 @@ export async function launchClaudeCode(
         envTokenKey: null,
         storedTokenPresent: false,
       }
-    : await resolveTokenWithSource({ serviceValue: service.value, noPrompt });
+    : await resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt });
   warnClaudeCodeTokenConflict(service, resolvedToken);
   const token = resolvedToken.token;
   const tokenFormat = validateTokenFormat(token);
   if (!tokenFormat.valid) {
     throw new Error(tokenFormat.message);
   }
-  const validation = await fetchModels(token, { serviceValue: service.value, baseUrl: service.baseUrl });
+  const validation = await fetchModelsFn(token, { serviceValue: service.value, baseUrl: service.baseUrl });
   if (!validation.valid && validation.reason === 'auth_failed') {
     throw claudeCodeAuthenticationError(validation, service, resolvedToken);
   }
@@ -282,7 +281,7 @@ export async function launchClaudeCode(
     console.log(chalk.yellow(`WARN ${service.availabilityLabel} model list unavailable: ${detail}.`));
   }
 
-  const selectedStrategy = await chooseStrategy({
+  const selectedStrategy = await chooseStrategyFn({
     serviceValue: service.value,
     noPrompt,
     preferredStrategy: strategyValue,
@@ -297,7 +296,7 @@ export async function launchClaudeCode(
 
   let proxy = null;
   try {
-    proxy = await startLongRunningLlmProxy({
+    proxy = await startLongRunningLlmProxyFn({
       targetBaseUrl: service.baseUrl,
       routerlabToken: token,
       upstreamAuth: 'anthropic',
@@ -316,10 +315,10 @@ export async function launchClaudeCode(
       console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
     }
 
-    await runInteractiveCli(claude.cliPath, claudeArgs, { env });
+    await runInteractiveCliFn(claude.cliPath, claudeArgs, { env });
     return { kind: 'launched' };
   } finally {
-    await stopLongRunningLlmProxy(proxy, { graceMs: 2000 });
+    await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
   }
 }
 

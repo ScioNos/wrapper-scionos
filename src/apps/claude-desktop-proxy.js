@@ -19,12 +19,15 @@ export function createClaudeDesktopProxy({
 }) {
   if (!gatewayToken) throw new Error('A generated local proxy credential is required.');
   const serviceConfig = requireServiceConfig(serviceValue);
+  const resolvedTargetBaseUrl = targetBaseUrl === null
+    ? validateServiceBaseUrl(
+        resolveServiceBaseUrl(serviceConfig.value, process.env),
+        serviceConfig.value,
+      )
+    : String(targetBaseUrl);
   const service = {
     ...serviceConfig,
-    baseUrl: validateServiceBaseUrl(
-      targetBaseUrl ?? resolveServiceBaseUrl(serviceConfig.value, process.env),
-      serviceConfig.value,
-    ),
+    baseUrl: resolvedTargetBaseUrl,
   };
   const routes = strategyValues
     ? modelRoutesForDesktopMapping(service.value, strategyValues)

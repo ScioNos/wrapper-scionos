@@ -324,7 +324,7 @@ function describeProxyConfig(config) {
   return `${config.serviceValue} at ${host}:${config.port} using ${strategies}`;
 }
 
-function resolveValidatedDesktopService(serviceValue) {
+export function resolveValidatedDesktopService(serviceValue) {
   const serviceConfig = requireServiceConfig(serviceValue);
   return {
     ...serviceConfig,

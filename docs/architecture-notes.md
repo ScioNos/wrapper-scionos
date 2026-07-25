@@ -10,7 +10,7 @@ The command registry and common option definitions are the source for parser beh
 
 All HTTP listeners are loopback-only. A proxy credential is generated from 32 random bytes and must authenticate every route. Claude Desktop stores that credential in its managed profile; legacy scionos-local profiles are replaced atomically. On Linux/macOS, configuration directories are verified as 0700 and every credential-bearing JSON as 0600. Profile writes occur only after the token is resolved and the listener is active; failure closes the listener and preserves the previous profile. Profiles and status output redact credentials.
 
-Service base URLs are resolved and validated as absolute HTTP(S) URLs before credential resolution, listener creation, or profile mutation. Gateway profiles derive their Cowork egress allowlist from the validated gateway hostname; wildcard egress is not written.
+Production service destinations are constants: `routerlab` is `https://api.routerlab.ch` and `llm` is `https://llm-api.routerlab.ch`. User URL variables are detected only to emit an ignored-value warning; they never affect routing. Gateway profiles derive their Cowork egress allowlist from the fixed service hostname or from the wrapper-generated loopback URL; wildcard egress is not written.
 
 No CORS origin is allowed by default. Exact origins are opt-in and wildcard responses are forbidden. A matching OPTIONS preflight is answered before authentication with 204 and no resource data; every GET/POST route remains authenticated.
 
@@ -22,7 +22,7 @@ Claude Code uses the service selected before entering the interactive menu. The 
 
 The LLM `claude` strategy is launchable when discovery reports `claude-opus-4-8`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`. All LLM Claude Code strategies force `CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-5`; service-scoped environment construction prevents that policy from changing the `routerlab` subagent model.
 
-Service bases are resolved with source metadata and validated as HTTP(S) before credential use. Service-specific environment values are preferred, while `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` remain deprecated 4.x fallbacks. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both are present. Endpoint overrides are also disclosed on stderr.
+Service bases are fixed before credential use. `ANTHROPIC_BASE_URL` and service-specific base URL variables are ignored with a credential-free warning. `ANTHROPIC_AUTH_TOKEN` remains a deprecated token fallback. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both token sources are present.
 
 Model discovery occurs before proxy startup. A 401/403 is fatal and reports the service, token source, and matching auth recovery commands without including the token. Network, timeout, malformed-response, and non-authentication server failures retain the existing unverified-availability fallback.
 
@@ -32,35 +32,27 @@ After strategy selection, the wrapper creates a loopback proxy with a random loc
 
 Codex CLI 0.144.1 or newer is invoked through the resolved executable or Windows shim. The same invocation builder is used for version detection and interactive launch.
 
-The default path is a session-local Responses proxy. The direct path is diagnostic only. Codex presence/version is checked once before token resolution, network discovery, proxy startup, or catalog creation. The resolved service base is validated as HTTP(S), and an explicit token is validated before any network request. Environment endpoint overrides are disclosed without exposing credentials.
+Codex always connects directly to the fixed service `/v1` endpoint. There is no Codex proxy, local gateway credential, or generated model catalog. Codex presence/version is checked once before token resolution and model discovery. An explicit token is validated before any network request. User endpoint variables are ignored with warnings.
 
-Model-discovery 401/403 responses are fatal and provide service-scoped auth recovery commands. A successful discovery must contain the selected model in the wrapper-supported Codex catalog; the runtime catalog is restricted to the compatible models verified by the service. Network, timeout, malformed-response, and non-authentication server failures retain the conservative static-catalog fallback.
+`GET /v1/models` is used only to intersect returned identifiers with the service allowlist. Every discovery failure is fatal, including 401/403, network errors, timeouts, malformed JSON, server failures, and an empty intersection. Explicit model identifiers require an exact match. Interactive launch selects among the intersection; non-interactive launch without a model requires `gpt-5.6-sol`.
 
-Runtime overrides are limited to provider identity, base URL, model, wire API, token environment key, temporary model catalog, and the session-only `web_search="disabled"` compatibility guard. User sandbox, approvals, reasoning effort, features, MCP settings, hooks, auth files, and other active policy remain untouched. The native Responses catalog omits freeform custom tools; edits use `shell_command`. Hosted search is disabled by the top-level session override because `supports_search_tool` is not the hosted-search gate. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
+Runtime overrides contain exactly six values: `model_provider`, `model`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged through that child-only environment variable. User sandbox, approvals, instructions, context, reasoning effort, modalities, tools, search, truncation, priorities, features, MCP settings, hooks, auth files, and other active policy remain native to Codex. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
 
-Cleanup surrounds the entire token/network/proxy/catalog/argument/child lifecycle with nullable resources. The active catalog and proxy are removed after normal exit, creation failure, launch error, SIGINT, or SIGTERM. Catalogs older than 24 hours are removed before a new one is created.
+`codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path writes neither.
 
 An interactive non-zero Codex exit or startup exception is reported and returns to the main menu without retaining the child exit code. A successful interactive session closes the wrapper, while direct launches preserve the Codex exit code.
 
 ## Native Responses transport
 
-Every model exposed by the RouterLab and RouterLab LLM services is forwarded to `/v1/responses` without semantic conversion, for both streaming and non-streaming requests. Codex receives `wire_api="responses"`. RouterLab owns the model-specific compatibility contract; no protocol-conversion fallback or model classification remains in the wrapper.
-
-The proxy authenticates its local client, replaces the local credential with the service-scoped upstream token, and forces `store: false` in rewritten Responses JSON. Direct mode performs no wrapper rewrite; Codex CLI 0.144.6 sends `store: false` for non-Azure custom Responses providers, without defining the upstream retention policy. Only rewritten request bodies lose `content-encoding` and `content-length`; true hop-by-hop headers and every header named by `Connection` are removed in both directions. Unmodified upstream responses retain `Content-Encoding` and `Content-Length`. Intercepted gzip, deflate, Brotli, or zstd errors are decoded with the decompressed-size limit before Responses-compatible normalization and contextual 401/403 diagnostics.
-
-Custom HTTP(S) service bases retain their pathname. Appending `/v1/responses` to `/gateway` yields `/gateway/v1/responses`; a base already ending in `/v1` is deduplicated. Client query strings are retained.
+Codex receives `wire_api="responses"` and calls the fixed RouterLab `/v1` endpoint directly. The wrapper neither observes nor transforms Responses requests or errors. RouterLab owns model-specific compatibility, authorization, retention, and any model change made through Codex after startup.
 
 ## Model catalog
 
-RouterLab model metadata is normalized into context, modalities, reasoning, parallel function-call, freeform, hosted-tool, and search capabilities. Presence flags distinguish explicit values from normalizer defaults so an ID-only response can use the known-model manifest. The wrapper never clones an arbitrary Codex models_cache.json entry.
-
-Known-model context fallbacks intentionally mirror cc-switch's conservative Codex presets: GPT-5.6 uses 372,000 tokens; DeepSeek V4 Pro and MiniMax M3 use 1,000,000; Kimi K2.7 Code uses 262,144; GLM-5.2 uses 200,000; Kimi K3 uses 1,048,576; and Grok 4.5 uses 500,000. They are RouterLab compatibility assumptions rather than provider-public maxima, and explicit verified RouterLab metadata wins. Unknown models retain the conservative 128k text-only sequential fallback. Catalog windows use a 95% effective budget. DeepSeek V4 Pro and GLM-5.2 are text-only; GPT-5.6, Kimi K2.7 Code, Kimi K3, Grok 4.5, and MiniMax M3 expose image input. GPT-5.6, Grok 4.5, and MiniMax M3 enable parallel tool calls in the static manifest.
-
-The native profile deliberately omits `apply_patch_tool_type`, `web_search_tool_type`, `tools`, and `model_messages`, matching cc-switch's compatibility strategy for Responses gateways that reject Codex custom tools. `shell_type="shell_command"` remains available for edits, `supports_search_tool` remains false, and the independent hosted-search path is disabled with the temporary top-level `web_search="disabled"` override.
+The current Codex path has no model catalog. LiteLLM metadata may remain useful inside RouterLab, but the wrapper consumes only exact model identifiers from `/v1/models` for pre-launch availability. It never converts metadata into Codex context, instructions, reasoning, modality, tool, or search configuration.
 
 ## Credential storage
 
-Preferred service environment variables use RouterLab names. Anthropic token and base URL names are 4.x compatibility fallbacks with one stderr warning per process.
+Preferred token environment variables use RouterLab names. `ANTHROPIC_AUTH_TOKEN` is a deprecated token fallback. All user-provided base URL variables are ignored with one stderr warning per variable per process.
 
 Interactive login is masked. Auth dry-runs never prompt or mutate. auth test and strategies resolve command token, environment, then storage; Codex deliberately resolves command token, storage, then environment. macOS Keychain storage sends the secret on stdin. Logout removes both wrapper-scionos and claude-scionos entries on Windows, macOS, and Linux.
 

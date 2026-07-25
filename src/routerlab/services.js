@@ -67,16 +67,26 @@ export function requireServiceConfig(serviceValue = DEFAULT_SERVICE) {
 export function validateServiceBaseUrl(baseUrl, serviceValue = DEFAULT_SERVICE) {
   const service = requireServiceConfig(serviceValue);
   const value = String(baseUrl ?? '').trim();
+  const expected = new URL(service.baseUrl);
   let parsed;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error(`${service.label} base URL is invalid: ${value}`);
+    throw new Error(`${service.label} base URL must be ${service.baseUrl}.`);
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`${service.label} base URL must use HTTP or HTTPS.`);
+  if (
+    parsed.protocol !== expected.protocol
+    || parsed.hostname !== expected.hostname
+    || parsed.port !== expected.port
+    || parsed.username
+    || parsed.password
+    || parsed.pathname.replace(/\/+$/, '') !== expected.pathname.replace(/\/+$/, '')
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new Error(`${service.label} base URL must be ${service.baseUrl}.`);
   }
-  return value;
+  return service.baseUrl;
 }
 
 export function resolveServiceBaseUrl(serviceValue = DEFAULT_SERVICE, env = {}) {
@@ -85,18 +95,26 @@ export function resolveServiceBaseUrl(serviceValue = DEFAULT_SERVICE, env = {}) 
 
 export function resolveServiceBaseUrlWithSource(serviceValue = DEFAULT_SERVICE, env = {}) {
   const service = requireServiceConfig(serviceValue);
-  const serviceOverride = firstEnvValue(env, service.baseUrlEnvKeys ?? []);
-  if (serviceOverride) {
-    return { baseUrl: serviceOverride.value, source: 'env', envKey: serviceOverride.key };
+  const ignoredEnvKeys = [
+    ...Object.values(SERVICES).flatMap((candidate) => candidate.baseUrlEnvKeys ?? []),
+    LEGACY_BASE_URL_ENV_KEY,
+  ].filter((key, index, keys) => keys.indexOf(key) === index && Boolean(env[key]?.trim()));
+
+  if (env === process.env) {
+    for (const key of ignoredEnvKeys) {
+      warnDeprecationOnce(
+        `ignored-base-url:${key}`,
+        `${key} is ignored. ${service.label} always uses ${service.baseUrl}.`,
+      );
+    }
   }
 
-  const legacyOverride = firstEnvValue(env, [LEGACY_BASE_URL_ENV_KEY]);
-  if (legacyOverride) {
-    if (env === process.env) warnDeprecationOnce('env:ANTHROPIC_BASE_URL', 'ANTHROPIC_BASE_URL is deprecated; use the RouterLab service-specific base URL variable.');
-    return { baseUrl: legacyOverride.value, source: 'legacy-env', envKey: legacyOverride.key };
-  }
-
-  return { baseUrl: service.baseUrl, source: 'default', envKey: null };
+  return {
+    baseUrl: service.baseUrl,
+    source: 'fixed',
+    envKey: null,
+    ignoredEnvKeys,
+  };
 }
 
 export function resolveServiceEnvToken(serviceValue = DEFAULT_SERVICE, env = {}) {

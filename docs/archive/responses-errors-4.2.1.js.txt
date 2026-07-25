@@ -1,3 +1,4 @@
+/* Archived implementation from 4.2.1. Codex now receives RouterLab Responses errors directly.
 const MAX_RAW_ERROR_CHARS = 1024 * 1024;
 
 export function upstreamResponsesError(status, body, context = {}) {
@@ -65,3 +66,4 @@ function truncateRawError(text) {
 function isPlainObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
+*/

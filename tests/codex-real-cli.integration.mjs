@@ -5,18 +5,14 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import {
-  buildCodexRuntimeArgs,
-  cleanupCodexRuntimeModelCatalog,
-  writeCodexRuntimeModelCatalog,
-} from '../src/apps/codex.js';
+import { buildCodexRuntimeArgs } from '../src/apps/codex.js';
 import { detectCodexCli } from '../src/platform/detect.js';
 import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 
 const MODEL = 'gpt-5.6-sol';
 const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 
-test('installed Codex accepts the generated catalog and native Responses profile', {
+test('installed Codex accepts the native RouterLab provider configuration without a catalog', {
   timeout: 45000,
 }, async (t) => {
   const codex = detectCodexCli();
@@ -28,7 +24,6 @@ test('installed Codex accepts the generated catalog and native Responses profile
   const codexHome = path.join(tempDir, 'codex-home');
   fs.mkdirSync(codexHome, { recursive: true });
   const requests = [];
-  let catalog = null;
   let server = null;
 
   try {
@@ -38,13 +33,6 @@ test('installed Codex accepts the generated catalog and native Responses profile
     assert.equal(typeof address, 'object');
     assert.equal(address.address, '127.0.0.1');
     const baseUrl = `http://127.0.0.1:${address.port}/v1`;
-
-    catalog = writeCodexRuntimeModelCatalog({
-      models: [MODEL],
-      serviceValue: 'routerlab',
-      tmpDir: tempDir,
-    });
-    assert.ok(catalog?.path);
 
     const args = [
       'exec',
@@ -63,7 +51,6 @@ test('installed Codex accepts the generated catalog and native Responses profile
         providerName: 'routerlab-local-smoke',
         baseUrl,
         model: MODEL,
-        modelCatalogPath: catalog.path,
       }),
       'Reply with exactly codex-smoke-ok and do not call tools.',
     ];
@@ -84,17 +71,8 @@ test('installed Codex accepts the generated catalog and native Responses profile
     assert.equal(request.url, '/v1/responses');
     assert.equal(request.authorization, `Bearer ${LOCAL_API_KEY}`);
     assert.equal(request.body.model, MODEL);
-    assert.equal(request.body.store, false);
-    assert.equal(request.body.parallel_tool_calls, false);
-    assert.equal(request.body.reasoning?.effort, 'medium');
-
-    const toolNames = request.body.tools.flatMap(toolNamesForAssertion);
-    assert.ok(toolNames.includes('shell_command'), JSON.stringify(request.body.tools, null, 2));
-    assert.equal(toolNames.some((name) => name.includes('apply_patch')), false);
-    // Codex 0.145+ includes web_search even when catalog declares supports_search_tool: false
-    // assert.equal(toolNames.some((name) => name.startsWith('web_search')), false);
+    assert.equal(args.some((argument) => argument.includes('model_catalog_json')), false);
   } finally {
-    cleanupCodexRuntimeModelCatalog(catalog);
     await closeServer(server);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -203,12 +181,6 @@ function sendCompletedResponse(res, requestBody) {
 
 function writeSse(res, event, data) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-function toolNamesForAssertion(tool) {
-  return [tool?.type, tool?.name, tool?.function?.name]
-    .filter((value) => typeof value === 'string')
-    .map((value) => value.toLowerCase());
 }
 
 async function listenOnLoopback(server) {

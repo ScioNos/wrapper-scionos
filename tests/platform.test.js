@@ -195,10 +195,19 @@ test('platform metadata and client candidates cover Windows, macOS, Linux, and o
     '/usr/local/bin/claude',
   ]);
 
-  const windowsCodex = codexCliCandidates('win32', 'C:\\Users\\tester', 'C:\\AppData');
+  let npmBinDetections = 0;
+  const windowsCodex = codexCliCandidates('win32', 'C:\\Users\\tester', 'C:\\AppData', {
+    getNpmGlobalBinPathFn: () => {
+      npmBinDetections += 1;
+      return null;
+    },
+  });
   assert.ok(windowsCodex.length >= 3, `Expected at least 3 Windows candidates, got ${windowsCodex.length}`);
   assert.match(windowsCodex[0], /codex$/);
-  const darwinCodex = codexCliCandidates('darwin', '/Users/tester', '/unused');
+  assert.equal(npmBinDetections, 1);
+  const darwinCodex = codexCliCandidates('darwin', '/Users/tester', '/unused', {
+    getNpmGlobalBinPathFn: () => null,
+  });
   assert.ok(darwinCodex.length >= 3, `Expected at least 3 macOS candidates, got ${darwinCodex.length}`);
   assert.ok(darwinCodex.includes(path.join('/Users/tester', '.local', 'bin', 'codex')));
   assert.ok(darwinCodex.includes('/opt/homebrew/bin/codex'));
@@ -296,28 +305,30 @@ test('platform detection skips a version command that exceeds its timeout', (t) 
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const hanging = path.join(tempDir, process.platform === 'win32' ? 'hanging.cmd' : 'hanging');
   const working = path.join(tempDir, process.platform === 'win32' ? 'working.cmd' : 'working');
-  fs.writeFileSync(hanging, process.platform === 'win32'
-    ? '@ping 127.0.0.1 -n 10 >nul\r\n'
-    : '#!/bin/sh\nsleep 10\n');
-  fs.writeFileSync(working, process.platform === 'win32'
-    ? '@echo wrapper-test 1.0.0\r\n'
-    : '#!/bin/sh\necho wrapper-test 1.0.0\n');
+  fs.writeFileSync(hanging, '');
+  fs.writeFileSync(working, '');
   if (process.platform !== 'win32') {
     fs.chmodSync(hanging, 0o755);
     fs.chmodSync(working, 0o755);
   }
 
-  const startedAt = Date.now();
+  let calls = 0;
   const detected = detectCli({
     command: 'definitely-missing-cli',
     candidates: [hanging, working],
     versionTimeoutMs: 500,
+    spawnSyncFn: () => {
+      calls += 1;
+      return calls === 1
+        ? { status: null, error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }) }
+        : { status: 0, stdout: 'wrapper-test 1.0.0\n', stderr: '' };
+    },
   });
 
   assert.equal(detected.installed, true);
   assert.equal(detected.cliPath, working);
   assert.equal(detected.version, 'wrapper-test 1.0.0');
-  assert.ok(Date.now() - startedAt < 3000, 'version detection should remain bounded');
+  assert.equal(calls, 2);
 });
 test('interactive child startup errors are surfaced', async () => {
   await assert.rejects(

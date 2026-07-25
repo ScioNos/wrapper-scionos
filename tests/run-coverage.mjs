@@ -1,9 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
 const args = ['--test'];
-if (process.allowedNodeEnvironmentFlags.has('--test-isolation')) {
-  args.push('--test-isolation=none');
-}
 args.push(
   '--experimental-test-coverage',
   '--test-coverage-lines=85',

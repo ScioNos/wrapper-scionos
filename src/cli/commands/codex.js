@@ -1,3 +1,4 @@
+import { select } from '@inquirer/prompts';
 import {
   requireServiceConfig,
   resolveServiceBaseUrlWithSource,
@@ -6,98 +7,92 @@ import {
 } from '../../routerlab/services.js';
 import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
-import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platform/llm-proxy.js';
 import {
   assertCodexCliAvailable,
-  buildCodexAuth,
   buildCodexConfigPreview,
   buildCodexRuntimeArgs,
-  cleanupCodexRuntimeModelCatalog,
+  codexModelDisplayName,
   codexModelsForService,
   defaultCodexModelForService,
   getCodexPaths,
   launchCodex,
   readCodexStatus,
   restoreCodexConfig,
-  writeCodexRuntimeModelCatalog,
 } from '../../apps/codex.js';
 import { print } from './output.js';
 
-export async function launchCodexForService(options) {
-  const codex = assertCodexCliAvailable();
-  let proxy = null;
-  let catalog = null;
+const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
+  assertCodexCliAvailable,
+  fetchModels,
+  launchCodex,
+  resolveTokenWithSource,
+  selectModel: select,
+});
+
+export async function launchCodexForService(options, dependencies = {}) {
+  const deps = { ...DEFAULT_CODEX_DEPENDENCIES, ...dependencies };
+  const codex = deps.assertCodexCliAvailable();
+  const serviceConfig = requireServiceConfig(options.service);
+  const baseResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
+  const service = {
+    ...serviceConfig,
+    baseUrl: validateServiceBaseUrl(baseResolution.baseUrl, serviceConfig.value),
+  };
+  const envToken = resolveServiceEnvToken(service.value, process.env);
+  const resolvedToken = options.token
+    ? explicitCodexToken(options.token, envToken)
+    : await deps.resolveTokenWithSource({
+        serviceValue: service.value,
+        noPrompt: options.noPrompt,
+        preferStored: true,
+      });
+  warnStoredCodexTokenPrecedence(options, resolvedToken, service);
+
+  let modelResult;
   try {
-    const serviceConfig = requireServiceConfig(options.service);
-    const baseResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
-    const service = {
-      ...serviceConfig,
-      baseUrl: validateServiceBaseUrl(baseResolution.baseUrl, serviceConfig.value),
-    };
-    warnCodexBaseUrlOverride(service, baseResolution);
-    const model = options.model ?? defaultCodexModelForService(service.value);
-    const envToken = resolveServiceEnvToken(service.value, process.env);
-    const resolvedToken = options.token
-      ? explicitCodexToken(options.token, envToken)
-      : await resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt, preferStored: true });
-    warnStoredCodexTokenPrecedence(options, resolvedToken, service);
-    const modelResult = await fetchModels(resolvedToken.token, {
+    modelResult = await deps.fetchModels(resolvedToken.token, {
       serviceValue: service.value,
       baseUrl: service.baseUrl,
       timeoutMs: 10000,
     });
-    if (!modelResult.valid && modelResult.reason === 'auth_failed') {
+  } catch (error) {
+    throw codexModelDiscoveryError(
+      { reason: 'network_error', message: error.message },
+      service,
+    );
+  }
+  if (!modelResult.valid) {
+    if (modelResult.reason === 'auth_failed') {
       throw codexAuthenticationError(modelResult, service, resolvedToken);
     }
-    const allowedModels = codexModelsForService(service.value);
-    if (!allowedModels.includes(model)) {
-      throw codexModelUnavailableError(model, service, allowedModels);
-    }
-    if (!modelResult.valid) warnCodexModelFallback(modelResult);
-    const modelMetadata = modelResult.valid ? modelResult.modelMetadata : [];
-
-    if (modelResult.valid && !modelMetadata.some((m) => m.id === model)) {
-      const verifiedIds = modelMetadata.map((m) => m.id).filter((id) => allowedModels.includes(id));
-      throw codexModelUnavailableError(model, service, verifiedIds);
-    }
-
-    let baseUrl = service.baseUrl;
-    let apiKey = resolvedToken.token;
-    if (options.transport !== 'direct') {
-      proxy = await startLongRunningLlmProxy({
-        targetBaseUrl: service.baseUrl,
-        routerlabToken: resolvedToken.token,
-        upstreamAuth: 'openai',
-        codexServiceValue: service.value,
-      });
-      baseUrl = proxy.baseUrl;
-      apiKey = proxy.gatewayToken;
-    }
-
-    catalog = writeCodexRuntimeModelCatalog({
-      serviceValue: service.value,
-      modelMetadata,
-      models: allowedModels,
-    });
-    const codexArgs = buildCodexRuntimeArgs({
-      providerName: service.value,
-      baseUrl: appendCodexApiPath(baseUrl),
-      model,
-      modelCatalogPath: catalog?.path ?? null,
-    });
-    return await launchCodex({
-      apiKey,
-      codexArgs: [...codexArgs, ...(options.forwarded ?? [])],
-      codex,
-      updateProcessExitCode: options.updateProcessExitCode ?? true,
-    });
-  } finally {
-    try {
-      cleanupCodexRuntimeModelCatalog(catalog);
-    } finally {
-      await stopLongRunningLlmProxy(proxy);
-    }
+    throw codexModelDiscoveryError(modelResult, service);
   }
+
+  const availableModels = availableCodexModels(service.value, modelResult.models);
+  if (availableModels.length === 0) {
+    throw codexModelDiscoveryError(
+      { reason: 'models_unavailable', message: 'No allowed Codex model is currently available' },
+      service,
+    );
+  }
+  const model = await resolveCodexLaunchModel({
+    requestedModel: options.model,
+    availableModels,
+    service,
+    noPrompt: options.noPrompt,
+    selectModel: deps.selectModel,
+  });
+  const codexArgs = buildCodexRuntimeArgs({
+    providerName: service.value,
+    baseUrl: appendCodexApiPath(service.baseUrl),
+    model,
+  });
+  return deps.launchCodex({
+    apiKey: resolvedToken.token,
+    codexArgs: [...codexArgs, ...(options.forwarded ?? [])],
+    codex,
+    updateProcessExitCode: options.updateProcessExitCode ?? true,
+  });
 }
 
 export async function handleCodex(action, options) {
@@ -125,13 +120,51 @@ export async function handleCodex(action, options) {
   const paths = getCodexPaths();
   const preview = buildCodexConfigPreview({
     providerName: service.value,
-    serviceValue: service.value,
     baseUrl: appendCodexApiPath(service.baseUrl),
     model,
     paths,
-    modelCatalogModels: codexModelsForService(service.value),
   });
-  print({ paths, auth: buildCodexAuth(''), config: preview.config, catalog: preview.catalog }, options);
+  print({ config: preview.config }, options);
+}
+
+export function availableCodexModels(serviceValue, discoveredModelIds = []) {
+  const discovered = new Set(discoveredModelIds);
+  return codexModelsForService(serviceValue).filter((model) => discovered.has(model));
+}
+
+export async function resolveCodexLaunchModel({
+  requestedModel = null,
+  availableModels,
+  service,
+  noPrompt = false,
+  selectModel = select,
+}) {
+  if (requestedModel !== null && requestedModel !== undefined) {
+    if (!availableModels.includes(requestedModel)) {
+      throw codexModelUnavailableError(requestedModel, service, availableModels);
+    }
+    return requestedModel;
+  }
+
+  if (noPrompt) {
+    const defaultModel = defaultCodexModelForService(service.value);
+    if (!availableModels.includes(defaultModel)) {
+      throw codexModelUnavailableError(defaultModel, service, availableModels);
+    }
+    return defaultModel;
+  }
+
+  if (availableModels.length === 1) {
+    return availableModels[0];
+  }
+  return selectModel({
+    message: `Select a Codex model on ${service.label}:`,
+    choices: availableModels.map((model) => ({
+      name: codexModelDisplayName(model),
+      value: model,
+      description: model,
+    })),
+  });
 }
 
 export function explicitCodexToken(token, envToken) {
@@ -144,12 +177,6 @@ export function explicitCodexToken(token, envToken) {
     envTokenKey: envToken.envKey,
     storedTokenPresent: false,
   };
-}
-
-export function warnCodexBaseUrlOverride(service, resolution) {
-  if (resolution.source !== 'env' && resolution.source !== 'legacy-env') return;
-  const legacy = resolution.source === 'legacy-env' ? 'deprecated ' : '';
-  console.error(`WARN Codex is using ${legacy}${resolution.envKey} for the ${service.label} endpoint: ${resolution.baseUrl}`);
 }
 
 export function warnStoredCodexTokenPrecedence(options, resolvedToken, service) {
@@ -191,11 +218,17 @@ export function codexModelUnavailableError(model, service, availableModels) {
   return error;
 }
 
-export function warnCodexModelFallback(modelResult) {
-  const detail = modelResult.message ? `: ${modelResult.message}` : '';
-  console.error(
-    `WARN Model metadata unavailable (${modelResult.reason ?? 'unknown'}${detail}); using the conservative local Codex catalog.`,
+export function codexModelDiscoveryError(validation, service) {
+  const detail = validation.message
+    ?? (validation.status ? `HTTP ${validation.status}${validation.statusText ? ` ${validation.statusText}` : ''}` : null)
+    ?? validation.reason
+    ?? 'unknown error';
+  const error = new Error(
+    `Cannot discover available Codex models on ${service.label}: ${detail}. Codex was not launched.`,
   );
+  error.code = validation.reason ?? 'model_discovery_failed';
+  if (validation.status) error.statusCode = validation.status;
+  return error;
 }
 
 export function appendCodexApiPath(baseUrl) {

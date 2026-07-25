@@ -54,12 +54,10 @@ test('wrapper options without a command keep the user in the main menu', () => {
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm'])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm', '--strategy', 'claude-gpt'])), true);
   assert.equal(parseOptions(['codex', 'launch', '--model', 'deepseek-v4-pro']).model, 'deepseek-v4-pro');
-  assert.equal(parseOptions(['codex', 'launch']).transport, 'proxy');
-  assert.equal(parseOptions(['codex', 'launch', '--direct']).transport, 'direct');
-  assert.equal(parseOptions(['codex', 'launch', '--transport', 'direct']).transport, 'direct');
-  assert.equal(parseOptions(['codex', 'launch', '--transport', 'proxy']).transport, 'proxy');
-  assert.equal(parseOptions(['codex', 'launch', '--proxy']).transport, 'proxy');
-  assert.throws(() => parseOptions(['codex', 'launch', '--transport', 'remote']), /--transport/);
+  assert.equal(Object.hasOwn(parseOptions(['codex', 'launch']), 'transport'), false);
+  assert.throws(() => parseOptions(['codex', 'launch', '--direct']), /--direct has been removed/);
+  assert.throws(() => parseOptions(['codex', 'launch', '--transport', 'direct']), /--transport has been removed/);
+  assert.throws(() => parseOptions(['codex', 'launch', '--proxy']), /--proxy has been removed/);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--', '-p', 'hello'])), false);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['-p', 'hello'])), false);
 });

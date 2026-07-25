@@ -9,7 +9,6 @@ export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--host'], value: '<loopback>', description: 'Bind a local proxy to a loopback address.' },
   { flags: ['--port'], value: '<1-65535>', description: 'Select the Claude Desktop proxy port.' },
   { flags: ['--allow-origin'], value: '<origin>', description: 'Allow an exact CORS origin; repeatable.' },
-  { flags: ['--direct'], description: 'Bypass the Codex proxy for diagnostics.' },
   { flags: ['--no-prompt'], description: 'Disable interactive prompts.' },
   { flags: ['--yes', '-y'], description: 'Confirm a mutating operation.' },
   { flags: ['--dry-run'], description: 'Preview a mutating operation.' },
@@ -28,18 +27,19 @@ export class CliUsageError extends Error {
 }
 
 export const OPTION_WITH_VALUE = new Set([
-  '--service', '--strategy', '--model', '--token', '--port', '--host', '--transport', '--allow-origin',
+  '--service', '--strategy', '--model', '--token', '--port', '--host', '--allow-origin',
 ]);
 
-const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--direct', '--proxy', '--list-strategies']);
+const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--list-strategies']);
+const REMOVED_OPTIONS = new Set(['--direct', '--proxy', '--transport']);
 
 export function isRecognizedWrapperOption(argument) {
   const key = String(argument).match(/^(--[^=]+)=/)?.[1] ?? argument;
-  return OPTION_WITH_VALUE.has(key) || OPTION_WITHOUT_VALUE.has(key);
+  return OPTION_WITH_VALUE.has(key) || OPTION_WITHOUT_VALUE.has(key) || REMOVED_OPTIONS.has(key);
 }
 
 export function optionConsumesNextArgument(argument) {
-  return !String(argument).includes('=') && OPTION_WITH_VALUE.has(argument);
+  return !String(argument).includes('=') && (OPTION_WITH_VALUE.has(argument) || argument === '--transport');
 }
 
 export function parseOptions(argv) {
@@ -56,7 +56,6 @@ export function parseOptions(argv) {
     host: '127.0.0.1',
     port: 15721,
     allowOrigins: [],
-    transport: 'proxy',
     dryRun: false,
     listStrategies: false,
     deprecations: [],
@@ -86,6 +85,9 @@ export function parseOptions(argv) {
     if (key === '--subagent-model') {
       throw new CliUsageError('--subagent-model has been removed because Claude Code subagent models are fixed by the selected service.');
     }
+    if (REMOVED_OPTIONS.has(key)) {
+      throw new CliUsageError(`${key} has been removed. Codex now connects directly to RouterLab.`);
+    }
 
     if (OPTION_WITH_VALUE.has(key)) {
       const value = inline ? inlineValue : argv[++index];
@@ -104,13 +106,6 @@ export function parseOptions(argv) {
         options.host = value;
       }
       if (key === '--allow-origin') options.allowOrigins.push(normalizeOrigin(value));
-      if (key === '--transport') {
-        if (value !== 'direct' && value !== 'proxy') {
-          throw new CliUsageError('--transport must be either "direct" or "proxy".');
-        }
-        options.transport = value;
-        options.deprecations.push('--transport');
-      }
       if (key === '--port') {
         const port = Number(value);
         if (!/^\d+$/.test(value) || !Number.isInteger(port) || port <= 0 || port > 65535) {
@@ -139,13 +134,6 @@ export function parseOptions(argv) {
       options.help = true;
     } else if (arg === '--version' || arg === '-v') {
       options.version = true;
-    } else if (arg === '--direct') {
-      options.transport = 'direct';
-      options.providedOptions.add('transport');
-    } else if (arg === '--proxy') {
-      options.transport = 'proxy';
-      options.providedOptions.add('transport');
-      options.deprecations.push('--proxy');
     } else if (arg === '--list-strategies') {
       options.listStrategies = true;
       options.providedOptions.add('listStrategies');
@@ -161,11 +149,7 @@ export function parseOptions(argv) {
 
 export function emitOptionDeprecations(options) {
   for (const option of new Set(options.deprecations ?? [])) {
-    if (option === '--proxy') {
-      warnDeprecationOnce('option:--proxy', '`--proxy` is redundant in 4.x because proxy is the default.');
-    } else if (option === '--transport') {
-      warnDeprecationOnce('option:--transport', '`--transport` is deprecated; use the default proxy or `--direct`.');
-    } else if (option === '--list-strategies') {
+    if (option === '--list-strategies') {
       warnDeprecationOnce('option:--list-strategies', '`--list-strategies` is deprecated; use `strategies`.');
     }
   }
@@ -204,6 +188,5 @@ function optionProperty(flag) {
     '--host': 'host',
     '--port': 'port',
     '--allow-origin': 'allowOrigins',
-    '--transport': 'transport',
   }[flag];
 }

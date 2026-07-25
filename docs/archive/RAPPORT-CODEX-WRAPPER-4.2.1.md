@@ -1,3 +1,7 @@
+# Rapport d’analyse archivé — comportement Codex 4.2.1
+
+> Archive historique : ce document décrit le proxy et le catalogue Codex de la version 4.2.1. Ces mécanismes ne font plus partie du chemin Codex 5.0 actuel.
+
 # Rapport d'analyse — Comportement du wrapper sur Codex CLI
 
 Analyse statique du code de `wrapper-scionos` v4.2.1, limitée au chemin Codex.

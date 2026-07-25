@@ -1,5 +1,7 @@
 # Migrating from wrapper-scionos 3.x to 4.0
 
+> Historical 4.x guide. Its Codex proxy and transport-option guidance does not describe 5.0; see [migration-5.0-codex.md](./migration-5.0-codex.md).
+
 ## Before upgrading
 
 Install Node.js ^22.13.0 or >=23.5.0. Codex users must install Codex CLI 0.144.1 or newer.

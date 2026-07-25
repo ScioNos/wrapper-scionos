@@ -19,13 +19,22 @@ import {
 } from '../src/routerlab/strategies.js';
 import { extractModelIds, validateTokenFormat } from '../src/routerlab/models.js';
 import { codexModelDisplayName, codexModelFromClaudeCodeModel, codexModelsFromClaudeCodeStrategies, desktopLabelForDesktopMapping, desktopLabelForStrategyModel, desktopRouteIdForStrategyModel, getStrategyModels, isClaudeFamilyModel, sortDesktopRoutes, supportsOneMillionContext } from '../src/routerlab/strategy-models.js';
+import { resetDeprecationWarningsForTests } from '../src/cli/deprecations.js';
 
 test('RouterLab services expose the expected endpoints', () => {
   assert.equal(requireServiceConfig('routerlab').baseUrl, 'https://api.routerlab.ch');
   assert.equal(requireServiceConfig('llm').baseUrl, 'https://llm-api.routerlab.ch');
-  assert.equal(validateServiceBaseUrl('https://example.test/gateway/v1', 'routerlab'), 'https://example.test/gateway/v1');
-  assert.throws(() => validateServiceBaseUrl('not-a-valid-url', 'routerlab'), /RouterLab base URL is invalid/);
-  assert.throws(() => validateServiceBaseUrl('file:\/\/\/tmp/routerlab', 'llm'), /RouterLab LLM base URL must use HTTP or HTTPS/);
+  assert.equal(validateServiceBaseUrl('https://api.routerlab.ch/', 'routerlab'), 'https://api.routerlab.ch');
+  assert.equal(validateServiceBaseUrl('https://llm-api.routerlab.ch', 'llm'), 'https://llm-api.routerlab.ch');
+  for (const value of [
+    'https://example.test/gateway/v1',
+    'http://api.routerlab.ch',
+    'https://api.routerlab.ch:444',
+    'https://api.routerlab.ch/v1',
+    'not-a-valid-url',
+  ]) {
+    assert.throws(() => validateServiceBaseUrl(value, 'routerlab'), /must be https:\/\/api\.routerlab\.ch/);
+  }
 });
 
 test('service environment tokens prefer RouterLab names with Anthropic legacy fallback', () => {
@@ -55,31 +64,55 @@ test('service environment tokens prefer RouterLab names with Anthropic legacy fa
   });
 });
 
-test('service base URL overrides prefer RouterLab names with Anthropic legacy fallback', () => {
+test('service base URL overrides are ignored and official destinations remain fixed', () => {
   assert.deepEqual(resolveServiceBaseUrlWithSource('routerlab', {
     ROUTERLAB_BASE_URL: 'https://custom-routerlab.example',
     ANTHROPIC_BASE_URL: 'https://legacy.example',
   }), {
-    baseUrl: 'https://custom-routerlab.example',
-    source: 'env',
-    envKey: 'ROUTERLAB_BASE_URL',
+    baseUrl: 'https://api.routerlab.ch',
+    source: 'fixed',
+    envKey: null,
+    ignoredEnvKeys: ['ROUTERLAB_BASE_URL', 'ANTHROPIC_BASE_URL'],
   });
   assert.deepEqual(resolveServiceBaseUrlWithSource('llm', {
     ROUTERLAB_LLM_BASE_URL: 'https://custom-llm.example',
     ROUTERLAB_BASE_URL: 'https://custom-routerlab.example',
     ANTHROPIC_BASE_URL: 'https://legacy.example',
   }), {
-    baseUrl: 'https://custom-llm.example',
-    source: 'env',
-    envKey: 'ROUTERLAB_LLM_BASE_URL',
+    baseUrl: 'https://llm-api.routerlab.ch',
+    source: 'fixed',
+    envKey: null,
+    ignoredEnvKeys: ['ROUTERLAB_BASE_URL', 'ROUTERLAB_LLM_BASE_URL', 'ANTHROPIC_BASE_URL'],
   });
   assert.deepEqual(resolveServiceBaseUrlWithSource('llm', {
     ANTHROPIC_BASE_URL: 'https://legacy.example',
   }), {
-    baseUrl: 'https://legacy.example',
-    source: 'legacy-env',
-    envKey: 'ANTHROPIC_BASE_URL',
+    baseUrl: 'https://llm-api.routerlab.ch',
+    source: 'fixed',
+    envKey: null,
+    ignoredEnvKeys: ['ANTHROPIC_BASE_URL'],
   });
+});
+
+test('user URL variables emit warnings while remaining ignored', () => {
+  const previous = process.env.WRAPPER_SCIONOS_ROUTERLAB_BASE_URL;
+  const originalError = console.error;
+  const warnings = [];
+  process.env.WRAPPER_SCIONOS_ROUTERLAB_BASE_URL = 'https://untrusted.example';
+  resetDeprecationWarningsForTests();
+  console.error = (...values) => warnings.push(values.join(' '));
+  try {
+    const resolution = resolveServiceBaseUrlWithSource('routerlab', process.env);
+    assert.equal(resolution.baseUrl, 'https://api.routerlab.ch');
+  } finally {
+    console.error = originalError;
+    if (previous === undefined) delete process.env.WRAPPER_SCIONOS_ROUTERLAB_BASE_URL;
+    else process.env.WRAPPER_SCIONOS_ROUTERLAB_BASE_URL = previous;
+    resetDeprecationWarningsForTests();
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /WRAPPER_SCIONOS_ROUTERLAB_BASE_URL is ignored/);
+  assert.match(warnings[0], /https:\/\/api\.routerlab\.ch/);
 });
 
 test('Claude Code strategy mapping is service-aware', () => {

@@ -8,18 +8,21 @@ All notable changes to this project will be documented in this file.
 
 #### Codex Integration Refactoring
 
-- **BREAKING**: Removed hardcoded `CODEX_MODEL_PROFILES` and `CODEX_REASONING_PROFILES`. Model metadata (context windows, reasoning levels, input modalities, base instructions) now comes from RouterLab's `/v1/models` endpoint.
-- **BREAKING**: Removed request body rewriting in proxy mode. `metadata` field is no longer deleted, `store` is no longer forced to `false`.
-- **BREAKING**: Removed `web_search="disabled"` override. Codex now controls web search based on its own configuration.
+- **BREAKING**: Removed the Codex proxy, local gateway credential, temporary `model_catalog_json`, and all wrapper-generated behavioral metadata.
+- **BREAKING**: Removed Codex `--direct`, `--proxy`, and `--transport`; Codex now always connects directly to the selected official RouterLab `/v1` endpoint.
+- **BREAKING**: User-provided service base URL variables are ignored with a warning. Production destinations are fixed to `https://api.routerlab.ch` and `https://llm-api.routerlab.ch`.
 - LLM service model list: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3` (6 models).
-- **BREAKING**: Fallback catalog (when `/v1/models` fails) now uses minimal conservative defaults (128K context, medium reasoning, text-only) instead of detailed hardcoded profiles.
+- **BREAKING**: All `/v1/models` discovery failures and empty allowlist intersections now prevent Codex launch; there is no fallback catalog or silent model substitution.
 
 ### Changed
 
-- Model catalogs are now generated from upstream metadata with conservative fallbacks only when upstream is unavailable.
+- `/v1/models` is used only to intersect exact identifiers with the service-scoped Codex allowlist.
+- Codex runtime injection is limited to six native routing settings; the RouterLab token is passed unchanged as child-only `OPENAI_API_KEY`.
+- Interactive launch selects among currently available allowlisted models, while `--no-prompt` without a model requires `gpt-5.6-sol`.
 - RouterLab service model list unchanged (6 models).
-- Base instructions now come from upstream or use Codex defaults, no longer imposed by wrapper.
-- Context windows, reasoning levels, and capabilities reflect upstream provider declarations.
+- Context, instructions, reasoning, modalities, tools, search, truncation, priorities, sandbox, approvals, MCP, hooks, and auth behavior are left to native Codex.
+- Claude Code and Claude Desktop retain their dedicated local proxies and internally generated `ANTHROPIC_BASE_URL`.
+- Release checks no longer execute the full unit suite twice; coverage uses normal Node test isolation and the real Codex check remains explicit.
 
 ### Migration
 

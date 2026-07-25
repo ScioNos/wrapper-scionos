@@ -1,172 +1,117 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import {
   appendCodexApiPath,
+  availableCodexModels,
   codexAuthenticationError,
+  codexModelDiscoveryError,
   codexModelUnavailableError,
-  describeCodexTokenSource,
-  explicitCodexToken,
   handleCodex,
-  warnCodexBaseUrlOverride,
-  warnCodexModelFallback,
-  warnStoredCodexTokenPrecedence,
+  resolveCodexLaunchModel,
 } from '../src/cli/commands/codex.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 
-test('Codex command helpers describe token sources and diagnostics', () => {
-  assert.equal(describeCodexTokenSource({ source: 'option' }), '--token');
-  assert.equal(describeCodexTokenSource({ source: 'secure-storage' }), 'secure storage');
-  assert.equal(describeCodexTokenSource({ source: 'prompt' }), 'the interactive prompt');
-  assert.equal(
-    describeCodexTokenSource({ source: 'env', envTokenKey: 'ROUTERLAB_API_KEY' }),
-    'environment variable ROUTERLAB_API_KEY',
+test('Codex availability is the allowlist/discovery intersection in allowlist order', () => {
+  assert.deepEqual(
+    availableCodexModels('routerlab', ['unknown', 'glm-5.2', 'gpt-5.6-sol']),
+    ['gpt-5.6-sol', 'glm-5.2'],
   );
-  assert.equal(describeCodexTokenSource({ source: 'legacy-env', envTokenKey: null }), 'the environment');
-  assert.equal(describeCodexTokenSource({ source: 'unknown' }), 'the configured token source');
-
-  const service = requireServiceConfig('llm');
-  const authError = codexAuthenticationError(
-    { status: 403 },
-    service,
-    { source: 'prompt' },
+  assert.deepEqual(
+    availableCodexModels('llm', ['MiniMax-M3', 'gpt-5.6-luna']),
+    ['gpt-5.6-luna', 'MiniMax-M3'],
   );
-  assert.equal(authError.code, 'auth_failed');
-  assert.equal(authError.statusCode, 403);
-  assert.match(authError.message, /interactive prompt/);
-  assert.match(authError.message, /auth status --service llm/);
-
-  const defaultStatus = codexAuthenticationError({}, service, { source: 'unknown' });
-  assert.equal(defaultStatus.statusCode, 401);
-  assert.match(defaultStatus.message, /configured token source/);
-
-  const unavailable = codexModelUnavailableError('missing-model', service, ['gpt-5.6-sol']);
-  assert.equal(unavailable.code, 'model_unavailable');
-  assert.match(unavailable.message, /gpt-5\.6-sol/);
-  assert.match(codexModelUnavailableError('missing-model', service, []).message, /Available Codex models: none/);
 });
 
-test('Codex command warnings cover overrides, stored precedence, and fallback details', () => {
-  const originalError = console.error;
-  const warnings = [];
-  console.error = (...values) => warnings.push(values.join(' '));
+test('Codex exact requested model is preserved and never substituted', async () => {
+  const service = requireServiceConfig('llm');
+  assert.equal(await resolveCodexLaunchModel({
+    requestedModel: 'MiniMax-M3',
+    availableModels: ['gpt-5.6-sol', 'MiniMax-M3'],
+    service,
+  }), 'MiniMax-M3');
+  await assert.rejects(resolveCodexLaunchModel({
+    requestedModel: 'minimax-m3',
+    availableModels: ['MiniMax-M3'],
+    service,
+  }), /not available/);
+});
+
+test('Codex no-prompt requires the default model', async () => {
   const service = requireServiceConfig('routerlab');
-  try {
-    warnCodexBaseUrlOverride(service, {
-      source: 'default',
-      envKey: null,
-      baseUrl: service.baseUrl,
-    });
-    warnCodexBaseUrlOverride(service, {
-      source: 'env',
-      envKey: 'ROUTERLAB_BASE_URL',
-      baseUrl: 'https://example.test/gateway',
-    });
-    warnCodexBaseUrlOverride(service, {
-      source: 'legacy-env',
-      envKey: 'ANTHROPIC_BASE_URL',
-      baseUrl: 'https://legacy.example.test',
-    });
+  assert.equal(await resolveCodexLaunchModel({
+    availableModels: ['gpt-5.6-sol', 'glm-5.2'],
+    service,
+    noPrompt: true,
+  }), 'gpt-5.6-sol');
+  await assert.rejects(resolveCodexLaunchModel({
+    availableModels: ['glm-5.2'],
+    service,
+    noPrompt: true,
+  }), /gpt-5\.6-sol.*not available/);
+});
 
-    warnStoredCodexTokenPrecedence(
-      { noPrompt: false },
-      {
-        source: 'secure-storage',
-        envTokenPresent: true,
-        envTokenKey: 'ROUTERLAB_API_KEY',
-      },
-      service,
-    );
-    warnStoredCodexTokenPrecedence(
-      { noPrompt: true },
-      {
-        source: 'secure-storage',
-        envTokenPresent: true,
-        envTokenKey: 'ROUTERLAB_API_KEY',
-      },
-      service,
-    );
-    warnStoredCodexTokenPrecedence(
-      { noPrompt: false },
-      { source: 'env', envTokenPresent: true, envTokenKey: 'ROUTERLAB_API_KEY' },
-      service,
-    );
+test('Codex interactive selection auto-selects one model and prompts for several', async () => {
+  const service = requireServiceConfig('routerlab');
+  let promptCalls = 0;
+  assert.equal(await resolveCodexLaunchModel({
+    availableModels: ['glm-5.2'],
+    service,
+    selectModel: async () => {
+      promptCalls += 1;
+      return 'unexpected';
+    },
+  }), 'glm-5.2');
+  assert.equal(promptCalls, 0);
 
-    warnCodexModelFallback({ reason: 'network_error', message: 'connection refused' });
-    warnCodexModelFallback({});
-  } finally {
-    console.error = originalError;
+  assert.equal(await resolveCodexLaunchModel({
+    availableModels: ['gpt-5.6-sol', 'glm-5.2'],
+    service,
+    selectModel: async ({ choices }) => {
+      promptCalls += 1;
+      assert.deepEqual(choices.map((choice) => choice.value), ['gpt-5.6-sol', 'glm-5.2']);
+      return 'glm-5.2';
+    },
+  }), 'glm-5.2');
+  assert.equal(promptCalls, 1);
+});
+
+test('Codex discovery and authentication errors are explicit', () => {
+  const service = requireServiceConfig('llm');
+  const auth = codexAuthenticationError({ status: 403 }, service, { source: 'option' });
+  assert.equal(auth.code, 'auth_failed');
+  assert.equal(auth.statusCode, 403);
+  assert.match(auth.message, /HTTP 403/);
+
+  for (const failure of [
+    { reason: 'network_error', message: 'connection refused' },
+    { reason: 'timeout', message: 'timed out' },
+    { reason: 'invalid_response', message: 'invalid JSON' },
+    { reason: 'server_error', status: 500, statusText: 'Internal Server Error' },
+    { reason: 'models_unavailable', message: 'No allowed Codex model is currently available' },
+  ]) {
+    const error = codexModelDiscoveryError(failure, service);
+    assert.equal(error.code, failure.reason);
+    assert.match(error.message, /Codex was not launched/);
   }
 
-  assert.equal(warnings.length, 5);
-  assert.match(warnings[0], /ROUTERLAB_BASE_URL/);
-  assert.match(warnings[1], /deprecated ANTHROPIC_BASE_URL/);
-  assert.match(warnings[2], /stored RouterLab token/);
-  assert.match(warnings[3], /network_error: connection refused/);
-  assert.match(warnings[4], /unknown/);
+  assert.equal(codexModelUnavailableError('missing', service, []).code, 'model_unavailable');
+  assert.equal(appendCodexApiPath(service.baseUrl), 'https://llm-api.routerlab.ch/v1');
 });
 
-test('Codex token and API path helpers validate and normalize inputs', () => {
-  assert.deepEqual(
-    explicitCodexToken('  explicit-token-with-enough-length  ', {
-      token: 'environment-token',
-      envKey: 'ROUTERLAB_API_KEY',
-    }),
-    {
-      token: 'explicit-token-with-enough-length',
-      source: 'option',
-      envTokenPresent: true,
-      envTokenKey: 'ROUTERLAB_API_KEY',
-      storedTokenPresent: false,
-    },
-  );
-  assert.throws(() => explicitCodexToken('short', { token: null, envKey: null }), /too short/);
-
-  assert.equal(appendCodexApiPath('https://api.example.test'), 'https://api.example.test/v1');
-  assert.equal(appendCodexApiPath('https://api.example.test/'), 'https://api.example.test/v1');
-  assert.equal(appendCodexApiPath('https://api.example.test/gateway/'), 'https://api.example.test/gateway/v1');
-  assert.equal(appendCodexApiPath('https://api.example.test/gateway/v1/'), 'https://api.example.test/gateway/v1');
-});
-
-test('Codex restore handler prints dry-run and applied results', async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-codex-command-restore-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-  const previousCodexHome = process.env.CODEX_HOME;
-  process.env.CODEX_HOME = tempDir;
-  t.after(() => {
-    if (previousCodexHome === undefined) delete process.env.CODEX_HOME;
-    else process.env.CODEX_HOME = previousCodexHome;
-  });
-
-  const configPath = path.join(tempDir, 'config.toml');
-  const backupPath = configPath + '.wrapper-scionos-backup';
-  fs.writeFileSync(configPath, 'wrapper config', 'utf8');
-  fs.writeFileSync(backupPath, 'original config', 'utf8');
-
+test('codex template prints only native provider configuration', async () => {
   const originalLog = console.log;
   const output = [];
   console.log = (line) => output.push(JSON.parse(line));
   try {
-    await handleCodex('restore', {
-      yes: false,
+    await handleCodex('template', {
+      service: 'routerlab',
+      model: 'gpt-5.6-sol',
       json: true,
-      command: 'codex:restore',
-    });
-    assert.equal(fs.readFileSync(configPath, 'utf8'), 'wrapper config');
-
-    await handleCodex('restore', {
-      yes: true,
-      json: true,
-      command: 'codex:restore',
+      command: 'codex:template',
     });
   } finally {
     console.log = originalLog;
   }
-
-  assert.equal(output.length, 2);
-  assert.equal(output[0].data.dryRun, true);
-  assert.equal(output[1].data.restoredFromBackup, true);
-  assert.equal(fs.readFileSync(configPath, 'utf8'), 'original config\n');
-  assert.equal(fs.existsSync(backupPath), false);
+  assert.deepEqual(Object.keys(output[0].data), ['config']);
+  assert.doesNotMatch(output[0].data.config, /model_catalog_json/);
 });

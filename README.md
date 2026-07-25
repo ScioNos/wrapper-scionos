@@ -64,14 +64,10 @@ Preferred environment variables:
 
     ROUTERLAB_API_KEY
     ROUTERLAB_LLM_API_KEY
-    ROUTERLAB_BASE_URL
-    ROUTERLAB_LLM_BASE_URL
     WRAPPER_SCIONOS_ROUTERLAB_TOKEN
     WRAPPER_SCIONOS_LLM_TOKEN
-    WRAPPER_SCIONOS_ROUTERLAB_BASE_URL
-    WRAPPER_SCIONOS_LLM_BASE_URL
 
-ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL remain accepted during 4.x and emit one deprecation warning on stderr. A custom `*_BASE_URL` keeps its path prefix: `/gateway` followed by a Responses request becomes `/gateway/v1/responses`; a trailing `/v1` is deduplicated. Only HTTP(S) bases are accepted.
+`ANTHROPIC_AUTH_TOKEN` remains a deprecated token fallback. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL`, and `ANTHROPIC_BASE_URL` values are ignored with a warning; they never change the production destination.
 
 Secure storage reads both wrapper-scionos and the legacy claude-scionos namespace; logout deletes both. On Linux, the file fallback creates directories as `0700` and verifies token files as `0600`, failing closed if those permissions cannot be guaranteed.
 
@@ -85,7 +81,7 @@ Claude Code is launched through a loopback proxy. Wrapper-owned credentials and 
 
 For `--service llm`, the `claude` strategy is active and maps Opus to `claude-opus-4-8`, Sonnet to `claude-sonnet-5`, and Haiku to `claude-haiku-4-5-20251001`. Claude Code subagents use `claude-sonnet-5` for every LLM strategy.
 
-Claude Code validates the selected service base as HTTP(S) before resolving or sending a token. Environment-provided base URL overrides are printed on stderr, and legacy `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_BASE_URL` values remain accepted with their 4.x deprecation warning.
+Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted with its deprecation warning.
 
 An HTTP 401/403 from model discovery stops the launch before the local proxy or Claude child starts. The error identifies the token source without exposing it and prints service-specific `auth status`, `auth test`, and `auth login` commands. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings; the user may continue with unverified model availability.
 
@@ -119,47 +115,40 @@ When the proxy was started from the interactive menu, Ctrl+C stops it and return
 
 ## Codex CLI
 
-The default Codex path is the session-local proxy:
+Codex connects directly to the selected RouterLab Responses endpoint:
 
     wrapper-scionos codex launch --service routerlab
     wrapper-scionos codex launch --service llm
 
-The Codex catalogs are restricted to these models, in menu order:
+The wrapper allowlists these initial models:
 
 - `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
 - `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
 
-Before resolving a token or opening the proxy, Codex validates the selected service endpoint as HTTP(S) and validates an explicit `--token`. An HTTP 401/403 from model discovery stops the launch with service-specific `auth status`, `auth test`, and `auth login` guidance. If discovery succeeds, the requested or default model must be present in the verified Codex-compatible service catalog; otherwise the wrapper lists the available models and refuses to launch. Network, timeout, invalid-response, and other non-authentication discovery failures remain warnings and use the conservative local catalog.
+Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. Interactive launch asks among the intersection and automatically selects it when only one model remains. `--no-prompt` without `--model` requires `gpt-5.6-sol` to be available.
 
-For diagnostics only, --direct bypasses the proxy:
+Every discovery failure is fail-closed: network errors, timeouts, invalid JSON, HTTP 401/403, server errors, and an empty intersection all prevent Codex from starting. The `--direct`, `--proxy`, and `--transport` options have been removed because direct access is now the only Codex transport.
 
-    wrapper-scionos codex launch --service llm --direct
+The session receives only six Codex configuration overrides: `model_provider`, `model`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged to the Codex child through `OPENAI_API_KEY`; arguments after `--` are forwarded unchanged.
 
-The wrapper overrides the Codex session provider, model, URL, wire API, and temporary catalog. It does not modify sandbox, approval policy, reasoning effort, MCP, features, hooks, or auth files. Like cc-switch's native Responses profile, the catalog does not advertise the freeform `apply_patch` tool: file edits use `shell_command`, which is gateway-compatible. Hosted web search availability is no longer forced by the wrapper: it is derived from upstream model metadata (`supports_search`), and Codex then decides whether to use it.
+No model catalog is generated. The wrapper does not supply context windows, instructions, reasoning levels, modalities, shell/tool declarations, search capabilities, truncation rules, priorities, sandbox policy, approval policy, MCP configuration, hooks, or auth-file changes. Codex keeps its native behavior, including its own model selector after startup; RouterLab/LiteLLM remains the final authority for any later model change.
 
-In both proxy and direct modes, the wrapper no longer rewrites Responses request bodies: `store` and `metadata` are forwarded as Codex sends them. The proxy is limited to local authentication and upstream token substitution. The retention policy applied remains that of the upstream provider.
+Production destinations are fixed: `routerlab` uses `https://api.routerlab.ch/v1` and `llm` uses `https://llm-api.routerlab.ch/v1`. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL`, and `ANTHROPIC_BASE_URL` values are ignored with a warning. Token variables remain supported.
 
 When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
 
-The temporary model catalog is generated from normalized upstream metadata, and explicit verified RouterLab values take precedence. When only model IDs are available, known models intentionally use conservative cc-switch-derived context profiles: GPT-5.6 at 372,000 tokens, DeepSeek V4 Pro and MiniMax M3 at 1,000,000, Kimi K2.7 Code at 262,144, GLM-5.2 at 200,000, Kimi K3 at 1,048,576, and Grok 4.5 at 500,000. These fallback values are RouterLab compatibility assumptions, not claims about each provider's public maximum. Unknown IDs retain the conservative 128k, text-only, sequential fallback. Codex receives 95% of each context window as its effective budget. Catalog files older than 24 hours are removed at startup and the active catalog is removed when Codex exits.
-
-All RouterLab and RouterLab LLM models are sent without transformation to the native `/v1/responses` endpoint with `wire_api="responses"`, streaming and non-streaming. RouterLab provides model-specific Responses compatibility; the wrapper performs no protocol translation. It preserves local authentication, upstream token substitution, temporary catalogs, and contextualized 401/403 diagnostics on the Codex Responses path. Relayed compressed responses preserve encoding and length; intercepted compressed errors are bounded-decoded before normalization.
-
-codex template prints a non-persistent template. codex restore exists only to recover a configuration written by an older wrapper release.
+`codex template` prints the non-persistent native provider configuration without a catalog. `codex status` and `codex restore` remain available only to inspect and remove configuration or catalog files created by older wrapper releases.
 
 ## 4.x compatibility
 
-The following remain accepted throughout 4.x and warn once per process on stderr:
+The following legacy items still warn once per process on stderr:
 
-- --proxy
-- --transport proxy or --transport direct
 - ANTHROPIC_AUTH_TOKEN
-- ANTHROPIC_BASE_URL
 - --list-strategies (use strategies)
 - auth change (use auth login)
 - claude-desktop apply (use claude-desktop apply-proxy)
 
-Prefer the default proxy, --direct for diagnostics, and the RouterLab environment names above. See [Migrating from 3.x](./docs/migration-4.0.md).
+All user-provided base URL variables, including `ANTHROPIC_BASE_URL`, are ignored. See [Codex migration for 5.0](./docs/migration-5.0-codex.md).
 
 ## Development and release checks
 
@@ -172,7 +161,7 @@ Prefer the default proxy, --direct for diagnostics, and the RouterLab environmen
 
 `npm run test:entry-modes` packs the current working tree into a temporary tarball, installs it in an isolated prefix, then opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It does not require a global installation or a previously published npm version.
 
-`npm test` also performs isolated end-to-end Claude Code, Claude Desktop, and Codex launches for `routerlab` and `llm`. Fake client executables and local upstreams verify menu selection, service propagation, child-only credential injection, local-to-upstream token replacement, authentication failures, model availability, proxy cleanup, and Windows npm shim forwarding without contacting RouterLab production endpoints. `npm run test:codex-real` is an opt-in smoke test that runs the installed Codex CLI against a loopback-only fake Responses server with temporary config and catalog files; it never contacts RouterLab. Coverage gates remain 85% for lines/functions and 80% for branches.
+`npm test` uses internal dependency injection for local fixtures; production URL variables cannot redirect the wrapper. `npm run test:codex-real` is an explicit opt-in smoke test that runs the installed Codex CLI against a loopback-only fake Responses server with native provider overrides and no catalog; it never contacts RouterLab. Coverage gates remain 85% for lines/functions and 80% for branches.
 
 For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-4.2.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
 

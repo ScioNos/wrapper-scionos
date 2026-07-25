@@ -86,13 +86,14 @@ export function detectCli({
   configPath = null,
   preferWindowsShim = false,
   versionTimeoutMs = 5000,
+  spawnSyncFn = spawnSync,
 } = {}) {
   const cliCandidates = findExecutables(command, candidates, { preferWindowsShim });
   let cliPath = null;
   let version = null;
   for (const candidate of cliCandidates) {
     const invocation = buildInteractiveCliInvocation(candidate, ['--version']);
-    const result = spawnSync(invocation.command, invocation.args, {
+    const result = spawnSyncFn(invocation.command, invocation.args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: versionTimeoutMs,
@@ -157,9 +158,9 @@ export function isCodexVersionSupported(version, minimum = MINIMUM_CODEX_VERSION
   return true;
 }
 
-function getNpmGlobalBinPath() {
+export function getNpmGlobalBinPath(spawnSyncFn = spawnSync) {
   try {
-    const result = spawnSync('npm', ['bin', '-g'], {
+    const result = spawnSyncFn('npm', ['bin', '-g'], {
       encoding: 'utf8',
       timeout: 5000,
       windowsHide: true,
@@ -177,16 +178,18 @@ export function codexCliCandidates(
   platform = process.platform,
   home = os.homedir(),
   appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+  { getNpmGlobalBinPathFn = getNpmGlobalBinPath } = {},
 ) {
+  const npmGlobalBinPath = getNpmGlobalBinPathFn();
   return platform === 'win32'
     ? [
-        ...(getNpmGlobalBinPath() ? [path.join(getNpmGlobalBinPath(), 'codex.cmd'), path.join(getNpmGlobalBinPath(), 'codex')] : []),
+        ...(npmGlobalBinPath ? [path.join(npmGlobalBinPath, 'codex.cmd'), path.join(npmGlobalBinPath, 'codex')] : []),
         path.join(appData, 'npm', 'codex'),
         path.join(home, '.local', 'bin', 'codex.exe'),
         path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'codex.exe'),
       ]
     : [
-        ...(platform !== 'win32' && getNpmGlobalBinPath() ? [path.join(getNpmGlobalBinPath(), 'codex')] : []),
+        ...(npmGlobalBinPath ? [path.join(npmGlobalBinPath, 'codex')] : []),
         path.join(home, '.local', 'bin', 'codex'),
         '/opt/homebrew/bin/codex',
         '/usr/local/bin/codex',

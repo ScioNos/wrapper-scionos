@@ -5,12 +5,10 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
 import { DEFAULT_ANTHROPIC_VERSION } from '../routerlab/services.js';
-import { upstreamResponsesError } from './responses-errors.js';
 
 export const DEFAULT_LLM_PROXY_HOST = '127.0.0.1';
 export const LEGACY_LLM_PROXY_GATEWAY_TOKEN = 'scionos-local';
 export const MAX_LLM_PROXY_REQUEST_BYTES = 64 * 1024 * 1024;
-const MAX_ERROR_BODY_BYTES = 1024 * 1024;
 
 export function generateLlmProxyGatewayToken() {
   return randomBytes(32).toString('base64url');
@@ -35,7 +33,6 @@ export function createLongRunningLlmProxy({
   gatewayToken = generateLlmProxyGatewayToken(),
   upstreamAuth = 'both',
   beforeForward = null,
-  codexServiceValue = null,
 }) {
   const server = http.createServer(async (req, res) => {
     try {
@@ -56,7 +53,6 @@ export function createLongRunningLlmProxy({
         routerlabToken,
         body: bodyText,
         upstreamAuth,
-        errorContext: buildCodexErrorContext(req, bodyText, codexServiceValue),
       });
     } catch (error) {
       if (!res.headersSent) {
@@ -125,7 +121,6 @@ export async function forwardLongRunningLlmRequest(req, res, {
   routerlabToken,
   body,
   upstreamAuth = 'both',
-  errorContext = null,
   responseHeaders = {},
 }) {
   const upstreamUrl = buildUpstreamUrl(req, targetBaseUrl);
@@ -142,16 +137,6 @@ export async function forwardLongRunningLlmRequest(req, res, {
     body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
     signal: controller.signal,
   });
-
-  const status = upstream.statusCode ?? 502;
-  if (errorContext && (status < 200 || status >= 300)) {
-    const errorBody = await readEncodedStreamText(upstream);
-    writeJson(res, upstreamResponsesError(status, errorBody, {
-      ...errorContext,
-      upstreamUrl: upstreamUrl.href,
-    }), status);
-    return;
-  }
 
   await writeLongRunningHttpResponse(res, upstream, responseHeaders);
 }
@@ -204,7 +189,9 @@ export function forwardHeaders(sourceHeaders, {
   }
 
   headers['content-type'] = headers['content-type'] ?? 'application/json';
-  headers['anthropic-version'] = headers['anthropic-version'] ?? DEFAULT_ANTHROPIC_VERSION;
+  if (upstreamAuth === 'anthropic' || upstreamAuth === 'both') {
+    headers['anthropic-version'] = headers['anthropic-version'] ?? DEFAULT_ANTHROPIC_VERSION;
+  }
   return headers;
 }
 
@@ -285,77 +272,12 @@ function proxyError(message, statusCode, code) {
   return error;
 }
 
-const CODEX_RESPONSES_PATHS = new Set(['/responses', '/v1/responses']);
-
-export function buildCodexErrorContext(req, bodyText, codexServiceValue) {
-  if (!codexServiceValue) {
-    return null;
-  }
-  if (!isCodexResponsesRequest(req)) {
-    return null;
-  }
-  return {
-    requestLabel: 'Codex Responses request',
-    serviceValue: codexServiceValue,
-    model: extractRequestModel(bodyText),
-  };
-}
-
-function isCodexResponsesRequest(req) {
-  try {
-    const pathname = new URL(req?.url ?? '/', 'http://127.0.0.1').pathname.replace(/\/+$/, '');
-    return CODEX_RESPONSES_PATHS.has(pathname || '/');
-  } catch {
-    return false;
-  }
-}
-
-function extractRequestModel(bodyText) {
-  if (typeof bodyText !== 'string' || bodyText.trim() === '') {
-    return null;
-  }
-  try {
-    const model = JSON.parse(bodyText)?.model;
-    return typeof model === 'string' && model.trim() !== '' ? model : null;
-  } catch {
-    return null;
-  }
-}
 export function writeJson(res, payload, status = 200, headers = {}) {
   res.writeHead(status, {
     ...headers,
     'content-type': 'application/json',
   });
   res.end(JSON.stringify(payload));
-}
-
-async function readEncodedStreamText(stream, maxBytes = MAX_ERROR_BODY_BYTES) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of stream) {
-    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    const remaining = maxBytes - size;
-    if (remaining <= 0) break;
-    chunks.push(value.subarray(0, remaining));
-    size += Math.min(value.length, remaining);
-    if (value.length > remaining) break;
-  }
-  let body = Buffer.concat(chunks);
-  const header = Array.isArray(stream.headers?.['content-encoding'])
-    ? stream.headers['content-encoding'].join(',')
-    : stream.headers?.['content-encoding'] ?? 'identity';
-  const encodings = String(header).split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
-  for (const encoding of encodings.reverse()) {
-    if (!encoding || encoding === 'identity') continue;
-    const method = { gzip: zlib.gunzip, deflate: zlib.inflate, br: zlib.brotliDecompress, zstd: zlib.zstdDecompress }[encoding];
-    if (typeof method !== 'function') throw proxyError('Unsupported upstream content encoding: ' + encoding + '.', 502, 'unsupported_upstream_content_encoding');
-    try {
-      body = await promisify(method)(body, { maxOutputLength: maxBytes });
-    } catch {
-      throw proxyError('Upstream error body uses invalid ' + encoding + ' compression.', 502, 'invalid_upstream_compression');
-    }
-  }
-  return body.subarray(0, maxBytes).toString('utf8');
 }
 
 async function requestLongRunningHttp(url, { method, headers, body, signal }) {

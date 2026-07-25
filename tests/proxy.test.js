@@ -5,7 +5,6 @@ import zlib from 'node:zlib';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { DESKTOP_MAPPING_STRATEGIES } from '../src/apps/claude-desktop.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
-import { upstreamResponsesError } from '../src/platform/responses-errors.js';
 
 test('Claude Desktop proxy exposes mapped model list', async () => {
   const { server } = createClaudeDesktopProxy({
@@ -119,53 +118,6 @@ test('Claude Desktop proxy rewrites mapped request models and forwards empty JSO
   }
 });
 
-test('shared long-running LLM proxy swaps local Codex token for upstream OpenAI auth', async () => {
-  const upstream = http.createServer((req, res) => {
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({
-      authorization: req.headers.authorization,
-      apiKey: req.headers['x-api-key'] ?? null,
-      url: req.url,
-    }));
-  });
-
-  await new Promise((resolve, reject) => {
-    upstream.once('error', reject);
-    upstream.listen(0, '127.0.0.1', () => {
-      upstream.off('error', reject);
-      resolve();
-    });
-  });
-
-  const upstreamAddress = upstream.address();
-  const upstreamBaseUrl = `http://127.0.0.1:${upstreamAddress.port}`;
-  const proxy = await startLongRunningLlmProxy({
-    targetBaseUrl: upstreamBaseUrl,
-    routerlabToken: 'real-routerlab-token',
-    upstreamAuth: 'openai',
-  });
-
-  try {
-    const response = await fetch(`${proxy.baseUrl}/v1/responses`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${proxy.gatewayToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ model: 'gpt-5.5' }),
-    });
-    const payload = await response.json();
-
-    assert.equal(response.status, 200);
-    assert.equal(payload.authorization, 'Bearer real-routerlab-token');
-    assert.equal(payload.apiKey, null);
-    assert.equal(payload.url, '/v1/responses');
-  } finally {
-    await stopLongRunningLlmProxy(proxy);
-    await new Promise((resolve) => upstream.close(resolve));
-  }
-});
-
 test('shared long-running LLM proxy forces lingering connections closed after its grace period', async () => {
   let markUpstreamStarted;
   const upstreamStarted = new Promise((resolve) => {
@@ -204,7 +156,7 @@ test('shared long-running LLM proxy forces lingering connections closed after it
   }
 });
 
-test('shared long-running proxy keeps every RouterLab model on native Responses', async () => {
+test('shared long-running proxy preserves generic OpenAI-compatible requests', async () => {
   const captured = [];
   const upstream = http.createServer((req, res) => {
     const chunks = [];
@@ -227,7 +179,6 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
     targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexServiceValue: 'routerlab',
   });
 
   try {
@@ -258,7 +209,7 @@ test('shared long-running proxy keeps every RouterLab model on native Responses'
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
-test('shared long-running LLM proxy keeps LiteLLM open-source models on Responses passthrough', async () => {
+test('shared long-running LLM proxy keeps generic responses on passthrough', async () => {
   let captured = null;
   const upstream = http.createServer((req, res) => {
     captured = { url: req.url, authorization: req.headers.authorization };
@@ -279,7 +230,6 @@ test('shared long-running LLM proxy keeps LiteLLM open-source models on Response
     targetBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexServiceValue: 'llm',
   });
 
   try {
@@ -303,7 +253,7 @@ test('shared long-running LLM proxy keeps LiteLLM open-source models on Response
   }
 });
 
-test('shared long-running LLM proxy enriches Codex passthrough upstream auth errors', async () => {
+test('shared long-running LLM proxy preserves upstream error responses', async () => {
   const upstream = http.createServer((req, res) => {
     res.writeHead(403, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: { message: 'model access denied', type: 'forbidden' } }));
@@ -322,7 +272,6 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
     targetBaseUrl: `http://127.0.0.1:${upstreamAddress.port}`,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexServiceValue: 'llm',
   });
 
   try {
@@ -338,18 +287,14 @@ test('shared long-running LLM proxy enriches Codex passthrough upstream auth err
 
     assert.equal(response.status, 403);
     assert.equal(payload.error.type, 'forbidden');
-    assert.match(payload.error.message, /^Codex Responses request failed with HTTP 403\./);
-    assert.match(payload.error.message, /Service: llm\./);
-    assert.match(payload.error.message, /Model: gpt-5\.5\./);
-    assert.match(payload.error.message, /Upstream message: model access denied/);
-    assert.match(payload.error.message, /secure-storage token takes precedence/);
+    assert.equal(payload.error.message, 'model access denied');
   } finally {
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));
   }
 });
 
-test('proxy preserves compressed response headers and decodes compressed errors', async () => {
+test('proxy preserves compressed response headers and upstream errors', async () => {
   let fail = false;
   let encoding = 'gzip';
   const upstream = http.createServer((req, res) => {
@@ -369,7 +314,6 @@ test('proxy preserves compressed response headers and decodes compressed errors'
     targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
     routerlabToken: 'real-routerlab-token',
     upstreamAuth: 'openai',
-    codexServiceValue: 'routerlab',
   });
   try {
     const raw = await new Promise((resolve, reject) => {
@@ -411,33 +355,4 @@ test('proxy preserves compressed response headers and decodes compressed errors'
     await stopLongRunningLlmProxy(proxy);
     await new Promise((resolve) => upstream.close(resolve));
   }
-});
-test('Responses error normalization preserves structured fields and contextual auth guidance', () => {
-  const direct = upstreamResponsesError(400, JSON.stringify({ error: { message: 'bad request', type: 'invalid_request_error', code: 'bad_input', param: 'model' } }));
-  assert.deepEqual(direct.error, {
-    message: 'Upstream Responses request failed with HTTP 400. Upstream message: bad request',
-    type: 'invalid_request_error', code: 'bad_input', param: 'model',
-  });
-
-  const base = upstreamResponsesError(403, { base_resp: { status_msg: 'denied', status_code: 403 } }, {
-    requestLabel: 'Codex Responses request', serviceValue: 'llm', model: 'glm-5.2', upstreamUrl: 'https://llm-api.routerlab.ch/v1/responses',
-  });
-  assert.equal(base.error.type, 'upstream_error');
-  assert.equal(base.error.code, 403);
-  assert.match(base.error.message, /Service: llm/);
-  assert.match(base.error.message, /Model: glm-5\.2/);
-  assert.match(base.error.message, /secure-storage token takes precedence/);
-
-  const fallback = upstreamResponsesError(500, { detail: 'gateway unavailable', type: 'gateway_error', code: 'upstream_down', param: 'request' });
-  assert.deepEqual(fallback.error, {
-    message: 'Upstream Responses request failed with HTTP 500. Upstream message: gateway unavailable',
-    type: 'gateway_error', code: 'upstream_down', param: 'request',
-  });
-  assert.match(upstreamResponsesError(401, 'plain failure').error.message, /--service <routerlab\|llm>/);
-  assert.equal(upstreamResponsesError(502, { message: 'object message' }).error.type, 'upstream_error');
-  assert.match(upstreamResponsesError(502, { base_resp: { message: 'fallback message' } }).error.message, /fallback message/);
-  assert.match(upstreamResponsesError(502, {}).error.message, /\{\}/);
-  assert.match(upstreamResponsesError(502, null).error.message, /Unknown upstream error/);
-  const long = 'x'.repeat(1024 * 1024 + 1);
-  assert.match(upstreamResponsesError(502, long).error.message, /\.\.\.\(truncated\)/);
 });

@@ -12,13 +12,6 @@ import { main, resolveCommandInvocation } from '../src/cli/main.js';
 import { printError } from '../src/cli/commands/output.js';
 import { defaultDesktopStrategy, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
 import { extractModelMetadata, fetchModels } from '../src/routerlab/models.js';
-import {
-  buildCodexCatalogFallback,
-  buildCodexCatalogFromUpstream,
-  cleanupStaleCodexRuntimeModelCatalogs,
-  CODEX_MODEL_CATALOG_FILENAME,
-  CODEX_RUNTIME_MODEL_CATALOG_DIR,
-} from '../src/apps/codex.js';
 import { isCodexVersionSupported } from '../src/platform/detect.js';
 import { assertSupportedNodeVersion, isSupportedNodeVersion } from '../src/platform/runtime.js';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
@@ -34,7 +27,7 @@ import {
 import { buildUpstreamUrl, forwardHeaders, readRequestBody, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 import { resetDeprecationWarningsForTests, warnDeprecationOnce } from '../src/cli/deprecations.js';
 
-test('v4 CLI validates loopback hosts, numeric ports, origins, and legacy transport', () => {
+test('CLI validates loopback hosts, numeric ports, origins, and removed Codex transport flags', () => {
   assert.equal(isLoopbackHost('127.0.0.42'), true);
   assert.equal(isLoopbackHost('127.999.0.1'), false);
   assert.equal(isLoopbackHost('0.0.0.0'), false);
@@ -47,12 +40,13 @@ test('v4 CLI validates loopback hosts, numeric ports, origins, and legacy transp
     '--port', '8080',
     '--allow-origin', 'https://example.test/path',
     '--allow-origin=https://second.test',
-    '--transport', 'direct',
   ]);
   assert.equal(options.port, 8080);
   assert.deepEqual(options.allowOrigins, ['https://example.test', 'https://second.test']);
-  assert.equal(options.transport, 'direct');
-  assert.deepEqual(options.deprecations, ['--transport']);
+  assert.equal(Object.hasOwn(options, 'transport'), false);
+  for (const removed of ['--direct', '--proxy', '--transport=direct']) {
+    assert.throws(() => parseOptions([removed]), /has been removed/);
+  }
 });
 
 test('v4 runtime version requirements follow the published ranges', () => {
@@ -92,61 +86,6 @@ test('RouterLab model metadata is normalized without optimistic capabilities', (
   assert.equal(metadata[1].supportsReasoningVerified, false);
 });
 
-test('Codex catalog uses upstream metadata, minimal fallback, and prunes stale runtime files', (t) => {
-  const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-v4-catalog-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
-
-  const catalog = buildCodexCatalogFromUpstream({
-    serviceValue: 'routerlab',
-    allowedModelIds: ['model-a', 'model-b'],
-    upstreamModels: [
-      {
-        id: 'model-a',
-        contextWindow: 200000,
-        inputModalities: ['text', 'image'],
-        supportsReasoning: true,
-        supportsParallelToolCalls: true,
-        supportsSearch: true,
-      },
-      { id: 'model-b' },
-    ],
-  });
-  assert.equal(catalog.models[0].context_window, 200000);
-  assert.deepEqual(catalog.models[0].input_modalities, ['text', 'image']);
-  assert.equal(catalog.models[0].supports_parallel_tool_calls, true);
-  assert.equal(catalog.models[0].supports_search_tool, true);
-  assert.equal(catalog.models[1].context_window, 128000);
-  assert.deepEqual(catalog.models[1].input_modalities, ['text']);
-  assert.equal(catalog.models[1].supports_parallel_tool_calls, false);
-  assert.equal(catalog.models[1].supports_search_tool, false);
-
-  const filtered = buildCodexCatalogFromUpstream({
-    allowedModelIds: ['model-a'],
-    upstreamModels: [{ id: 'model-a' }, { id: 'not-allowed' }],
-  });
-  assert.deepEqual(filtered.models.map((entry) => entry.slug), ['model-a']);
-
-  const fallback = buildCodexCatalogFallback({
-    serviceValue: 'llm',
-    allowedModelIds: ['gpt-5.6-sol', 'kimi-k3'],
-  });
-  assert.deepEqual(fallback.models.map((entry) => entry.slug), ['gpt-5.6-sol', 'kimi-k3']);
-  assert.equal(fallback.models.every((entry) => entry.context_window === 128000), true);
-  assert.equal(fallback.models.every((entry) => entry.supports_search_tool === false), true);
-
-  const dir = path.join(tempDir, CODEX_RUNTIME_MODEL_CATALOG_DIR);
-  fs.mkdirSync(dir);
-  const stale = path.join(dir, 'old-' + CODEX_MODEL_CATALOG_FILENAME);
-  const fresh = path.join(dir, 'new-' + CODEX_MODEL_CATALOG_FILENAME);
-  fs.writeFileSync(stale, '{}');
-  fs.writeFileSync(fresh, '{}');
-  const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
-  fs.utimesSync(stale, old, old);
-  assert.equal(cleanupStaleCodexRuntimeModelCatalogs({ tmpDir: tempDir }), 1);
-  assert.equal(fs.existsSync(stale), false);
-  assert.equal(fs.existsSync(fresh), true);
-});
-
 test('Claude Desktop catalog requires auth and enforces exact CORS origins', async (t) => {
   const gatewayToken = 'local-random-token';
   const { server } = createClaudeDesktopProxy({
@@ -175,37 +114,6 @@ test('Claude Desktop catalog requires auth and enforces exact CORS origins', asy
   assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://allowed.test');
 });
 
-test('Codex proxy forwards Responses bodies without rewriting them', async (t) => {
-  let captured;
-  const upstream = http.createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      captured = JSON.parse(Buffer.concat(chunks));
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end('{"ok":true}');
-    });
-  });
-  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise((resolve) => upstream.close(resolve)));
-  const proxy = await startLongRunningLlmProxy({
-    targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
-    routerlabToken: 'upstream',
-    upstreamAuth: 'openai',
-  });
-  t.after(() => stopLongRunningLlmProxy(proxy));
-  const response = await fetch(proxy.baseUrl + '/v1/responses', {
-    method: 'POST',
-    headers: {
-      authorization: 'Bearer ' + proxy.gatewayToken,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ model: 'gpt-5.6-sol', store: true, metadata: { session: 'abc' } }),
-  });
-  assert.equal(response.status, 200);
-  assert.equal(captured.store, true);
-  assert.deepEqual(captured.metadata, { session: 'abc' });
-});
 test('central command registry drives non-interactive help and diagnostic commands', async () => {
   const originalLog = console.log;
   const originalError = console.error;
@@ -416,35 +324,6 @@ test('CLI JSON output uses one stable success or error document', async () => {
   assert.equal(payload.ok, true);
   assert.equal(payload.command, 'codex:status');
   assert.equal(typeof payload.data, 'object');
-});
-
-test('Auth test and strategies honor explicit token before environment and storage', async (t) => {
-  const seen = [];
-  const server = http.createServer((req, res) => {
-    seen.push(req.headers['x-api-key']);
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end('{"data":[{"id":"gpt-5.6-sol"}]}');
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-  const oldBase = process.env.ROUTERLAB_BASE_URL;
-  const oldToken = process.env.ROUTERLAB_API_KEY;
-  process.env.ROUTERLAB_BASE_URL = 'http://127.0.0.1:' + server.address().port;
-  process.env.ROUTERLAB_API_KEY = 'environment-token-with-enough-length';
-  const originalLog = console.log;
-  const lines = [];
-  console.log = (line) => lines.push(line);
-  try {
-    await main(['auth', 'test', '--token', 'explicit-token-with-enough-length', '--json', '--no-prompt']);
-    await main(['strategies', '--token', 'explicit-token-with-enough-length', '--json', '--no-prompt']);
-  } finally {
-    console.log = originalLog;
-    if (oldBase === undefined) delete process.env.ROUTERLAB_BASE_URL; else process.env.ROUTERLAB_BASE_URL = oldBase;
-    if (oldToken === undefined) delete process.env.ROUTERLAB_API_KEY; else process.env.ROUTERLAB_API_KEY = oldToken;
-  }
-  assert.deepEqual(seen, ['explicit-token-with-enough-length', 'explicit-token-with-enough-length']);
-  assert.equal(JSON.parse(lines[0]).data.tokenSource, 'option');
-  assert.equal(JSON.parse(lines[1]).data.tokenSource, 'option');
 });
 
 test('Auth dry-run validates input and does not request a secret', async () => {
@@ -709,6 +588,10 @@ test('proxy helpers cover empty bodies, array encodings, URLs, headers, and null
   assert.equal(headers['content-length'], undefined);
   assert.equal(headers.accept, 'x');
   assert.equal(headers['x-remove-me'], undefined);
+  assert.equal(headers['anthropic-version'], '2023-06-01');
+  const openAiHeaders = forwardHeaders({}, { routerlabToken: 'upstream', upstreamAuth: 'openai' });
+  assert.equal(openAiHeaders.authorization, 'Bearer upstream');
+  assert.equal(openAiHeaders['anthropic-version'], undefined);
   await stopLongRunningLlmProxy(null);
 });
 
@@ -775,47 +658,6 @@ test('Desktop proxy does not mutate a profile before token and port validation',
   });
 
   const paths = getClaudeDesktopPaths();
-  for (const invalidCase of [
-    {
-      serviceArgs: [],
-      envKey: 'ROUTERLAB_BASE_URL',
-      value: 'file:///tmp/routerlab',
-      expected: /must use HTTP or HTTPS/,
-    },
-    {
-      serviceArgs: ['--service', 'llm'],
-      envKey: 'ROUTERLAB_LLM_BASE_URL',
-      value: 'not-a-valid-url',
-      expected: /base URL is invalid/,
-    },
-  ]) {
-    process.env[invalidCase.envKey] = invalidCase.value;
-    await assert.rejects(
-      () => main([
-        'claude-desktop', 'apply-proxy', '--yes', '--no-prompt',
-        ...invalidCase.serviceArgs,
-      ]),
-      invalidCase.expected,
-    );
-    await assert.rejects(
-      () => main([
-        'claude-desktop', 'proxy', '--yes', '--no-prompt',
-        ...invalidCase.serviceArgs,
-      ]),
-      invalidCase.expected,
-    );
-    await assert.rejects(
-      () => main([
-        'claude-desktop', 'apply', '--yes', '--no-prompt',
-        ...invalidCase.serviceArgs,
-      ]),
-      invalidCase.expected,
-    );
-    delete process.env[invalidCase.envKey];
-    assert.equal(fs.existsSync(paths.profilePath), false);
-    assert.equal(fs.existsSync(paths.metaPath), false);
-  }
-
   await assert.rejects(
     () => main(['claude-desktop', 'proxy', '--yes', '--no-prompt']),
     /token is required/,

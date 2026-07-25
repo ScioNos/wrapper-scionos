@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
 import path from 'node:path';
 import { handleStrategies } from '../src/cli/commands/strategies.js';
 
@@ -63,14 +62,6 @@ test('strategies command covers missing, invalid, and unavailable token/model pa
     /too short/i,
   );
 
-  const server = http.createServer((_req, res) => {
-    res.writeHead(503, { 'content-type': 'application/json' });
-    res.end('{"error":{"message":"temporarily unavailable"}}');
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-  process.env.ROUTERLAB_BASE_URL = `http://127.0.0.1:${server.address().port}`;
-
   const fallbackOutput = [];
   console.log = (line) => fallbackOutput.push(JSON.parse(line));
   try {
@@ -80,6 +71,11 @@ test('strategies command covers missing, invalid, and unavailable token/model pa
       noPrompt: true,
       json: true,
       command: 'strategies',
+    }, {
+      fetchModelsFn: async (_token, options) => {
+        assert.equal(options.baseUrl, 'https://api.routerlab.ch');
+        return { valid: false, reason: 'server_error', status: 503 };
+      },
     });
   } finally {
     console.log = originalLog;

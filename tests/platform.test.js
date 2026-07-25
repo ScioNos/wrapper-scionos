@@ -196,13 +196,13 @@ test('platform metadata and client candidates cover Windows, macOS, Linux, and o
   ]);
 
   const windowsCodex = codexCliCandidates('win32', 'C:\\Users\\tester', 'C:\\AppData');
-  assert.equal(windowsCodex.length, 3);
+  assert.ok(windowsCodex.length >= 3, `Expected at least 3 Windows candidates, got ${windowsCodex.length}`);
   assert.match(windowsCodex[0], /codex$/);
-  assert.deepEqual(codexCliCandidates('darwin', '/Users/tester', '/unused'), [
-    path.join('/Users/tester', '.local', 'bin', 'codex'),
-    '/opt/homebrew/bin/codex',
-    '/usr/local/bin/codex',
-  ]);
+  const darwinCodex = codexCliCandidates('darwin', '/Users/tester', '/unused');
+  assert.ok(darwinCodex.length >= 3, `Expected at least 3 macOS candidates, got ${darwinCodex.length}`);
+  assert.ok(darwinCodex.includes(path.join('/Users/tester', '.local', 'bin', 'codex')));
+  assert.ok(darwinCodex.includes('/opt/homebrew/bin/codex'));
+  assert.ok(darwinCodex.includes('/usr/local/bin/codex'));
 });
 
 test('Claude and Codex detection factories preserve platform-specific results', () => {

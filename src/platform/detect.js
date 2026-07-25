@@ -156,6 +156,23 @@ export function isCodexVersionSupported(version, minimum = MINIMUM_CODEX_VERSION
   }
   return true;
 }
+
+function getNpmGlobalBinPath() {
+  try {
+    const result = spawnSync('npm', ['bin', '-g'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true,
+    });
+    if (result.status === 0 && result.stdout) {
+      return result.stdout.trim();
+    }
+  } catch {
+    // npm not available or command failed
+  }
+  return null;
+}
+
 export function codexCliCandidates(
   platform = process.platform,
   home = os.homedir(),
@@ -163,11 +180,13 @@ export function codexCliCandidates(
 ) {
   return platform === 'win32'
     ? [
+        ...(getNpmGlobalBinPath() ? [path.join(getNpmGlobalBinPath(), 'codex.cmd'), path.join(getNpmGlobalBinPath(), 'codex')] : []),
         path.join(appData, 'npm', 'codex'),
         path.join(home, '.local', 'bin', 'codex.exe'),
         path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'codex.exe'),
       ]
     : [
+        ...(platform !== 'win32' && getNpmGlobalBinPath() ? [path.join(getNpmGlobalBinPath(), 'codex')] : []),
         path.join(home, '.local', 'bin', 'codex'),
         '/opt/homebrew/bin/codex',
         '/usr/local/bin/codex',

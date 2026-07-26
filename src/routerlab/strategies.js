@@ -5,9 +5,9 @@ export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-sonnet-5';
 
 export const DEFAULT_CLAUDE_MODELS = [
   'claude-fable-5',
+  'claude-opus-5',
   'claude-sonnet-5',
-  'claude-opus-4-8',
-  ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL,
+  'claude-haiku-4-5-20251001',
 ];
 
 export const LLM_CLAUDE_MODELS = [
@@ -68,15 +68,26 @@ export const STRATEGIES = [
   {
     value: 'default',
     name: 'Claude Native',
-    description: 'Forces Claude Code aliases to Fable 5, Sonnet 5, and Opus 4.8.',
+    description: 'Adds Claude Fable 5 and pins the Opus, Sonnet, and Haiku aliases to their native RouterLab models.',
     selectionName: 'Claude Native',
-    selectionDescription: 'Haiku => Claude Fable 5, Sonnet => Claude Sonnet 5, Opus => Claude Opus 4.8.',
+    selectionDescription: 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
     requiredModels: DEFAULT_CLAUDE_MODELS,
     environment: createModelEnvironment({
-      opus: 'claude-opus-4-8',
+      opus: 'claude-opus-5',
       sonnet: 'claude-sonnet-5',
-      haiku: 'claude-fable-5',
+      haiku: 'claude-haiku-4-5-20251001',
+      subagent: 'claude-fable-5',
     }),
+    claudeCodeEnvironment: {
+      ANTHROPIC_CUSTOM_MODEL_OPTION: 'claude-fable-5',
+      ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
+      ...createModelEnvironment({
+        opus: 'claude-opus-5',
+        sonnet: 'claude-sonnet-5',
+        haiku: 'claude-haiku-4-5-20251001',
+        subagent: 'claude-haiku-4-5-20251001',
+      }),
+    },
   },
   {
     value: 'aws',
@@ -158,16 +169,16 @@ export const STRATEGIES = [
   },
   {
     value: 'claude-kimi-k2.7-code',
-    name: 'kimi-k2.7',
-    selectionName: 'kimi-k2.7',
-    description: 'Uses kimi-k2.7 for all main model aliases.',
-    selectionDescription: 'Uses kimi-k2.7 for Opus, Sonnet, and Haiku.',
+    name: 'kimi-k2.7-code',
+    selectionName: 'kimi-k2.7-code',
+    description: 'Uses kimi-k2.7-code for all main model aliases.',
+    selectionDescription: 'Uses kimi-k2.7-code for Opus, Sonnet, and Haiku.',
     aliases: ['kimi-k2.7', 'kimi-k2.7-code'],
-    requiredModels: ['kimi-k2.7', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    requiredModels: ['kimi-k2.7-code', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
     environment: createModelEnvironment({
-      opus: 'kimi-k2.7',
-      sonnet: 'kimi-k2.7',
-      haiku: 'kimi-k2.7',
+      opus: 'kimi-k2.7-code',
+      sonnet: 'kimi-k2.7-code',
+      haiku: 'kimi-k2.7-code',
     }),
   },
   {
@@ -188,6 +199,19 @@ export const STRATEGIES = [
       opus: 'glm-5.2',
       sonnet: 'glm-5.2',
       haiku: 'glm-5.2',
+    }),
+  },
+  {
+    value: 'minimax-m3',
+    name: 'minimax-m3',
+    selectionName: 'minimax-m3',
+    description: 'Uses minimax-m3 for all main model aliases.',
+    selectionDescription: 'Uses minimax-m3 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['minimax-m3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'minimax-m3',
+      sonnet: 'minimax-m3',
+      haiku: 'minimax-m3',
     }),
   },
 ];
@@ -321,18 +345,22 @@ export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = D
     throw new Error(`Unknown strategy "${strategyValue}" for service "${serviceValue}".`);
   }
 
-  const env = strategy.claudeCodeNative ? {} : { ...(strategy.environment ?? {}) };
-  if (normalizeServiceValue(serviceValue) === 'llm') {
-    env.CLAUDE_CODE_SUBAGENT_MODEL = LLM_CLAUDE_CODE_SUBAGENT_MODEL;
-  } else {
-    env.CLAUDE_CODE_SUBAGENT_MODEL = ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL;
+  const env = strategy.claudeCodeNative
+    ? {}
+    : { ...(strategy.claudeCodeEnvironment ?? strategy.environment ?? {}) };
+  if (!env.CLAUDE_CODE_SUBAGENT_MODEL) {
+    if (normalizeServiceValue(serviceValue) === 'llm') {
+      env.CLAUDE_CODE_SUBAGENT_MODEL = LLM_CLAUDE_CODE_SUBAGENT_MODEL;
+    } else {
+      env.CLAUDE_CODE_SUBAGENT_MODEL = ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL;
+    }
   }
   return applySubagentModelOverride(strategy, env, options);
 }
 
 export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
   const modelKeys = [
-    'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    'ANTHROPIC_CUSTOM_MODEL_OPTION',
     'ANTHROPIC_DEFAULT_HAIKU_MODEL',
     'ANTHROPIC_DEFAULT_SONNET_MODEL',
     'ANTHROPIC_DEFAULT_OPUS_MODEL',

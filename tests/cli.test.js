@@ -4,7 +4,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { handleInteractiveDesktopAction, handleInteractiveMenu, main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { getAuthMenuContext } from '../src/cli/commands/auth.js';
 import { parseOptions } from '../src/cli/args.js';
-import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, resolveMenuChoice, resolveNavigation } from '../src/cli/menu.js';
+import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, formatServiceHealthAlert, resolveMenuChoice, resolveNavigation } from '../src/cli/menu.js';
 
 test('default menu exposes Claude Code and Claude Desktop', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
@@ -35,6 +35,11 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
     /Claude Desktop/,
   );
   assert.match(stripVTControlCharacters(formatBanner('A'.repeat(60))), /A{60}/);
+  const llmAlert = stripVTControlCharacters(formatServiceHealthAlert(' LLM '));
+  assert.match(llmAlert, /SERVICE FORTEMENT DÉGRADÉ/);
+  assert.match(llmAlert, /ROUTERLAB LLM — NE PAS UTILISER/);
+  assert.match(llmAlert, /╔═+╗/);
+  assert.equal(formatServiceHealthAlert('routerlab'), '');
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',
     value: 'claude-code',

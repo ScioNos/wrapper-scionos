@@ -12,6 +12,8 @@ Wrapper en ligne de commande ScioNos pour Claude Code, Claude Desktop et Codex C
 - Codex CLI >=0.144.1 pour les lancements Codex.
 - Windows, macOS ou claude-desktop-debian sous Linux pour les profils Claude Desktop.
 
+> **Avertissement :** `--service llm` est actuellement fortement dégradé et ne doit pas être utilisé. Le wrapper affiche une alerte très visible avant toute commande exécutée avec ce service.
+
 ## Installation et modes d’entrée
 
 Sans installation globale :
@@ -98,6 +100,8 @@ Claude Desktop est pris en charge uniquement via le proxy local authentifié ave
 
 `apply-proxy` ne stocke dans le profil qu’un identifiant local aléatoire de 32 octets ; le token RouterLab reste dans sa source sécurisée. Avant l’application et avant chaque démarrage, le wrapper découvre `/v1/models` directement sur l’endpoint RouterLab fixe et n’expose que l’intersection avec les routes Desktop configurées. Les erreurs de découverte, authentification, redirection, timeout, JSON invalide, catalogue vide ou intersection vide bloquent tout et ne modifient aucun profil.
 
+Pour `--service routerlab`, le catalogue Desktop reflète les stratégies Claude Code de RouterLab. Claude Native expose `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5` et `claude-haiku-4-5-20251001` ; les autres routes couvrent AWS Claude, GPT 5.6, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2` et `minimax-m3`. Seuls les modèles retournés par la découverte RouterLab sont affichés.
+
 Les profils utilisent le schéma de métadonnées `wrapperScionos` v2 avec le service fixe, les stratégies, l’origine loopback et les routes vérifiées, sans token RouterLab. Un profil proxy v1 valide est migré après redécouverte en conservant son identifiant local aléatoire. Un profil direct, non géré ou sans métadonnées exige un remplacement explicite avec `apply-proxy --yes` ou une restauration officielle ; un ancien token direct n’est jamais réutilisé.
 
 Depuis le menu interactif, Start Local Mapping utilise le service affiché dans la bannière. Un profil absent est créé directement, un profil sain et équivalent est réutilisé sans rotation de son identifiant local, et le remplacement d’un profil différent, direct, ancien ou invalide demande confirmation. L’hôte et le port stockés sont conservés sauf surcharge explicite ; un changement de service recharge le catalogue propre au service.
@@ -119,7 +123,7 @@ Codex se connecte directement au point d’accès Responses RouterLab sélection
 
 Le wrapper autorise les modèles initiaux suivants :
 
-- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
+- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`, `minimax-m3`.
 - `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
 
 Avant le lancement, `GET /v1/models` sert uniquement à croiser cette liste avec les identifiants actuellement disponibles sur RouterLab. Un `--model` explicite doit correspondre exactement à un identifiant disponible ; aucune substitution n’est faite. Le mode interactif propose l’intersection et sélectionne automatiquement le modèle lorsqu’il n’en reste qu’un. `--no-prompt` sans `--model` exige que `gpt-5.6-sol` soit disponible.

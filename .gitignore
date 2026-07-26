@@ -4,6 +4,7 @@ npm-debug.log*
 *.pid
 .tmp-package-audit/
 .codex-tmp/
+.codegraph/
 .env
 .env.*
 !.env.example

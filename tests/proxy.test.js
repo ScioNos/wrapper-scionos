@@ -52,13 +52,16 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.data.some((model) => model.id === 'claude-opus-4-8'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-opus-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-fable-5'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-haiku-4-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-kim2.7' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-kim2.7-code' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.2' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-max-m3'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-deev4-pro'), true);
     assert.equal(payload.data[0].created_at, 'routerlab-created-at');
     assert.equal(payload.data[0].supports1m, true);
     assert.equal(payload.data.slice(1).every((model) => !Object.hasOwn(model, 'created_at')), true);

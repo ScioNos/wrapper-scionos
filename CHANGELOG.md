@@ -17,6 +17,12 @@ All notable changes to this project will be documented in this file.
 ### Release
 
 - Corrected Claude Code token-recovery guidance so it no longer recommends the unsupported `--token` option.
+- Added a prominent red warning before commands using the strongly degraded `--service llm`.
+- Hardened CI with read-only permissions, immutable current GitHub Action revisions, and cancellation of superseded runs.
+- Removed the tracked CodeGraph placeholder while keeping the machine-local `.codegraph/` index ignored.
+- Added `minimax-m3` to the RouterLab Codex model allowlist.
+- Aligned the RouterLab Claude Desktop catalogue with Claude Code: four Claude Native models plus AWS, GPT, DeepSeek, Kimi, GLM, and `minimax-m3` routes.
+- Corrected the RouterLab Claude Code Kimi strategy to use the exact `kimi-k2.7-code` model identifier.
 - Added both real Claude Code and minimum-version Codex CLI smoke tests to the release gate and cross-platform CI.
 - Removed obsolete 4.x migration and internal archive documents from the published package.
 

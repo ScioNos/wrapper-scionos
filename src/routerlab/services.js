@@ -24,6 +24,7 @@ export const SERVICES = {
       'deepseek-v4',
       'claude-kimi-k2.7-code',
       'glm-5.2',
+      'minimax-m3',
     ],
   },
   llm: {

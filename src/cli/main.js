@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { CliUsageError, COMMON_OPTION_DEFINITIONS, emitOptionDeprecations, isRecognizedWrapperOption, optionConsumesNextArgument, parseOptions } from './args.js';
 import { warnDeprecationOnce } from './deprecations.js';
-import { MENU_ROUTES, askMenu, askYesNo, formatBreadcrumb, resolveNavigation } from './menu.js';
+import { MENU_ROUTES, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { findStrategy } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
@@ -83,6 +83,10 @@ export async function main(argv) {
   if (options.version) {
     print(pkg.version, { ...options, command: 'version' });
     return;
+  }
+  const serviceAlert = formatServiceHealthAlert(options.service);
+  if (serviceAlert) {
+    console.error(serviceAlert);
   }
   if (!command && options.listStrategies) {
     validateOptions('strategies', null, options, new Set(['service', 'token', 'noPrompt', 'json', 'listStrategies']));

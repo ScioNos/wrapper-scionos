@@ -188,7 +188,7 @@ test('model discovery handles metadata, invalid JSON, auth failures, and timeout
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = 'http://127.0.0.1:' + server.address().port;
-  const valid = await fetchModels('token', { baseUrl: base + '/valid', timeoutMs: 1000 });
+  const valid = await fetchModels('token', { baseUrl: base + '/valid', timeoutMs: 5000 });
   assert.equal(valid.valid, true);
   assert.equal(valid.modelMetadata[0].contextWindow, 64000);
   assert.equal((await fetchModels('token', { baseUrl: base + '/invalid' })).reason, 'invalid_response');

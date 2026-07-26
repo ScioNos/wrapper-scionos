@@ -117,15 +117,18 @@ test('user URL variables emit warnings while remaining ignored', () => {
 
 test('Claude Code strategy mapping is service-aware', () => {
   assert.deepEqual(getStrategyEnvironment('default', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-fable-5',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('default', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
+    ANTHROPIC_CUSTOM_MODEL_OPTION: 'claude-fable-5',
+    ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-fable-5',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'aws-claude-haiku-4-5-20251001',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
   });
   assert.deepEqual(getStrategyEnvironment('claude-gpt', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.6-sol',
@@ -138,14 +141,25 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-pro',
   });
   assert.deepEqual(getStrategyEnvironment('kimi-k2.7', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.7',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.7',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.7',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2.7-code',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2.7-code',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2.7-code',
   });
   assert.deepEqual(getStrategyEnvironment('glm-5.2', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.2',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5.2',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-5.2',
+  });
+  assert.deepEqual(getStrategyEnvironment('minimax-m3', 'routerlab'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'minimax-m3',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'minimax-m3',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'minimax-m3',
+  });
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('minimax-m3', 'routerlab'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'minimax-m3',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'minimax-m3',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'minimax-m3',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'aws-claude-haiku-4-5-20251001',
   });
   assert.deepEqual(getStrategyEnvironment('claude', 'llm', { subagentModel: 'haiku' }), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-8',
@@ -215,7 +229,7 @@ test('Claude Code strategies force service-defined subagents and disable selecti
     serviceValue: 'routerlab',
     strategyValue: 'default',
     preferredSubagentModel: 'haiku',
-  }), 'aws-claude-haiku-4-5-20251001');
+  }), 'claude-haiku-4-5-20251001');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'claude-gpt',
@@ -270,6 +284,7 @@ test('service strategy lists stay scoped', () => {
     'deepseek-v4',
     'claude-kimi-k2.7-code',
     'glm-5.2',
+    'minimax-m3',
   ]);
   assert.deepEqual(getStrategyChoices([], 'llm').map((choice) => choice.value), [
     'claude',
@@ -287,12 +302,12 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.some((choice) => choice.value === 'deepseek-v4-beta'), false);
   assert.equal(choices.find((choice) => choice.value === 'deepseek-v4').name, 'deepseek-v4');
   assert.deepEqual(getStrategyEnvironment('deepseek-v4-beta', 'routerlab'), getStrategyEnvironment('deepseek-v4', 'routerlab'));
-  assert.equal(choices.find((choice) => choice.value === 'claude-kimi-k2.7-code').name, 'kimi-k2.7');
+  assert.equal(choices.find((choice) => choice.value === 'claude-kimi-k2.7-code').name, 'kimi-k2.7-code');
   assert.deepEqual(getStrategyEnvironment('kimi-k2.7', 'routerlab'), getStrategyEnvironment('claude-kimi-k2.7-code', 'routerlab'));
   assert.deepEqual(getStrategyEnvironment('kimi-k2.7-code', 'routerlab'), getStrategyEnvironment('claude-kimi-k2.7-code', 'routerlab'));
   assert.throws(() => getStrategyEnvironment('claude-kimi-k2.6', 'routerlab'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('claude-fable-5', 'routerlab'), /Unknown strategy/);
-  assert.equal(choices.find((choice) => choice.value === 'default').description, 'Haiku => Claude Fable 5, Sonnet => Claude Sonnet 5, Opus => Claude Opus 4.8.');
+  assert.equal(choices.find((choice) => choice.value === 'default').description, 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.');
   assert.equal(choices.some((choice) => choice.value === 'claude-fable-5'), false);
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').name, 'OpenAI GPT');
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.');
@@ -312,9 +327,9 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   ], 'routerlab').ready, false);
   assert.equal(assessStrategyLaunch('default', [
     'claude-fable-5',
+    'claude-opus-5',
     'claude-sonnet-5',
-    'claude-opus-4-8',
-    'aws-claude-haiku-4-5-20251001',
+    'claude-haiku-4-5-20251001',
   ], 'routerlab').ready, true);
   assert.equal(assessStrategyLaunch('claude', [
     'claude-opus-4-8',
@@ -349,7 +364,7 @@ test('token format validation catches obvious mistakes', () => {
 });
 
 test('strategy model normalization covers native, mapped, fallback, labels, and ordering', () => {
-  assert.deepEqual(getStrategyModels('default', 'routerlab').map((entry) => entry.role), ['haiku', 'sonnet', 'opus']);
+  assert.deepEqual(getStrategyModels('default', 'routerlab').map((entry) => entry.role), ['haiku', 'sonnet', 'opus', 'subagent']);
   assert.deepEqual(getStrategyModels('glm-5.2', 'routerlab'), [{ role: 'haiku', model: 'glm-5.2' }]);
   const routerlabCodex = codexModelsFromClaudeCodeStrategies('routerlab');
   assert.equal(routerlabCodex.includes('gpt-5.6-sol'), true);
@@ -360,6 +375,7 @@ test('strategy model normalization covers native, mapped, fallback, labels, and 
   assert.equal(codexModelFromClaudeCodeModel('claude-unknown-model'), 'unknown-model');
   assert.equal(codexModelFromClaudeCodeModel('  '), null);
   assert.equal(codexModelDisplayName('gpt-5.6-sol'), 'GPT 5.6 Sol');
+  assert.equal(codexModelDisplayName('minimax-m3'), 'MiniMax M3');
   assert.equal(codexModelDisplayName('unknown'), 'unknown');
   assert.equal(supportsOneMillionContext('unknown'), true);
   assert.equal(desktopRouteIdForStrategyModel('unknown', 'unknown', 'suffix'), 'claude-sonnet-4-6-suffix');
@@ -374,14 +390,14 @@ test('strategy model normalization covers native, mapped, fallback, labels, and 
 });
 
 test('Claude strategy selection covers verified choices, aliases, invalid preferences, and disabled prompts', async () => {
-  const completeDefault = ['claude-opus-4-8', 'claude-sonnet-5', 'claude-fable-5', 'aws-claude-haiku-4-5-20251001'];
+  const completeDefault = ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
   assert.equal(await chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: completeDefault }), 'default');
   await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'missing', modelIds: [] }), /Unknown strategy/);
-  await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: ['claude-opus-4-8'] }), /requires all/);
-  await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', noPrompt: true, modelIds: ['claude-opus-4-8'] }), /No launchable strategy/);
+  await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: ['claude-opus-5'] }), /requires all/);
+  await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', noPrompt: true, modelIds: ['claude-opus-5'] }), /No launchable strategy/);
   const unknownChoices = buildStrategyPromptChoices([], 'routerlab');
   assert.equal(unknownChoices.every((choice) => choice.disabled === false), true);
-  const verifiedChoices = buildStrategyPromptChoices(['claude-opus-4-8'], 'routerlab');
+  const verifiedChoices = buildStrategyPromptChoices(['claude-opus-5'], 'routerlab');
   assert.equal(verifiedChoices.some((choice) => typeof choice.disabled === 'string'), true);
   assert.equal(verifiedChoices.some((choice) => choice.name.includes('●')), true);
 });

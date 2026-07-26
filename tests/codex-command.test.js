@@ -14,8 +14,8 @@ import { requireServiceConfig } from '../src/routerlab/services.js';
 
 test('Codex availability is the allowlist/discovery intersection in allowlist order', () => {
   assert.deepEqual(
-    availableCodexModels('routerlab', ['unknown', 'glm-5.2', 'gpt-5.6-sol']),
-    ['gpt-5.6-sol', 'glm-5.2'],
+    availableCodexModels('routerlab', ['unknown', 'minimax-m3', 'glm-5.2', 'gpt-5.6-sol']),
+    ['gpt-5.6-sol', 'glm-5.2', 'minimax-m3'],
   );
   assert.deepEqual(
     availableCodexModels('llm', ['MiniMax-M3', 'gpt-5.6-luna']),

@@ -27,6 +27,7 @@ test('Codex allowlists stay service-scoped', () => {
     'deepseek-v4-pro',
     'kimi-k2.7-code',
     'glm-5.2',
+    'minimax-m3',
   ]);
   assert.deepEqual(CODEX_ALLOWED_MODELS.llm, [
     'gpt-5.6-sol',

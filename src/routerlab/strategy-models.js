@@ -12,8 +12,10 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'default',
     'aws',
     'claude-gpt',
+    'deepseek-v4',
     'claude-kimi-k2.7-code',
     'glm-5.2',
+    'minimax-m3',
   ],
   llm: [
     'claude',
@@ -26,9 +28,10 @@ export const DESKTOP_MAPPING_STRATEGIES = {
 };
 
 const DEFAULT_NATIVE_STRATEGY_MODELS = [
-  { role: 'opus', model: 'claude-opus-4-8' },
+  { role: 'fable', model: 'claude-fable-5' },
+  { role: 'opus', model: 'claude-opus-5' },
   { role: 'sonnet', model: 'claude-sonnet-5' },
-  { role: 'haiku', model: 'claude-fable-5' },
+  { role: 'haiku', model: 'claude-haiku-4-5-20251001' },
 ];
 
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
@@ -41,6 +44,10 @@ export const MODEL_ROUTE_METADATA = {
   'claude-fable-5': {
     desktopRouteId: 'claude-fable-5',
     label: 'claude-fable-5',
+  },
+  'claude-opus-5': {
+    desktopRouteId: 'claude-opus-5',
+    label: 'claude-opus-5',
   },
   'claude-sonnet-5': {
     desktopRouteId: 'claude-sonnet-5',
@@ -178,6 +185,12 @@ export const MODEL_ROUTE_METADATA = {
     codexModel: 'MiniMax-M3',
     codexDisplayName: 'MiniMax M3',
   },
+  'minimax-m3': {
+    desktopRouteId: 'claude-max-m3',
+    label: 'minimax-m3',
+    codexModel: 'minimax-m3',
+    codexDisplayName: 'MiniMax M3',
+  },
   'claude-qwen3.7-max': {
     desktopRouteId: 'claude-wen3.7-max',
     label: 'qwen3.7-max',
@@ -197,6 +210,13 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'Qwen 3.6 Flash',
   },
   'claude-kimi-k2.7-code': {
+    desktopRouteId: 'claude-kim2.7-code',
+    label: 'kimi-k2.7-code',
+    codexModel: 'kimi-k2.7-code',
+    codexDisplayName: 'Kimi K2.7 Code',
+    supports1m: false,
+  },
+  'kimi-k2.7-code': {
     desktopRouteId: 'claude-kim2.7-code',
     label: 'kimi-k2.7-code',
     codexModel: 'kimi-k2.7-code',
@@ -234,11 +254,12 @@ export const MODEL_ROUTE_METADATA = {
 };
 
 export const DESKTOP_MODEL_ORDER = [
-  'claude-opus-4-8',
-  'claude-sonnet-5',
   'claude-fable-5',
-  'claude-sonnet-4-6',
+  'claude-opus-5',
+  'claude-sonnet-5',
   'claude-haiku-4-5',
+  'claude-opus-4-8',
+  'claude-sonnet-4-6',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
   'aws-claude-haiku-4-5',
@@ -270,6 +291,7 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
   ['kimi-k3', 'Kimi K3'],
   ['grok-4.5', 'Grok 4.5'],
+  ['minimax-m3', 'MiniMax M3'],
 ]);
 
 export function getStrategyModels(strategyValue, serviceValue) {

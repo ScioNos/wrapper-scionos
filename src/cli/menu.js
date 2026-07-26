@@ -150,6 +150,22 @@ const BANNER_WIDTH = 58;
 const LINUX_CLAUDE_DESKTOP_LABEL = 'aaddrick/claude-desktop-debian';
 const LINUX_CLAUDE_DESKTOP_URL = 'https://github.com/aaddrick/claude-desktop-debian';
 
+export function formatServiceHealthAlert(serviceValue) {
+  if (String(serviceValue ?? '').trim().toLowerCase() !== 'llm') {
+    return '';
+  }
+  const border = chalk.bold.red;
+  const warning = chalk.bgRed.white.bold;
+  return [
+    '',
+    border(`   ╔${'═'.repeat(BANNER_WIDTH)}╗`),
+    `${border('   ║')}${warning(centerText('⚠ SERVICE FORTEMENT DÉGRADÉ', BANNER_WIDTH))}${border('║')}`,
+    `${border('   ║')}${warning(centerText('ROUTERLAB LLM — NE PAS UTILISER', BANNER_WIDTH))}${border('║')}`,
+    border(`   ╚${'═'.repeat(BANNER_WIDTH)}╝`),
+    '',
+  ].join('\n');
+}
+
 export function formatBanner(title, version = null) {
   const centered = centerText(title, BANNER_WIDTH).replace(title, colorBannerTitle(title));
   const border = chalk.gray;

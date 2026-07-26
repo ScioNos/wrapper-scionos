@@ -12,6 +12,8 @@ ScioNos command-line wrapper for RouterLab-backed Claude Code, Claude Desktop, a
 - Codex CLI >=0.144.1 for Codex launches.
 - Windows, macOS, or claude-desktop-debian on Linux for Claude Desktop profiles.
 
+> **Warning:** `--service llm` is currently strongly degraded and should not be used. The wrapper displays a prominent warning before executing commands with this service.
+
 ## Install and entry modes
 
 Without a global install:
@@ -98,6 +100,8 @@ Claude Desktop is supported only through the authenticated local mapping proxy. 
 
 `apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation.
 
+For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
+
 Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
 
 From the interactive menu, Start Local Mapping uses the service shown in the banner. A missing profile is created immediately, an equivalent healthy profile is reused without rotating its local credential, and replacement of a different, direct, legacy, or unhealthy profile requires confirmation. The stored host and port are preserved unless explicitly overridden; changing services refreshes the service-specific mapping catalog.
@@ -119,7 +123,7 @@ Codex connects directly to the selected RouterLab Responses endpoint:
 
 The wrapper allowlists these initial models:
 
-- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`.
+- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`, `minimax-m3`.
 - `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
 
 Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. Interactive launch asks among the intersection and automatically selects it when only one model remains. `--no-prompt` without `--model` requires `gpt-5.6-sol` to be available.

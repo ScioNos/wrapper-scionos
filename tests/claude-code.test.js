@@ -76,6 +76,26 @@ test('Claude Code launch environment is sanitized without changing native tool v
   assert.equal(env.no_proxy, env.NO_PROXY);
 });
 
+test('Claude Native injects the verified Fable option and official model aliases', () => {
+  const service = {
+    ...requireServiceConfig('routerlab'),
+    baseUrl: 'http://127.0.0.1:43124',
+  };
+  const env = buildClaudeCodeEnvironment(
+    'generated-local-token-with-enough-length',
+    service,
+    'default',
+    { env: { ANTHROPIC_CUSTOM_MODEL_OPTION: 'hostile-model' } },
+  );
+
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, 'claude-fable-5');
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, 'Claude Fable 5');
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'claude-opus-5');
+  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-5');
+  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'claude-haiku-4-5-20251001');
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5-20251001');
+});
+
 test('Claude Code launch screens use wrapper-branded guided layout', () => {
   const intro = formatClaudeCodeIntro('1.0.0');
   const plainIntro = stripVTControlCharacters(intro);
@@ -258,7 +278,7 @@ test('interactive Claude strategy selection covers separators, Back, and selecte
   await assert.rejects(
     () => chooseStrategy({
       serviceValue: 'routerlab',
-      modelIds: ['claude-opus-4-8'],
+      modelIds: ['claude-opus-5'],
       selectFn: async () => assert.fail('all-disabled choices must not prompt'),
     }),
     /No launchable strategy/,
@@ -283,7 +303,7 @@ test('Claude Code summaries, indicators, and missing CLI failures are covered', 
   assert.match(stripVTControlCharacters(getStrategyIndicator('default', [], 'routerlab')), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(
     'default',
-    ['claude-opus-4-8', 'claude-sonnet-5', 'claude-fable-5', 'aws-claude-haiku-4-5-20251001'],
+    ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'],
     'routerlab',
   )), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(

@@ -1,6 +1,6 @@
 {
   "name": "wrapper-scionos",
-  "version": "5.0.0-beta.1",
+  "version": "5.0.0",
   "description": "Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants",
   "type": "module",
   "main": "index.js",
@@ -24,7 +24,7 @@
     "start": "node index.js",
     "test:entry-modes": "node tests/run-entry-mode-smokes.mjs",
     "test:coverage": "node tests/run-coverage.mjs",
-    "release:check": "npm run test:coverage && npm run test:entry-modes && npm run test:claude-real && npm audit && npm pack --dry-run"
+    "release:check": "npm run test:coverage && npm run test:entry-modes && npm run test:claude-real && npm run test:codex-real && npm audit && npm pack --dry-run"
   },
   "keywords": [
     "scionos",

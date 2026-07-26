@@ -125,6 +125,8 @@ test('Claude Code reports environment precedence without exposing either token',
   });
   assert.match(warning, /ROUTERLAB_LLM_API_KEY/);
   assert.match(warning, /stored RouterLab LLM token is present and ignored/);
+  assert.match(warning, /Update or unset ROUTERLAB_LLM_API_KEY/);
+  assert.doesNotMatch(warning, /--token/);
   assert.doesNotMatch(warning, /environment-token-with-enough-length/);
   assert.equal(formatClaudeCodeTokenConflictWarning(requireServiceConfig('llm'), {
     source: 'secure-storage',
@@ -196,6 +198,14 @@ test('Claude Code diagnostics cover endpoint warnings and every token source', (
   assert.equal(authError.code, 'auth_failed');
   assert.equal(authError.statusCode, 403);
   assert.match(authError.message, /interactive prompt/);
+  assert.match(authError.message, /auth login --service llm/);
+  assert.doesNotMatch(authError.message, /--token/);
+  const envAuthError = claudeCodeAuthenticationError({ status: 401 }, service, {
+    source: 'env',
+    envTokenKey: 'ROUTERLAB_LLM_API_KEY',
+  });
+  assert.match(envAuthError.message, /Update or unset ROUTERLAB_LLM_API_KEY/);
+  assert.doesNotMatch(envAuthError.message, /--token/);
   assert.equal(
     claudeCodeAuthenticationError({}, service, { source: 'unknown' }).statusCode,
     401,

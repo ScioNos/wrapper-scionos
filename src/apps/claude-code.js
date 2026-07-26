@@ -155,7 +155,7 @@ export function formatClaudeCodeTokenConflictWarning(service, resolvedToken) {
   if (!resolvedToken.envTokenPresent || !resolvedToken.storedTokenPresent) return;
   if (resolvedToken.source !== 'env' && resolvedToken.source !== 'legacy-env') return;
   const source = resolvedToken.envTokenKey ?? 'an environment variable';
-  return `WARN Claude Code is using ${source}; a stored ${service.label} token is present and ignored. Pass --token to override explicitly.`;
+  return `WARN Claude Code is using ${source}; a stored ${service.label} token is present and ignored. Update or unset ${source} to change the token source.`;
 }
 
 export function warnClaudeCodeTokenConflict(service, resolvedToken) {
@@ -176,10 +176,14 @@ export function describeClaudeCodeTokenSource(resolvedToken) {
 export function claudeCodeAuthenticationError(validation, service, resolvedToken) {
   const status = validation.status ?? 401;
   const serviceFlag = `--service ${service.value}`;
+  const usesEnvironment = resolvedToken.source === 'env' || resolvedToken.source === 'legacy-env';
+  const recovery = usesEnvironment
+    ? `Update or unset ${resolvedToken.envTokenKey ?? 'the environment token'}; after unsetting it, use "wrapper-scionos auth login ${serviceFlag}" to store a replacement.`
+    : `Replace it with "wrapper-scionos auth login ${serviceFlag}".`;
   const error = new Error([
     `${service.label} rejected the Claude Code token from ${describeClaudeCodeTokenSource(resolvedToken)} with HTTP ${status}.`,
     `Check it with "wrapper-scionos auth status ${serviceFlag}" and "wrapper-scionos auth test ${serviceFlag}",`,
-    `then replace it with "wrapper-scionos auth login ${serviceFlag}" or pass --token.`,
+    recovery,
   ].join(' '));
   error.code = 'auth_failed';
   error.statusCode = status;

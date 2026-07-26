@@ -155,16 +155,17 @@ Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ig
 ## Développement et portes de release
 
     npm test
-    npm run test:codex-real
     npm run test:coverage
     npm run test:entry-modes
+    npm run test:claude-real
+    npm run test:codex-real
     npm audit
     npm pack --dry-run
 
 `npm run test:entry-modes` empaquette l’arbre de travail courant dans un tarball temporaire, l’installe dans un préfixe isolé, puis ouvre et quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il ne nécessite ni installation globale ni version npm déjà publiée.
 
-`npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:codex-real` est un smoke test explicite et optionnel qui exécute le vrai Codex installé contre un faux serveur Responses limité au loopback, avec les surcharges natives du fournisseur et sans catalogue ; il ne contacte jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
+`npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles, et `npm run test:codex-real` valide le Codex installé avec les surcharges natives du fournisseur et sans catalogue. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-4.2.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.0.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

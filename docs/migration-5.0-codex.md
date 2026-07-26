@@ -117,6 +117,5 @@ Or pin your `package.json`:
 ## Questions
 
 For issues or questions about this migration:
-- Check the [archived 4.2.1 audit](./archive/RAPPORT-CODEX-WRAPPER-4.2.1.md)
 - Open an issue on GitHub
 - Review the [CHANGELOG.md](../CHANGELOG.md)

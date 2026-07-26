@@ -228,7 +228,7 @@ function showHelp(options = {}) {
     'Options:',
     formatOptionHelp(),
     '',
-    'Global options may appear before or after a command. Arguments after -- are passed through unchanged.',
+    'Global options may appear before or after a command. Supported arguments after -- are passed through unchanged; Codex routing overrides are rejected.',
     'Claude Desktop: use apply-proxy; direct profiles are refused because they expose the RouterLab token.',
     '',
   ].join('\n');

@@ -3,6 +3,7 @@ npm-debug.log*
 *.log
 *.pid
 .tmp-package-audit/
+.codex-tmp/
 .env
 .env.*
 !.env.example

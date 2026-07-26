@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.0.0 - 2026-07-26
+
+### Breaking Changes
+
+- Codex now connects directly to the fixed RouterLab Responses endpoint with native runtime provider overrides; the wrapper-managed Codex proxy, generated catalog, and transport flags are removed.
+- Claude Desktop is proxy-only; direct profiles that persisted RouterLab credentials are refused and require explicit replacement or official restoration.
+
+### Security
+
+- Claude Code and Claude Desktop fail closed on model discovery, enforce verified model intersections locally, sanitize child credentials and routing, and reject redirect or provider-bypass paths.
+- Production RouterLab destinations are immutable, local listeners are authenticated loopback-only services, and Linux persistence requires Secret Service.
+
+### Release
+
+- Corrected Claude Code token-recovery guidance so it no longer recommends the unsupported `--token` option.
+- Added both real Claude Code and minimum-version Codex CLI smoke tests to the release gate and cross-platform CI.
+- Removed obsolete 4.x migration and internal archive documents from the published package.
+
 ## [5.0.0-beta.1] - 2026-07-25
 
 ### Security

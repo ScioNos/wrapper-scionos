@@ -91,25 +91,20 @@ Le proxy n’impose aucun timeout total aux générations et ferme la requête u
 
 ## Claude Desktop
 
-Le mode recommandé est le proxy local authentifié. L’application directe reste compatible pendant toute la 4.x, mais elle est dépréciée et prévue pour suppression en 5.0 :
-
-    wrapper-scionos claude-desktop apply --service routerlab --dry-run
-    wrapper-scionos claude-desktop apply --service routerlab --yes
-
-Proxy local recommandé avec mapping :
+Claude Desktop est pris en charge uniquement via le proxy local authentifié avec mapping. L’ancienne commande de profil direct a été supprimée, car elle persistait le token RouterLab dans le profil Desktop :
 
     wrapper-scionos claude-desktop apply-proxy --service llm --yes
     wrapper-scionos claude-desktop proxy --service llm
 
-`claude-desktop apply` persiste le token RouterLab en clair dans le profil Desktop et émet un avertissement explicite unique par processus. Sous Linux/macOS, chaque JSON contenant un credential est vérifié en `0600` et son répertoire de configuration en `0700` ; tout échec est fatal. `apply-proxy` ne stocke qu’un identifiant local aléatoire dans ce profil et constitue le mode normal.
+`apply-proxy` ne stocke dans le profil qu’un identifiant local aléatoire de 32 octets ; le token RouterLab reste dans sa source sécurisée. Avant l’application et avant chaque démarrage, le wrapper découvre `/v1/models` directement sur l’endpoint RouterLab fixe et n’expose que l’intersection avec les routes Desktop configurées. Les erreurs de découverte, authentification, redirection, timeout, JSON invalide, catalogue vide ou intersection vide bloquent tout et ne modifient aucun profil.
 
-apply-proxy résout le token RouterLab et démarre l’écoute avant d’écrire le profil. Un token absent, une annulation, un port occupé ou un échec d’écriture laisse le profil précédent intact et ferme toute nouvelle écoute. Il écrit atomiquement un identifiant aléatoire de 32 octets encodé en base64url et des métadonnées wrapperScionos versionnées. Un futur proxy sans option explicite reprend le service, la liste de stratégies, l’hôte loopback et le port stockés. Des options explicites divergentes sont refusées jusqu’à une réécriture avec apply-proxy --yes, ou avec --yes sur la commande proxy. Un ancien profil récupère hôte/port depuis inferenceGatewayBaseUrl, utilise le service CLI avec avertissement et reçoit les métadonnées v4 à la prochaine application. Un identifiant 3.x scionos-local est remplacé automatiquement avant l’écoute.
+Les profils utilisent le schéma de métadonnées `wrapperScionos` v2 avec le service fixe, les stratégies, l’origine loopback et les routes vérifiées, sans token RouterLab. Un profil proxy v1 valide est migré après redécouverte en conservant son identifiant local aléatoire. Un profil direct, non géré ou sans métadonnées exige un remplacement explicite avec `apply-proxy --yes` ou une restauration officielle ; un ancien token direct n’est jamais réutilisé.
 
 Depuis le menu interactif, Start Local Mapping utilise le service affiché dans la bannière. Un profil absent est créé directement, un profil sain et équivalent est réutilisé sans rotation de son identifiant local, et le remplacement d’un profil différent, direct, ancien ou invalide demande confirmation. L’hôte et le port stockés sont conservés sauf surcharge explicite ; un changement de service recharge le catalogue propre au service.
 
 La base URL du service sélectionné est validée avant la résolution du token, l’ouverture du listener ou toute modification du profil. Les profils générés n’autorisent l’egress Cowork que vers le hostname exact de leur gateway. `claude-desktop status` conserve ses champs existants et ajoute `profileExists`, `applied`, `healthy` et des codes `issues` stables sans exposer les credentials.
 
-Le proxy écoute uniquement sur loopback. Toutes les routes GET/POST, y compris /v1/models, exigent l’identifiant du profil. Les origines navigateur sont refusées par défaut. Une origine HTTP(S) exacte peut être autorisée avec l’option répétable --allow-origin ; seul un préflight CORS OPTIONS correspondant peut répondre 204 sans authentification, sans exposer de données. Aucun CORS wildcard n’est émis.
+Le proxy écoute uniquement sur des hôtes loopback exacts (`localhost`, `::1` ou une IPv4 valide de `127.0.0.0/8`) et un port explicite entre 1 et 65535. Il autorise uniquement l’API Messages : liste des modèles, messages, comptage de tokens et création/liste/lecture/annulation/résultats/suppression des batchs. Les chemins, méthodes et modèles non autorisés échouent localement ; un batch mixte invalide est refusé en entier avant tout appel upstream. Les origines navigateur sont refusées par défaut.
 
 Les requêtes sont limitées à 64 Mio avant et après décompression. Les corps identity, gzip, deflate et Brotli sont acceptés ; zstd l’est si le runtime Node actif l’expose, sinon HTTP 415 unsupported_content_encoding est retourné. Un JSON invalide retourne HTTP 400. La réception des en-têtes est limitée à 30 secondes et celle du corps à 120 secondes. Les générations longues n’ont pas de timeout total.
 
@@ -152,7 +147,8 @@ Les anciens éléments suivants avertissent encore une seule fois par processus 
 - ANTHROPIC_AUTH_TOKEN
 - --list-strategies (utiliser strategies)
 - auth change (utiliser auth login)
-- claude-desktop apply (utiliser claude-desktop apply-proxy)
+
+`claude-desktop apply` n’est plus un alias de compatibilité et échoue avec une indication de migration vers `apply-proxy`.
 
 Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ignorées. Consulte [Migration Codex 5.0](./docs/migration-5.0-codex.md).
 

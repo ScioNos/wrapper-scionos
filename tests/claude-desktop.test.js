@@ -2,17 +2,40 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyDirectClaudeDesktop, applyProxyClaudeDesktop, buildGatewayProfile, DESKTOP_MAPPING_STRATEGIES, desktopRouteIdForStrategyModel, getClaudeDesktopPaths, isClaudeDesktopSafeModelId, isClaudeDesktopSupportedPlatform, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy, modelSpecsForDirectStrategy, readClaudeDesktopProxyCredential, readClaudeDesktopStatus, redactClaudeDesktopResult, restoreOfficialClaudeDesktop, supportsOneMillionContext } from '../src/apps/claude-desktop.js';
+import {
+  applyProxyClaudeDesktop,
+  buildGatewayProfile,
+  buildLoopbackUrl,
+  buildVerifiedClaudeDesktopRoutes,
+  DESKTOP_MAPPING_STRATEGIES,
+  desktopRouteIdForStrategyModel,
+  getClaudeDesktopPaths,
+  isClaudeDesktopSupportedPlatform,
+  modelRoutesForDesktopMapping,
+  modelRoutesForProxyStrategy,
+  readClaudeDesktopProxyCredential,
+  readClaudeDesktopStatus,
+  redactClaudeDesktopResult,
+  restoreOfficialClaudeDesktop,
+} from '../src/apps/claude-desktop.js';
 
-test('Claude Desktop helper identifies visible model ids and rejects hidden direct strategy ids', () => {
-  assert.equal(isClaudeDesktopSafeModelId('claude-sonnet-4-6'), true);
-  assert.equal(isClaudeDesktopSafeModelId('anthropic/claude-opus-4.8'), true);
-  assert.equal(isClaudeDesktopSafeModelId('aws-claude-sonnet-4-6'), true);
-  assert.equal(isClaudeDesktopSafeModelId('cursor-aws-opus-4-7'), true);
-  assert.equal(isClaudeDesktopSafeModelId('claude-gpt-5.5'), false);
-  assert.equal(isClaudeDesktopSafeModelId('gpt-5.5'), false);
-  assert.throws(() => modelSpecsForDirectStrategy('claude-gpt', 'routerlab'), /may hide/);
-});
+const LOCAL_TOKEN = 'A'.repeat(43);
+
+function verifiedRoutes(serviceValue = 'routerlab', strategyValues = DESKTOP_MAPPING_STRATEGIES[serviceValue]) {
+  const configured = modelRoutesForDesktopMapping(serviceValue, strategyValues);
+  return buildVerifiedClaudeDesktopRoutes({
+    serviceValue,
+    strategyValue: null,
+    strategyValues,
+    models: configured.map((route) => route.upstreamModel),
+    modelMetadata: configured.map((route) => ({
+      id: route.upstreamModel,
+      contextWindow: 1_000_000,
+      contextWindowVerified: true,
+      raw: { id: route.upstreamModel },
+    })),
+  });
+}
 
 test('Claude Desktop helper supports claude-desktop-debian Linux config paths', () => {
   assert.equal(isClaudeDesktopSupportedPlatform('linux'), true);
@@ -49,9 +72,9 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
     'gpt-5.6-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.supports1m), [
-    true,
-    true,
-    true,
+    undefined,
+    undefined,
+    undefined,
   ]);
   assert.equal(desktopRouteIdForStrategyModel('opus', 'gpt-5.6-sol'), 'claude-5.6-sol');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'gpt-5.6-terra'), 'claude-5.6-terra');
@@ -77,28 +100,6 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-qwen3.7-max'), 'claude-wen3.7-max');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'qwen3.7-max'), 'claude-wen3.7-max');
   assert.equal(desktopRouteIdForStrategyModel('subagent', 'claude-qwen3.6-flash'), 'claude-wen3.6-flash');
-  assert.equal(supportsOneMillionContext('claude-haiku-4-5-20251001'), false);
-  assert.equal(supportsOneMillionContext('aws-claude-haiku-4-5-20251001'), false);
-  assert.equal(supportsOneMillionContext('claude-gpt-5.4-mini'), false);
-  assert.equal(supportsOneMillionContext('claude-gpt-5.4'), true);
-  assert.equal(supportsOneMillionContext('claude-deepseek-v4-pro'), true);
-  assert.equal(supportsOneMillionContext('claude-deepseek-v4-flash'), true);
-  assert.equal(supportsOneMillionContext('claude-MiniMax-M3'), true);
-  assert.equal(supportsOneMillionContext('claude-qwen3.7-max'), true);
-  assert.equal(supportsOneMillionContext('claude-qwen3.6-flash'), true);
-  assert.equal(supportsOneMillionContext('claude-kimi-k2.7-code'), false);
-  assert.equal(supportsOneMillionContext('claude-glm-5.1'), false);
-  assert.equal(supportsOneMillionContext('claude-glm-5.2'), false);
-  assert.equal(supportsOneMillionContext('gpt-5.4-mini'), false);
-  assert.equal(supportsOneMillionContext('gpt-5.4'), true);
-  assert.equal(supportsOneMillionContext('gpt-5.6-sol'), true);
-  assert.equal(supportsOneMillionContext('gpt-5.6-terra'), true);
-  assert.equal(supportsOneMillionContext('gpt-5.6-luna'), true);
-  assert.equal(supportsOneMillionContext('deepseek-v4-pro'), true);
-  assert.equal(supportsOneMillionContext('deepseek-v4-flash'), true);
-  assert.equal(supportsOneMillionContext('MiniMax-M3'), true);
-  assert.equal(supportsOneMillionContext('qwen3.7-max'), true);
-  assert.equal(supportsOneMillionContext('glm-5.2'), false);
 });
 
 test('Claude Desktop default local mapping exposes the selected RouterLab catalog', () => {
@@ -144,10 +145,10 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-fable-5' && route.labelOverride === 'claude-fable-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-opus-4-8' && route.labelOverride === 'aws-claude-opus-4-8'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-4-6' && route.labelOverride === 'aws-claude-sonnet-4-6'), true);
-  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-4-5' && route.labelOverride === 'aws-claude-haiku-4-5' && route.supports1m === false), true);
+  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-4-5' && route.labelOverride === 'aws-claude-haiku-4-5' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-5.6-sol' && route.labelOverride === 'gpt-5.6-sol'), true);
-  assert.equal(routes.some((route) => route.routeId === 'claude-kim2.7' && route.labelOverride === 'kimi-k2.7' && route.supports1m === false), true);
-  assert.equal(routes.some((route) => route.routeId === 'claude-lm5.2' && route.labelOverride === 'glm-5.2' && route.supports1m === false), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-kim2.7' && route.labelOverride === 'kimi-k2.7' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-lm5.2' && route.labelOverride === 'glm-5.2' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(new Set(routes.map((route) => route.routeId)).size, routes.length);
 
   const llmRoutes = modelRoutesForDesktopMapping('llm');
@@ -175,7 +176,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => (
     route.routeId === 'claude-haiku-4-5'
       && route.upstreamModel === 'claude-haiku-4-5-20251001'
-      && route.supports1m === false
+      && !Object.hasOwn(route, 'supports1m')
   )), true);
   assert.equal(llmRoutes.some((route) => route.upstreamModel === 'claude-opus-4-6'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-haiku-4-5-gpt-special'), false);
@@ -183,16 +184,16 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.6-sol-pro' && route.upstreamModel === 'gpt-5.6-sol-pro' && route.labelOverride === 'gpt-5.6-sol-pro'), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro' && route.upstreamModel === 'deepseek-v4-pro' && route.labelOverride === 'deepseek-v4-pro' && route.supports1m === true), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash' && route.upstreamModel === 'deepseek-v4-flash' && route.labelOverride === 'deepseek-v4-flash' && route.supports1m === true), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'MiniMax-M3' && route.labelOverride === 'MiniMax-M3' && route.supports1m === true), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.7-max' && route.upstreamModel === 'qwen3.7-max' && route.labelOverride === 'qwen3.7-max' && route.supports1m === true), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro' && route.upstreamModel === 'deepseek-v4-pro' && route.labelOverride === 'deepseek-v4-pro' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash' && route.upstreamModel === 'deepseek-v4-flash' && route.labelOverride === 'deepseek-v4-flash' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'MiniMax-M3' && route.labelOverride === 'MiniMax-M3' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.7-max' && route.upstreamModel === 'qwen3.7-max' && route.labelOverride === 'qwen3.7-max' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.6-flash'), false);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.2' && route.upstreamModel === 'glm-5.2' && route.labelOverride === 'glm-5.2' && route.supports1m === false), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.2' && route.upstreamModel === 'glm-5.2' && route.labelOverride === 'glm-5.2' && !Object.hasOwn(route, 'supports1m')), true);
 });
 
-test('Claude Desktop direct application and restore write versioned metadata atomically', (t) => {
-  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-direct-'));
+test('Claude Desktop proxy application and restore write v2 metadata without RouterLab token', (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-proxy-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
@@ -201,12 +202,32 @@ test('Claude Desktop direct application and restore write versioned metadata ato
     profilePath: path.join(dir, 'profile.json'),
     metaPath: path.join(dir, '_meta.json'),
   };
-  const applied = applyDirectClaudeDesktop({
-    serviceValue: 'routerlab', strategyValue: 'default', token: 'secret-token', dryRun: false, paths,
+  fs.writeFileSync(paths.normalConfigPath, JSON.stringify({ foreignNormal: true }));
+  fs.writeFileSync(paths.threepConfigPath, JSON.stringify({ foreignThreep: true }));
+  fs.writeFileSync(paths.metaPath, JSON.stringify({ foreignMeta: true, entries: [{ id: 'foreign' }] }));
+  const applied = applyProxyClaudeDesktop({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
+    routes: verifiedRoutes(),
+    gatewayToken: LOCAL_TOKEN,
+    dryRun: false,
+    paths,
   });
   assert.equal(applied.dryRun, false);
-  assert.equal(JSON.parse(fs.readFileSync(paths.normalConfigPath)).deploymentMode, '3p');
-  assert.equal(JSON.parse(fs.readFileSync(paths.metaPath)).wrapperScionos.mode, 'direct');
+  assert.deepEqual(JSON.parse(fs.readFileSync(paths.normalConfigPath)), {
+    foreignNormal: true,
+    deploymentMode: '3p',
+  });
+  assert.equal(JSON.parse(fs.readFileSync(paths.threepConfigPath)).foreignThreep, true);
+  const metadataText = fs.readFileSync(paths.metaPath, 'utf8');
+  const metadata = JSON.parse(metadataText).wrapperScionos;
+  assert.equal(JSON.parse(metadataText).foreignMeta, true);
+  assert.equal(JSON.parse(metadataText).entries.some((entry) => entry.id === 'foreign'), true);
+  assert.equal(metadata.schemaVersion, 2);
+  assert.equal(metadata.mode, 'proxy');
+  assert.equal(metadataText.includes('secret-token'), false);
+  assert.equal(metadataText.includes(LOCAL_TOKEN), false);
   assert.equal(redactClaudeDesktopResult(applied).profile.inferenceGatewayApiKey, '[redacted]');
   if (process.platform !== 'win32') {
     assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
@@ -241,8 +262,13 @@ test('Claude Desktop fails closed when private directory permissions cannot be e
     metaPath: path.join(dir, '_meta.json'),
   };
 
-  assert.throws(() => applyDirectClaudeDesktop({
-    serviceValue: 'routerlab', strategyValue: 'default', token: 'secret-token', dryRun: false, paths,
+  assert.throws(() => applyProxyClaudeDesktop({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    routes: verifiedRoutes('routerlab', ['default']),
+    gatewayToken: LOCAL_TOKEN,
+    dryRun: false,
+    paths,
   }), /expected mode 700/);
   assert.equal(fs.existsSync(paths.profilePath), false);
 });
@@ -263,9 +289,11 @@ test('Claude Desktop profile helpers cover model specs, redaction, and invalid c
   assert.throws(() => buildGatewayProfile({
     baseUrl: 'file:///tmp/routerlab', apiKey: 'secret',
   }), /must use HTTP or HTTPS/);
-  assert.equal(modelSpecsForDirectStrategy('aws', 'routerlab').length, 3);
   assert.equal(redactClaudeDesktopResult(null), null);
   assert.throws(() => getClaudeDesktopPaths({}, 'freebsd'), /supported only/);
+  assert.throws(() => buildLoopbackUrl('127.attacker.test', 15721), /Invalid loopback host/);
+  assert.throws(() => buildLoopbackUrl('127.0.0.1', 0), /Invalid loopback port/);
+  assert.equal(buildLoopbackUrl('[::1]', 15721), 'http://[::1]:15721');
 
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-invalid-profile-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -296,7 +324,8 @@ test('Claude Desktop status distinguishes healthy, unapplied, and corrupt profil
     serviceValue: 'routerlab',
     strategyValue: 'default',
     strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
-    gatewayToken: 'generated-local-test-token',
+    routes: verifiedRoutes(),
+    gatewayToken: LOCAL_TOKEN,
     dryRun: false,
     paths,
   });
@@ -320,4 +349,85 @@ test('Claude Desktop status distinguishes healthy, unapplied, and corrupt profil
   assert.equal(corrupt.configured, true);
   assert.equal(corrupt.healthy, false);
   assert.deepEqual(corrupt.issues, ['profile_invalid', 'profile_not_applied']);
+});
+
+test('verified Desktop routes expose only authorized models and explicit metadata', () => {
+  const configured = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
+  const routes = buildVerifiedClaudeDesktopRoutes({
+    serviceValue: 'routerlab',
+    strategyValue: 'claude-gpt',
+    models: [configured[0].upstreamModel, configured[1].upstreamModel],
+    modelMetadata: [
+      {
+        id: configured[0].upstreamModel,
+        contextWindow: 1_000_000,
+        contextWindowVerified: true,
+        raw: { id: configured[0].upstreamModel, created_at: 123 },
+      },
+      {
+        id: configured[1].upstreamModel,
+        contextWindow: 2_000_000,
+        contextWindowVerified: false,
+        raw: { id: configured[1].upstreamModel },
+      },
+    ],
+  });
+  assert.equal(routes.length, 2);
+  const explicitlyVerified = routes.find((route) => route.upstreamModel === configured[0].upstreamModel);
+  const unverified = routes.find((route) => route.upstreamModel === configured[1].upstreamModel);
+  assert.equal(explicitlyVerified.supports1m, true);
+  assert.equal(explicitlyVerified.createdAt, 123);
+  assert.equal(Object.hasOwn(unverified, 'supports1m'), false);
+  assert.equal(Object.hasOwn(unverified, 'createdAt'), false);
+  assert.throws(() => buildVerifiedClaudeDesktopRoutes({
+    serviceValue: 'routerlab',
+    strategyValue: 'claude-gpt',
+    models: ['not-configured'],
+  }), (error) => error.code === 'no_authorized_models');
+});
+
+test('invalid existing Desktop JSON is never overwritten', (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-invalid-json-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const paths = {
+    normalConfigPath: path.join(dir, 'normal.json'),
+    threepConfigPath: path.join(dir, 'threep.json'),
+    configLibraryPath: dir,
+    profilePath: path.join(dir, 'profile.json'),
+    metaPath: path.join(dir, '_meta.json'),
+  };
+  fs.writeFileSync(paths.normalConfigPath, '{invalid');
+  assert.throws(() => applyProxyClaudeDesktop({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    routes: verifiedRoutes('routerlab', ['default']),
+    gatewayToken: LOCAL_TOKEN,
+    dryRun: false,
+    paths,
+  }), (error) => error.code === 'invalid_desktop_config');
+  assert.equal(fs.readFileSync(paths.normalConfigPath, 'utf8'), '{invalid');
+  assert.equal(fs.existsSync(paths.profilePath), false);
+});
+
+test('proxy credential parsing rejects deceptive loopback URLs and direct metadata', (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-credentials-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const profilePath = path.join(dir, 'profile.json');
+  const metaPath = path.join(dir, '_meta.json');
+  fs.writeFileSync(profilePath, JSON.stringify({
+    inferenceGatewayApiKey: LOCAL_TOKEN,
+    inferenceGatewayBaseUrl: 'http://127.attacker.test:15721',
+  }));
+  assert.equal(readClaudeDesktopProxyCredential({ profilePath, metaPath }), null);
+  fs.writeFileSync(profilePath, JSON.stringify({
+    inferenceGatewayApiKey: LOCAL_TOKEN,
+    inferenceGatewayBaseUrl: 'http://127.0.0.1:15721/path',
+  }));
+  assert.equal(readClaudeDesktopProxyCredential({ profilePath, metaPath }), null);
+  fs.writeFileSync(profilePath, JSON.stringify({
+    inferenceGatewayApiKey: LOCAL_TOKEN,
+    inferenceGatewayBaseUrl: 'http://127.0.0.1:15721',
+  }));
+  fs.writeFileSync(metaPath, JSON.stringify({ wrapperScionos: { schemaVersion: 1, mode: 'direct' } }));
+  assert.equal(readClaudeDesktopProxyCredential({ profilePath, metaPath }), null);
 });

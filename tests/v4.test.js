@@ -10,7 +10,7 @@ import * as zlib from 'node:zlib';
 import { parseOptions, isLoopbackHost } from '../src/cli/args.js';
 import { main, resolveCommandInvocation } from '../src/cli/main.js';
 import { printError } from '../src/cli/commands/output.js';
-import { defaultDesktopStrategy, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
+import { applyClaudeDesktopProxyProfile, defaultDesktopStrategy, discoverVerifiedDesktopRoutes, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
 import { extractModelMetadata, fetchModels, fetchModelsDirect } from '../src/routerlab/models.js';
 import { isCodexVersionSupported } from '../src/platform/detect.js';
 import { assertSupportedNodeVersion, isSupportedNodeVersion } from '../src/platform/runtime.js';
@@ -21,11 +21,29 @@ import {
   buildLoopbackUrl,
   generateLocalProxyGatewayToken,
   getClaudeDesktopPaths,
+  modelRoutesForDesktopMapping,
+  modelRoutesForProxyStrategy,
   readClaudeDesktopProxyCredential,
   redactClaudeDesktopProfile,
 } from '../src/apps/claude-desktop.js';
 import { buildUpstreamUrl, forwardHeaders, readRequestBody, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 import { resetDeprecationWarningsForTests, warnDeprecationOnce } from '../src/cli/deprecations.js';
+
+const DESKTOP_TEST_TOKEN = 'T'.repeat(43);
+const desktopDiscovery = async (_token, { serviceValue }) => {
+  const routes = modelRoutesForDesktopMapping(serviceValue, DESKTOP_MAPPING_STRATEGIES[serviceValue]);
+  return {
+    valid: true,
+    modelsVerified: true,
+    models: routes.map((route) => route.upstreamModel),
+    modelMetadata: routes.map((route) => ({
+      id: route.upstreamModel,
+      contextWindow: 200_000,
+      contextWindowVerified: true,
+      raw: { id: route.upstreamModel },
+    })),
+  };
+};
 
 test('CLI validates loopback hosts, numeric ports, origins, and removed Codex transport flags', () => {
   assert.equal(isLoopbackHost('127.0.0.42'), true);
@@ -87,13 +105,12 @@ test('RouterLab model metadata is normalized without optimistic capabilities', (
 });
 
 test('Claude Desktop catalog requires auth and enforces exact CORS origins', async (t) => {
-  const gatewayToken = 'local-random-token';
+  const gatewayToken = DESKTOP_TEST_TOKEN;
   const { server } = createClaudeDesktopProxy({
     serviceValue: 'routerlab',
-    strategyValue: 'claude-gpt',
-    strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
     routerlabToken: 'upstream-token',
     gatewayToken,
+    routes: modelRoutesForDesktopMapping('routerlab', DESKTOP_MAPPING_STRATEGIES.routerlab),
     allowedOrigins: ['https://allowed.test'],
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -129,11 +146,10 @@ test('central command registry drives non-interactive help and diagnostic comman
     await main(['codex', 'status', '--json']);
     await main(['codex', 'template', '--json']);
     await main(['claude-desktop', 'status', '--json']);
-    await main(['claude-desktop', 'apply-proxy', '--dry-run', '--json']);
-    await main([
-      'claude-desktop', 'apply', '--dry-run', '--json',
-      '--token', 'test-token-with-sufficient-length',
-    ]);
+    await assert.rejects(
+      () => main(['claude-desktop', 'apply', '--dry-run', '--json']),
+      /direct profiles expose the RouterLab token/,
+    );
   } finally {
     console.log = originalLog;
     console.error = originalError;
@@ -199,6 +215,64 @@ test('model discovery handles metadata, invalid JSON, auth failures, and timeout
     baseUrl: base + '/missing',
     timeoutMs: 20,
   })).reason, 'timeout');
+});
+
+test('Desktop discovery is fixed-endpoint, fail-closed, and exposes only the authorized intersection', async () => {
+  const service = { value: 'routerlab', baseUrl: 'https://api.routerlab.ch' };
+  const configured = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
+  for (const reason of ['auth_failed', 'timeout', 'redirect_not_allowed', 'invalid_response', 'network_error']) {
+    await assert.rejects(
+      () => discoverVerifiedDesktopRoutes({
+        service,
+        strategyValue: 'claude-gpt',
+        strategyValues: null,
+        token: 'test-token',
+      }, {
+        fetchModels: async (_token, options) => {
+          assert.equal(options.baseUrl, 'https://api.routerlab.ch');
+          return { valid: false, reason };
+        },
+      }),
+      (error) => error.code === reason,
+    );
+  }
+  await assert.rejects(
+    () => discoverVerifiedDesktopRoutes({
+      service,
+      strategyValue: 'claude-gpt',
+      strategyValues: null,
+      token: 'test-token',
+    }, {
+      fetchModels: async () => ({
+        valid: true,
+        modelsVerified: true,
+        models: ['not-configured'],
+        modelMetadata: [],
+      }),
+    }),
+    (error) => error.code === 'no_authorized_models',
+  );
+  const partial = await discoverVerifiedDesktopRoutes({
+    service,
+    strategyValue: 'claude-gpt',
+    strategyValues: null,
+    token: 'test-token',
+  }, {
+    fetchModels: async () => ({
+      valid: true,
+      modelsVerified: true,
+      models: [configured[1].upstreamModel],
+      modelMetadata: [{
+        id: configured[1].upstreamModel,
+        contextWindow: 1_000_000,
+        contextWindowVerified: true,
+        raw: { id: configured[1].upstreamModel, created_at: 'routerlab-time' },
+      }],
+    }),
+  });
+  assert.deepEqual(partial.map((route) => route.upstreamModel), [configured[1].upstreamModel]);
+  assert.equal(partial[0].supports1m, true);
+  assert.equal(partial[0].createdAt, 'routerlab-time');
 });
 
 test('generated Desktop credentials are strong, readable only for loopback, and redact cleanly', (t) => {
@@ -294,7 +368,8 @@ test('Claude Desktop profile metadata restores loopback URL, service, and strate
   };
   const applied = applyProxyClaudeDesktop({
     serviceValue: 'llm', strategyValue: 'glm-5.2', strategyValues: ['glm-5.2'],
-    host: '::1', port: 18080, gatewayToken: 'local-test-token', dryRun: false, paths,
+    routes: modelRoutesForDesktopMapping('llm', ['glm-5.2']),
+    host: '::1', port: 18080, gatewayToken: DESKTOP_TEST_TOKEN, dryRun: false, paths,
   });
   assert.equal(applied.profile.inferenceGatewayBaseUrl, 'http://[::1]:18080');
   assert.equal(buildLoopbackUrl('[::1]', 18080), 'http://[::1]:18080');
@@ -307,10 +382,11 @@ test('Claude Desktop profile metadata restores loopback URL, service, and strate
 });
 
 test('Claude Desktop accepts authenticated requests, unauthenticated allowed preflights, and valid JSON only', async (t) => {
-  const gatewayToken = 'local-random-token';
+  const gatewayToken = DESKTOP_TEST_TOKEN;
   const { server } = createClaudeDesktopProxy({
-    serviceValue: 'routerlab', strategyValue: 'claude-gpt',
+    serviceValue: 'routerlab',
     routerlabToken: 'upstream-token', gatewayToken, allowedOrigins: ['https://allowed.test'],
+    routes: modelRoutesForProxyStrategy('claude-gpt', 'routerlab'),
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -413,7 +489,7 @@ test('Desktop stored proxy configuration helpers restore and reconcile explicit 
 
   const requestedOptions = parseOptions(['--service', 'llm', '--strategy', 'glm-5.2', '--host', '[::1]', '--port', '18000']);
   const requested = requestedProxyConfig(requestedOptions);
-  assert.deepEqual(requested, { serviceValue: 'llm', strategyValue: 'glm-5.2', strategyValues: null, host: '[::1]', port: 18000 });
+  assert.deepEqual(requested, { serviceValue: 'llm', strategyValue: 'glm-5.2', strategyValues: null, host: '::1', port: 18000 });
   const reconciled = mergeExplicitProxyConfig(stored, requestedOptions);
   assert.equal(reconciled.strategyValue, 'glm-5.2');
   assert.equal(reconciled.strategyValues, null);
@@ -707,13 +783,19 @@ test('Desktop proxy does not mutate a profile before token and port validation',
   const blocker = http.createServer();
   await new Promise((resolve) => blocker.listen(0, '127.0.0.1', resolve));
   t.after(() => { if (blocker.listening) blocker.close(); });
+  const proxyOptions = parseOptions([
+    '--yes', '--token', 'valid-token-with-enough-length', '--port', String(blocker.address().port),
+  ]);
   await assert.rejects(
-    () => main(['claude-desktop', 'proxy', '--yes', '--token', 'valid-token-with-enough-length', '--port', String(blocker.address().port)]),
+    () => runClaudeDesktopProxy(proxyOptions, { fetchModels: desktopDiscovery }),
     (error) => error.code === 'EADDRINUSE',
   );
   assert.equal(fs.existsSync(paths.profilePath), false);
+  const applyOptions = parseOptions([
+    '--yes', '--token', 'valid-token-with-enough-length', '--port', String(blocker.address().port),
+  ]);
   await assert.rejects(
-    () => main(['claude-desktop', 'apply-proxy', '--yes', '--token', 'valid-token-with-enough-length', '--port', String(blocker.address().port)]),
+    () => applyClaudeDesktopProxyProfile(applyOptions, { fetchModels: desktopDiscovery }),
     (error) => error.code === 'EADDRINUSE',
   );
   assert.equal(fs.existsSync(paths.profilePath), false);
@@ -760,6 +842,7 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
     try {
       const result = await runClaudeDesktopProxy({
         ...options,
+        desktopDependencies: options.desktopDependencies ?? { fetchModels: desktopDiscovery },
         returnToMenuOnSigint: expectedKind === 'back',
         shutdownOptions: { signalSource, exitState },
       });
@@ -791,9 +874,10 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
   const originalLog = console.log;
   console.log = () => {};
   try {
-    await main([
-      'claude-desktop', 'apply-proxy', '--yes', '--token', token, '--port', String(port),
-    ]);
+    await applyClaudeDesktopProxyProfile(
+      parseOptions(['--yes', '--token', token, '--port', String(port)]),
+      { fetchModels: desktopDiscovery },
+    );
   } finally {
     console.log = originalLog;
   }
@@ -802,7 +886,22 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
   const firstCredential = readClaudeDesktopProxyCredential(paths);
   assert.ok(firstCredential);
 
-  const reuseOutput = await runAndInterrupt(parseOptions(['--token', token]));
+  const authorizedModel = firstCredential.metadata.routes[0].upstreamModel;
+  const reducedOptions = parseOptions(['--token', token]);
+  reducedOptions.desktopDependencies = {
+    fetchModels: async () => ({
+      valid: true,
+      modelsVerified: true,
+      models: [authorizedModel],
+      modelMetadata: [{ id: authorizedModel, contextWindowVerified: false, raw: { id: authorizedModel } }],
+    }),
+  };
+  const driftOutput = await runAndInterrupt(reducedOptions);
+  assert.equal(driftOutput.some((line) => line.includes('Catalog route removed:')), true);
+  assert.equal(readClaudeDesktopProxyCredential(paths).token, firstCredential.token);
+  assert.equal(readClaudeDesktopProxyCredential(paths).metadata.routes.length, 1);
+
+  const reuseOutput = await runAndInterrupt(reducedOptions);
   assert.equal(reuseOutput.some((line) => line.includes('Configured Claude Desktop local mapping profile')), false);
   assert.equal(readClaudeDesktopProxyCredential(paths).token, firstCredential.token);
 
@@ -817,6 +916,16 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
   ]));
   assert.equal(readClaudeDesktopProxyCredential(paths).metadata.service, 'llm');
 
+  const v1Token = readClaudeDesktopProxyCredential(paths).token;
+  const v1MetaFile = JSON.parse(fs.readFileSync(paths.metaPath, 'utf8'));
+  v1MetaFile.wrapperScionos.schemaVersion = 1;
+  delete v1MetaFile.wrapperScionos.routes;
+  fs.writeFileSync(paths.metaPath, JSON.stringify(v1MetaFile));
+  const migrationOutput = await runAndInterrupt(parseOptions(['--token', token]));
+  assert.equal(migrationOutput.some((line) => line.includes('metadata schema v1 to v2')), true);
+  assert.equal(readClaudeDesktopProxyCredential(paths).token, v1Token);
+  assert.equal(readClaudeDesktopProxyCredential(paths).metadata.schemaVersion, 2);
+
   const legacyProfile = JSON.parse(fs.readFileSync(paths.profilePath, 'utf8'));
   legacyProfile.inferenceGatewayApiKey = 'scionos-local';
   fs.writeFileSync(paths.profilePath, JSON.stringify(legacyProfile));
@@ -824,7 +933,7 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
   delete legacyMeta.wrapperScionos;
   fs.writeFileSync(paths.metaPath, JSON.stringify(legacyMeta));
   const legacyOutput = await runAndInterrupt(parseOptions(['--yes', '--token', token]));
-  assert.equal(legacyOutput.some((line) => line.includes('WARN Legacy Claude Desktop profile')), true);
+  assert.equal(legacyOutput.some((line) => line.includes('Configured Claude Desktop local mapping profile')), true);
   assert.notEqual(readClaudeDesktopProxyCredential(paths).token, 'scionos-local');
 
   console.log = () => {};
@@ -840,23 +949,13 @@ test('Desktop command covers successful apply, stored-profile reuse, legacy repl
   );
 });
 
-test('deprecated Desktop direct mode warns once and never prints its token', async () => {
-  resetDeprecationWarningsForTests();
-  const originalLog = console.log;
-  const originalError = console.error;
-  const output = [];
-  const warnings = [];
-  console.log = (line) => output.push(String(line));
-  console.error = (line) => warnings.push(String(line));
+test('Desktop direct mode is removed and never prints its token', async () => {
   const token = 'direct-profile-token-with-enough-length';
-  try {
-    await main(['claude-desktop', 'apply', '--dry-run', '--json', '--token', token]);
-    await main(['claude-desktop', 'apply', '--dry-run', '--json', '--token', token]);
-  } finally {
-    console.log = originalLog;
-    console.error = originalError;
-  }
-  assert.equal(warnings.filter((line) => line.includes('deprecated in 4.x')).length, 1);
-  assert.equal(output.some((line) => line.includes(token)), false);
-  assert.equal(output.every((line) => JSON.parse(line).ok === true), true);
+  await assert.rejects(
+    () => main(['claude-desktop', 'apply', '--dry-run', '--json', '--token', token]),
+    (error) => error.exitCode === 2
+      && error.code === 'invalid_usage'
+      && !error.message.includes(token)
+      && error.message.includes('apply-proxy'),
+  );
 });

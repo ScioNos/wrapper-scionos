@@ -3,16 +3,38 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import zlib from 'node:zlib';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
-import { DESKTOP_MAPPING_STRATEGIES } from '../src/apps/claude-desktop.js';
+import { DESKTOP_MAPPING_STRATEGIES, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy } from '../src/apps/claude-desktop.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 
+const DESKTOP_GATEWAY_TOKEN = 'G'.repeat(43);
+
+test('Claude Desktop proxy rejects configurable upstream endpoints', () => {
+  assert.throws(() => createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    routerlabToken: 'upstream-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes: modelRoutesForProxyStrategy('claude-gpt', 'routerlab'),
+    targetBaseUrl: 'http://127.0.0.1:9999',
+  }), (error) => error.code === 'unsupported_proxy_option');
+  assert.throws(() => createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    routerlabToken: 'upstream-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes: [
+      { routeId: 'claude-collision', upstreamModel: 'model-a' },
+      { routeId: 'claude-collision', upstreamModel: 'model-b' },
+    ],
+  }), (error) => error.code === 'route_collision');
+});
+
 test('Claude Desktop proxy exposes mapped model list', async () => {
+  const catalogRoutes = modelRoutesForDesktopMapping('routerlab', DESKTOP_MAPPING_STRATEGIES.routerlab);
+  catalogRoutes[0] = { ...catalogRoutes[0], supports1m: true, createdAt: 'routerlab-created-at' };
   const { server } = createClaudeDesktopProxy({
     serviceValue: 'routerlab',
-    strategyValue: 'claude-gpt',
-    strategyValues: DESKTOP_MAPPING_STRATEGIES.routerlab,
     routerlabToken: 'valid-token-with-enough-length',
-    gatewayToken: 'generated-local-test-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes: catalogRoutes,
   });
 
   await new Promise((resolve, reject) => {
@@ -26,7 +48,7 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
   try {
     const address = server.address();
     const response = await fetch(`http://127.0.0.1:${address.port}/v1/models`, {
-      headers: { authorization: 'Bearer generated-local-test-token' },
+      headers: { authorization: `Bearer ${DESKTOP_GATEWAY_TOKEN}` },
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
@@ -37,44 +59,33 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-kim2.7' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.2' && !model.supports1m), true);
+    assert.equal(payload.data[0].created_at, 'routerlab-created-at');
+    assert.equal(payload.data[0].supports1m, true);
+    assert.equal(payload.data.slice(1).every((model) => !Object.hasOwn(model, 'created_at')), true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
 });
 
-test('Claude Desktop proxy rewrites mapped request models and forwards empty JSON bodies', async () => {
+test('Claude Desktop proxy rewrites mapped models through injected transport and rejects missing models locally', async () => {
   const captured = [];
-  const upstream = http.createServer((req, res) => {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-    });
-    req.on('end', () => {
+  const configuredRoutes = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
+  const { server, routes } = createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    routerlabToken: 'real-routerlab-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes: configuredRoutes,
+  }, {
+    forwardRequest: async (req, res, options) => {
       captured.push({
-        body: JSON.parse(body),
-        apiKey: req.headers['x-api-key'],
-        authorization: req.headers.authorization,
+        body: JSON.parse(options.body),
+        routerlabToken: options.routerlabToken,
+        targetBaseUrl: options.targetBaseUrl,
         url: req.url,
       });
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end('{"ok":true}');
-    });
-  });
-  await new Promise((resolve, reject) => {
-    upstream.once('error', reject);
-    upstream.listen(0, '127.0.0.1', () => {
-      upstream.off('error', reject);
-      resolve();
-    });
-  });
-
-  const upstreamBaseUrl = `http://127.0.0.1:${upstream.address().port}`;
-  const { server, routes } = createClaudeDesktopProxy({
-    serviceValue: 'routerlab',
-    strategyValue: 'claude-gpt',
-    routerlabToken: 'real-routerlab-token',
-    gatewayToken: 'generated-local-test-token',
-    targetBaseUrl: upstreamBaseUrl,
+    },
   });
   await new Promise((resolve, reject) => {
     server.once('error', reject);
@@ -90,7 +101,7 @@ test('Claude Desktop proxy rewrites mapped request models and forwards empty JSO
     const mappedResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer generated-local-test-token',
+        authorization: `Bearer ${DESKTOP_GATEWAY_TOKEN}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({ model: mappedRoute.routeId, messages: [] }),
@@ -100,21 +111,116 @@ test('Claude Desktop proxy rewrites mapped request models and forwards empty JSO
     const emptyResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer generated-local-test-token',
+        authorization: `Bearer ${DESKTOP_GATEWAY_TOKEN}`,
         'content-type': 'application/json',
       },
     });
-    assert.equal(emptyResponse.status, 200);
+    assert.equal(emptyResponse.status, 400);
+    assert.equal((await emptyResponse.json()).error.code, 'missing_model');
 
     assert.equal(captured[0].body.model, mappedRoute.upstreamModel);
     assert.deepEqual(captured[0].body.messages, []);
-    assert.equal(captured[0].apiKey, 'real-routerlab-token');
-    assert.equal(captured[0].authorization, undefined);
+    assert.equal(captured[0].routerlabToken, 'real-routerlab-token');
+    assert.equal(captured[0].targetBaseUrl, 'https://api.routerlab.ch');
     assert.equal(captured[0].url, '/v1/messages');
-    assert.deepEqual(captured[1].body, {});
+    assert.equal(captured.length, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
-    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('Claude Desktop proxy fails closed for unknown models, mixed batches, paths, and methods', async () => {
+  const forwarded = [];
+  const routes = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
+  const { server } = createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    routerlabToken: 'real-routerlab-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes,
+  }, {
+    forwardRequest: async (req, res, options) => {
+      forwarded.push({ url: req.url, method: req.method, body: options.body });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true}');
+    },
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const headers = {
+    authorization: `Bearer ${DESKTOP_GATEWAY_TOKEN}`,
+    'content-type': 'application/json',
+  };
+
+  try {
+    const denied = await fetch(`${baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'unknown', messages: [] }),
+    });
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).error.code, 'model_not_allowed');
+
+    const mixedBatch = await fetch(`${baseUrl}/v1/messages/batches`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        requests: [
+          { custom_id: 'ok', params: { model: routes[0].routeId, messages: [] } },
+          { custom_id: 'denied', params: { model: 'unknown', messages: [] } },
+        ],
+      }),
+    });
+    assert.equal(mixedBatch.status, 403);
+    assert.equal((await mixedBatch.json()).error.code, 'model_not_allowed');
+
+    const validBatch = await fetch(`${baseUrl}/v1/messages/batches`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        requests: routes.slice(0, 2).map((route, index) => ({
+          custom_id: String(index),
+          params: { model: route.routeId, messages: [] },
+        })),
+      }),
+    });
+    assert.equal(validBatch.status, 200);
+    const batchBody = JSON.parse(forwarded[0].body);
+    assert.deepEqual(
+      batchBody.requests.map((request) => request.params.model),
+      routes.slice(0, 2).map((route) => route.upstreamModel),
+    );
+
+    const unsupported = await fetch(`${baseUrl}/v1/complete`, { method: 'POST', headers, body: '{}' });
+    assert.equal(unsupported.status, 404);
+    assert.equal((await unsupported.json()).error.code, 'unsupported_proxy_path');
+
+    const wrongMethod = await fetch(`${baseUrl}/v1/messages`, { method: 'GET', headers });
+    assert.equal(wrongMethod.status, 405);
+    assert.equal((await wrongMethod.json()).error.code, 'method_not_allowed');
+
+    for (const [method, pathname] of [
+      ['GET', '/v1/messages/batches'],
+      ['GET', '/v1/messages/batches/batch_1'],
+      ['DELETE', '/v1/messages/batches/batch_1'],
+      ['POST', '/v1/messages/batches/batch_1/cancel'],
+      ['GET', '/v1/messages/batches/batch_1/results'],
+    ]) {
+      const response = await fetch(`${baseUrl}${pathname}`, {
+        method,
+        headers,
+        ...(method === 'POST' ? { body: '{}' } : {}),
+      });
+      assert.equal(response.status, 200, `${method} ${pathname}`);
+    }
+    assert.equal(forwarded.length, 6);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 

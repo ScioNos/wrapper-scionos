@@ -91,25 +91,20 @@ The proxy has no total generation timeout and closes its upstream request if the
 
 ## Claude Desktop
 
-The recommended mode is the authenticated local mapping proxy. Direct profile application remains compatible throughout 4.x but is deprecated and scheduled for removal in 5.0:
-
-    wrapper-scionos claude-desktop apply --service routerlab --dry-run
-    wrapper-scionos claude-desktop apply --service routerlab --yes
-
-Recommended local mapped proxy:
+Claude Desktop is supported only through the authenticated local mapping proxy. The former direct profile command has been removed because it persisted the RouterLab token in the Desktop profile:
 
     wrapper-scionos claude-desktop apply-proxy --service llm --yes
     wrapper-scionos claude-desktop proxy --service llm
 
-`claude-desktop apply` persists the RouterLab token in clear text inside the Desktop profile and emits one explicit warning per process. On Linux/macOS, every credential-bearing JSON is verified as `0600` and its configuration directory as `0700`; failure is fatal. `apply-proxy` stores only a local random credential in that profile and is the normal mode.
+`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation.
 
-apply-proxy resolves the RouterLab token and starts listening before it writes the profile. A missing token, cancellation, occupied port, or profile-write failure leaves the previous profile intact and closes any newly opened listener. It writes a random 32-byte base64url credential and versioned wrapperScionos metadata atomically. A later proxy command with no explicit profile options restores the stored service, strategy list, loopback host, and port. Divergent explicit options are refused until the profile is rewritten with apply-proxy --yes or the proxy command is repeated with --yes. Legacy profiles recover host/port from inferenceGatewayBaseUrl, use the CLI-selected service with a warning, and gain v4 metadata on the next application. A 3.x scionos-local credential is replaced automatically before listening.
+Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
 
 From the interactive menu, Start Local Mapping uses the service shown in the banner. A missing profile is created immediately, an equivalent healthy profile is reused without rotating its local credential, and replacement of a different, direct, legacy, or unhealthy profile requires confirmation. The stored host and port are preserved unless explicitly overridden; changing services refreshes the service-specific mapping catalog.
 
 The selected service base URL is validated before a token is resolved, a listener opens, or a profile changes. Generated profiles allow Cowork egress only to their exact gateway hostname. `claude-desktop status` keeps the existing fields and also reports `profileExists`, `applied`, `healthy`, and stable `issues` codes without exposing credentials.
 
-The proxy binds only to loopback. Every GET/POST route, including /v1/models, requires the profile credential. Browser origins are rejected by default. An exact HTTP(S) origin can be allowed with repeatable --allow-origin; only a matching CORS OPTIONS preflight may return 204 without authentication, and it exposes no data. Wildcard CORS is never emitted.
+The proxy binds only to exact loopback hosts (`localhost`, `::1`, or a valid address in `127.0.0.0/8`) and an explicit port from 1 to 65535. It permits only the Messages API: model listing, messages, token counting, and creation/list/read/cancel/results/delete operations for message batches. Unsupported paths and methods fail locally, as do missing or unverified models; mixed invalid batches are rejected in full before any upstream request. Browser origins are rejected by default. An exact HTTP(S) origin can be allowed with repeatable --allow-origin; only a matching CORS OPTIONS preflight may return 204 without authentication.
 
 Requests are limited to 64 MiB both before and after decompression. Identity, gzip, deflate, and Brotli bodies are accepted; zstd is accepted when the active Node runtime exposes it, otherwise HTTP 415 unsupported_content_encoding is returned. Invalid JSON returns HTTP 400. Header receipt is limited to 30 seconds and body receipt to 120 seconds. Long generations have no total timeout.
 
@@ -152,7 +147,8 @@ The following legacy items still warn once per process on stderr:
 - ANTHROPIC_AUTH_TOKEN
 - --list-strategies (use strategies)
 - auth change (use auth login)
-- claude-desktop apply (use claude-desktop apply-proxy)
+
+`claude-desktop apply` is no longer a compatibility alias and fails with migration guidance to `apply-proxy`.
 
 All user-provided base URL variables, including `ANTHROPIC_BASE_URL`, are ignored. See [Codex migration for 5.0](./docs/migration-5.0-codex.md).
 

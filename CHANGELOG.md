@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Make Claude Desktop proxy-only, remove direct profile application, and reject direct or unmanaged profiles unless explicitly replaced.
+- Discover authorized Desktop models before every apply/start, persist only verified schema-v2 routes, and synchronize catalogue changes while preserving the random local credential.
+- Restrict the Desktop proxy to the Messages and message-batches API, with local fail-closed model/path/method validation and full batch model rewriting.
+- Enforce canonical loopback origins and preserve valid foreign Desktop configuration fields while refusing invalid existing JSON.
 - Reject Codex passthrough options that can replace the RouterLab provider, selected model, configuration profile, local provider, or remote app-server transport.
 - Reject every `/v1/models` redirect without forwarding the RouterLab token or discovery headers to another origin.
 - Preserve `config.toml` when no known wrapper backup exists; legacy status/restore now reports that manual cleanup is required while retaining independent catalog cleanup.
@@ -16,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Tests
 
+- Cover Desktop discovery failures, empty intersections, verified metadata, malicious loopback URLs, unknown/missing/batch models, unsupported paths/methods, migration, token redaction, and zero upstream calls on local rejection.
 - Add real Claude Code 2.1.220 gateway coverage with hostile settings and no production API access, plus cross-platform CI installation of the pinned CLI.
 - Cover fail-closed discovery, child-environment redaction, model enforcement, compressed requests, token counting, cleanup error precedence, and Linux Secret Service migration.
 

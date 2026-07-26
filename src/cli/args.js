@@ -1,5 +1,8 @@
 import { DEFAULT_SERVICE } from '../routerlab/services.js';
+import { isLoopbackHost, normalizeLoopbackHost, validateLoopbackPort } from '../platform/loopback.js';
 import { warnDeprecationOnce } from './deprecations.js';
+
+export { isLoopbackHost };
 
 export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--service'], value: '<routerlab|llm>', description: 'Select the RouterLab service.' },
@@ -103,12 +106,15 @@ export function parseOptions(argv) {
         if (!isLoopbackHost(value)) {
           throw new CliUsageError('--host must be a loopback address (127.0.0.1, localhost, or ::1).');
         }
-        options.host = value;
+        options.host = normalizeLoopbackHost(value);
       }
       if (key === '--allow-origin') options.allowOrigins.push(normalizeOrigin(value));
       if (key === '--port') {
-        const port = Number(value);
-        if (!/^\d+$/.test(value) || !Number.isInteger(port) || port <= 0 || port > 65535) {
+        let port;
+        try {
+          if (!/^\d+$/.test(value)) throw new Error('not numeric');
+          port = validateLoopbackPort(value);
+        } catch {
           throw new CliUsageError('--port must be a valid TCP port.');
         }
         options.port = port;
@@ -153,17 +159,6 @@ export function emitOptionDeprecations(options) {
       warnDeprecationOnce('option:--list-strategies', '`--list-strategies` is deprecated; use `strategies`.');
     }
   }
-}
-
-export function isLoopbackHost(value) {
-  const normalized = String(value ?? '').trim().toLowerCase();
-  if (normalized === 'localhost' || normalized === '::1' || normalized === '[::1]') {
-    return true;
-  }
-  const parts = normalized.split('.');
-  return parts.length === 4
-    && parts[0] === '127'
-    && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
 }
 
 function normalizeOrigin(value) {

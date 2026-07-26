@@ -40,8 +40,8 @@ export const COMMAND_DEFINITIONS = [
   },
   {
     name: 'claude-desktop', aliases: ['desktop'],
-    usage: 'wrapper-scionos claude-desktop status|apply|apply-proxy|proxy|restore-official',
-    description: 'Configure Claude Desktop (apply-proxy recommended; apply deprecated)', defaultAction: 'status',
+    usage: 'wrapper-scionos claude-desktop status|apply-proxy|proxy|restore-official',
+    description: 'Configure Claude Desktop through the local RouterLab proxy', defaultAction: 'status',
     handler: ({ action, options }) => handleClaudeDesktop(action, options),
   },
   {
@@ -136,7 +136,6 @@ const COMMAND_OPTIONS = {
   'claude-desktop': {
     status: ['json'],
     'restore-official': ['yes', 'dryRun', 'json'],
-    apply: ['service', 'strategy', 'token', 'noPrompt', 'yes', 'dryRun', 'json'],
     'apply-proxy': ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'yes', 'dryRun', 'json'],
     proxy: ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'allowOrigins', 'yes'],
   },
@@ -158,6 +157,9 @@ function validateCommand(name, action, options) {
   const actionTable = COMMAND_OPTIONS[name];
   const allowed = actionTable?.[action ?? ''];
   if (!allowed) {
+    if (name === 'claude-desktop' && action === 'apply') {
+      throw usageError('claude-desktop apply was removed because direct profiles expose the RouterLab token. Use "claude-desktop apply-proxy --yes".');
+    }
     if (name === 'codex' && action === 'apply') {
       throw usageError('codex apply was removed. Use "codex launch"; use "codex restore" only to undo an old wrapper config.');
     }
@@ -227,7 +229,7 @@ function showHelp(options = {}) {
     formatOptionHelp(),
     '',
     'Global options may appear before or after a command. Arguments after -- are passed through unchanged.',
-    'Claude Desktop: use apply-proxy normally; direct apply is deprecated in 4.x and stores its token in clear text.',
+    'Claude Desktop: use apply-proxy; direct profiles are refused because they expose the RouterLab token.',
     '',
   ].join('\n');
   if (options.json) print({ help }, { ...options, command: 'help' });

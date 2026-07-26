@@ -3,11 +3,12 @@ import {
   resolveServiceBaseUrl,
   validateServiceBaseUrl,
 } from '../../routerlab/services.js';
+import { fetchModelsDirect } from '../../routerlab/models.js';
 import { resolveToken } from '../../apps/claude-code.js';
 import {
   DESKTOP_MAPPING_STRATEGIES,
-  applyDirectClaudeDesktop,
   applyProxyClaudeDesktop,
+  buildVerifiedClaudeDesktopRoutes,
   generateLocalProxyGatewayToken,
   readClaudeDesktopProxyCredential,
   readClaudeDesktopStatus,
@@ -16,7 +17,6 @@ import {
 } from '../../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../../apps/claude-desktop-proxy.js';
 import { print } from './output.js';
-import { warnDeprecationOnce } from '../deprecations.js';
 
 export async function handleClaudeDesktop(action, options) {
   if (action === 'status') {
@@ -34,53 +34,53 @@ export async function handleClaudeDesktop(action, options) {
   if (action === 'proxy') {
     return runClaudeDesktopProxy(options);
   }
-
-  warnDeprecationOnce('action:claude-desktop-apply', 'claude-desktop apply is deprecated in 4.x because it stores the RouterLab token in the Desktop profile; use apply-proxy.');
-  const service = resolveValidatedDesktopService(options.service);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
-  const result = applyDirectClaudeDesktop({
-    serviceValue: service.value,
-    strategyValue: options.strategy ?? defaultDesktopStrategy(service.value),
-    token,
-    dryRun: !options.yes,
-  });
-  print(redactClaudeDesktopResult(result), options);
+  const error = new Error('claude-desktop apply has been removed because direct profiles expose the RouterLab token. Use "claude-desktop apply-proxy --yes".');
+  error.code = 'direct_mode_removed';
+  throw error;
 }
 
-async function applyClaudeDesktopProxyProfile(options) {
+export async function applyClaudeDesktopProxyProfile(options, dependencies = options.desktopDependencies ?? {}) {
   const service = resolveValidatedDesktopService(options.service);
   const strategyValue = options.strategy ?? defaultDesktopStrategy(service.value);
   const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
+  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const routes = await discoverVerifiedDesktopRoutes({
+    service,
+    strategyValue,
+    strategyValues,
+    token,
+  }, dependencies);
+  const gatewayToken = generateLocalProxyGatewayToken();
   if (!options.yes) {
     const preview = applyProxyClaudeDesktop({
       serviceValue: service.value,
       strategyValue,
       strategyValues,
+      routes,
       host: options.host,
       port: options.port,
+      gatewayToken,
       dryRun: true,
     });
     print(redactClaudeDesktopResult(preview), options);
     return;
   }
 
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
-  const gatewayToken = generateLocalProxyGatewayToken();
-  const proxy = await startClaudeDesktopProxy({
+  const startProxy = dependencies.startProxy ?? startClaudeDesktopProxy;
+  const proxy = await startProxy({
     serviceValue: service.value,
-    strategyValue,
-    strategyValues,
     routerlabToken: token,
     gatewayToken,
-    targetBaseUrl: service.baseUrl,
+    routes,
     host: options.host,
     port: options.port,
-  });
+  }, dependencies.proxyDependencies);
   try {
     const applied = applyProxyClaudeDesktop({
       serviceValue: service.value,
       strategyValue,
       strategyValues,
+      routes,
       host: options.host,
       port: options.port,
       gatewayToken,
@@ -92,7 +92,7 @@ async function applyClaudeDesktopProxyProfile(options) {
   }
 }
 
-export async function runClaudeDesktopProxy(options) {
+export async function runClaudeDesktopProxy(options, dependencies = options.desktopDependencies ?? {}) {
   const interactivePlan = options.interactiveDesktopPlan ?? null;
   let credential = interactivePlan?.credential ?? readClaudeDesktopProxyCredential();
   let config;
@@ -120,27 +120,42 @@ export async function runClaudeDesktopProxy(options) {
     if (!credential && !options.yes) {
       throw new Error('No wrapper-managed local Claude Desktop profile exists. Run "claude-desktop apply-proxy --yes" first.');
     }
-    rewriteProfile = !credential || credential.legacy || options.yes;
+    if (credential && !credential.metadata && !credential.legacyMetadata && !options.yes) {
+      throw new Error('The existing Claude Desktop profile is not wrapper-managed. Run "claude-desktop apply-proxy --yes" to replace it, or restore the official profile.');
+    }
+    rewriteProfile = !credential || credential.legacy || Boolean(credential.legacyMetadata) || options.yes;
   }
 
-  if (credential && !credential.metadata) {
-    console.error('WARN Legacy Claude Desktop profile: restored host/port from inferenceGatewayBaseUrl and using the CLI-selected service. The next apply-proxy will persist v4 metadata.');
+  if (credential?.legacyMetadata) {
+    console.error('WARN Migrating the verified Claude Desktop proxy profile from metadata schema v1 to v2.');
   }
 
   const service = resolveValidatedDesktopService(config.serviceValue);
   const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
-  const gatewayToken = rewriteProfile ? generateLocalProxyGatewayToken() : credential.token;
-  const result = await startClaudeDesktopProxy({
-    serviceValue: service.value,
+  const routes = await discoverVerifiedDesktopRoutes({
+    service,
     strategyValue: config.strategyValue,
     strategyValues: config.strategyValues,
+    token,
+  }, dependencies);
+  const previousRoutes = credential?.metadata?.routes ?? [];
+  const catalogChanged = !sameRouteCatalog(previousRoutes, routes);
+  rewriteProfile = rewriteProfile || catalogChanged;
+  const gatewayToken = credential
+    && (credential.metadata || credential.legacyMetadata)
+    && !credential.legacy
+    ? credential.token
+    : generateLocalProxyGatewayToken();
+  const startProxy = dependencies.startProxy ?? startClaudeDesktopProxy;
+  const result = await startProxy({
+    serviceValue: service.value,
     routerlabToken: token,
     gatewayToken,
-    targetBaseUrl: service.baseUrl,
+    routes,
     allowedOrigins: options.allowOrigins,
     host: config.host,
     port: config.port,
-  });
+  }, dependencies.proxyDependencies);
 
   try {
     if (rewriteProfile) {
@@ -148,6 +163,7 @@ export async function runClaudeDesktopProxy(options) {
         serviceValue: config.serviceValue,
         strategyValue: config.strategyValue,
         strategyValues: config.strategyValues,
+        routes,
         host: config.host,
         port: config.port,
         gatewayToken,
@@ -155,6 +171,9 @@ export async function runClaudeDesktopProxy(options) {
       });
       credential = readClaudeDesktopProxyCredential(applied.paths);
       console.log('Configured Claude Desktop local mapping profile at ' + applied.paths.profilePath);
+      if (catalogChanged && previousRoutes.length > 0) {
+        logCatalogChanges(previousRoutes, routes);
+      }
     }
   } catch (error) {
     await closeStartedProxy(result.server);
@@ -164,8 +183,7 @@ export async function runClaudeDesktopProxy(options) {
   console.log('Claude Desktop local mapping proxy listening on ' + result.baseUrl);
   console.log('Service: ' + service.value);
   console.log('Strategies: ' + (config.strategyValues ?? [config.strategyValue]).join(', '));
-  console.log('Routes:');
-  for (const route of result.routes) console.log('  ' + route.routeId + ' -> ' + route.upstreamModel);
+  console.log('Verified routes: ' + result.routes.length);
   console.log('Press Ctrl+C to stop.');
   return waitForProxyShutdown(result.server, {
     ...(options.shutdownOptions ?? {}),
@@ -178,7 +196,7 @@ function closeStartedProxy(server) {
   return new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 export function storedProxyConfig(credential, options) {
-  const meta = credential.metadata;
+  const meta = credential.metadata ?? credential.legacyMetadata;
   if (!meta || meta.mode !== 'proxy') {
     const service = requireServiceConfig(options.service);
     return {
@@ -197,6 +215,59 @@ export function storedProxyConfig(credential, options) {
     host: credential.host,
     port: credential.port,
   };
+}
+
+export async function discoverVerifiedDesktopRoutes({
+  service,
+  strategyValue,
+  strategyValues,
+  token,
+}, dependencies = {}) {
+  const fetchModels = dependencies.fetchModels ?? fetchModelsDirect;
+  const discovery = await fetchModels(token, {
+    serviceValue: service.value,
+    baseUrl: validateServiceBaseUrl(service.baseUrl, service.value),
+  });
+  if (!discovery?.valid || discovery.modelsVerified !== true) {
+    const reason = discovery?.reason ?? 'invalid_response';
+    const error = new Error(`Claude Desktop model discovery failed: ${reason}.`);
+    error.code = reason;
+    error.status = discovery?.status;
+    throw error;
+  }
+  return buildVerifiedClaudeDesktopRoutes({
+    serviceValue: service.value,
+    strategyValue,
+    strategyValues,
+    models: discovery.models,
+    modelMetadata: discovery.modelMetadata,
+  });
+}
+
+function sameRouteCatalog(left, right) {
+  const normalize = (routes) => (Array.isArray(routes) ? routes : []).map((route) => ({
+    routeId: route.routeId,
+    upstreamModel: route.upstreamModel,
+    labelOverride: route.labelOverride ?? null,
+    supports1m: route.supports1m === true,
+    createdAt: route.createdAt ?? null,
+  }));
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+}
+
+function logCatalogChanges(previousRoutes, nextRoutes) {
+  const previous = new Map(previousRoutes.map((route) => [route.routeId, route.upstreamModel]));
+  const next = new Map(nextRoutes.map((route) => [route.routeId, route.upstreamModel]));
+  for (const routeId of [...next.keys()]
+    .filter((routeId) => !previous.has(routeId) || previous.get(routeId) !== next.get(routeId))
+    .sort()) {
+    console.log(`Catalog route added: ${routeId}`);
+  }
+  for (const routeId of [...previous.keys()]
+    .filter((routeId) => !next.has(routeId) || previous.get(routeId) !== next.get(routeId))
+    .sort()) {
+    console.log(`Catalog route removed: ${routeId}`);
+  }
 }
 
 export function requestedProxyConfig(options) {

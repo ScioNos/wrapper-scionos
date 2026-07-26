@@ -22,19 +22,19 @@ These inputs still work throughout 4.x but warn once on stderr:
 - ANTHROPIC_BASE_URL;
 - --list-strategies (use strategies);
 - auth change (use auth login);
-- claude-desktop apply (use apply-proxy; direct mode is removable in 5.0).
+- claude-desktop apply (removed in 5.0; use apply-proxy).
 
 Move to the RouterLab environment variables documented in the README. Replace --transport direct with --direct and remove redundant proxy flags.
 
 ## Claude Desktop migration
 
-A 3.x local mapping may contain the shared scionos-local secret. Starting claude-desktop proxy automatically replaces it with a random profile credential using atomic writes and rollback. The normal 4.x path is `apply-proxy`. Direct `claude-desktop apply` remains compatible but is deprecated because it persists the RouterLab token in clear text in the profile.
+A 3.x local mapping may contain the shared scionos-local secret. In 5.0, Claude Desktop is proxy-only: `claude-desktop apply` is refused because direct profiles persist the RouterLab token. Use `apply-proxy --yes`; the direct token is never reused.
 
 You can migrate explicitly before starting the proxy:
 
     wrapper-scionos claude-desktop apply-proxy --service routerlab --yes
 
-The standalone proxy now refuses to start if no wrapper-managed profile exists. New profiles persist service, strategy list, host, and port in versioned metadata, so proxy with no explicit profile options resumes the applied mapping. Explicit divergent options are refused until apply-proxy --yes (or proxy --yes) rewrites the profile. Legacy profiles recover host/port from inferenceGatewayBaseUrl and use the CLI-selected service with a warning.
+The standalone proxy refuses to start if no wrapper-managed profile exists. Schema-v2 profiles persist the fixed service, strategies, canonical loopback origin, and verified model routes without the RouterLab token. A valid v1 proxy profile is migrated after live model rediscovery while retaining its random local credential. Direct, unmanaged, or metadata-less profiles require explicit replacement or official restoration.
 
 The RouterLab token is resolved and the listener starts before any profile change. A missing token, cancellation, occupied port, or failed profile write leaves the old profile unchanged; a newly opened listener is closed on write failure. On Linux/macOS, credential directories and JSON files are verified as `0700` and `0600`, including rollback results; failure is closed.
 

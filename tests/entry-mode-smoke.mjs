@@ -64,11 +64,11 @@ assert.equal(result.code, 0, `CLI exited with ${result.code}.\nstdout:\n${stdout
 assert.match(stdout, /Choose where you want to go:/);
 if (args.includes('llm')) {
   assert.match(stdout, /Service: RouterLab LLM/);
-  assert.match(stderr, /SERVICE FORTEMENT DÉGRADÉ/);
-  assert.match(stderr, /ROUTERLAB LLM — NE PAS UTILISER/);
+  assert.match(stderr, /LIMITED AVAILABILITY/);
+  assert.match(stderr, /ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED/);
 } else {
   assert.match(stdout, /Service: RouterLab(?! LLM)/);
-  assert.doesNotMatch(stderr, /SERVICE FORTEMENT DÉGRADÉ/);
+  assert.doesNotMatch(stderr, /LIMITED AVAILABILITY/);
 }
 
 console.log((displayLabel ?? `${requestedCommand} ${args.join(' ')}`.trim()) + ': interactive menu OK');

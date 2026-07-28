@@ -58,6 +58,11 @@ export const MODEL_ROUTE_METADATA = {
     label: 'claude-haiku-4-5',
     supports1m: false,
   },
+  'claude-haiku-4-5': {
+    desktopRouteId: 'claude-haiku-4-5',
+    label: 'claude-haiku-4-5',
+    supports1m: false,
+  },
   'claude-sonnet-4-6': {
     desktopRouteId: 'claude-sonnet-4-6',
     label: 'claude-sonnet-4-6',
@@ -289,7 +294,6 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['gpt-5.6-luna', 'GPT 5.6 Luna'],
   ['gpt-5.6-terra-pro', 'GPT 5.6 Terra Pro'],
   ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
-  ['kimi-k3', 'Kimi K3'],
   ['grok-4.5', 'Grok 4.5'],
   ['minimax-m3', 'MiniMax M3'],
 ]);

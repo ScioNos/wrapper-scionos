@@ -159,8 +159,8 @@ export function formatServiceHealthAlert(serviceValue) {
   return [
     '',
     border(`   ╔${'═'.repeat(BANNER_WIDTH)}╗`),
-    `${border('   ║')}${warning(centerText('⚠ SERVICE FORTEMENT DÉGRADÉ', BANNER_WIDTH))}${border('║')}`,
-    `${border('   ║')}${warning(centerText('ROUTERLAB LLM — NE PAS UTILISER', BANNER_WIDTH))}${border('║')}`,
+    `${border('   ║')}${warning(centerText('⚠ LIMITED AVAILABILITY', BANNER_WIDTH))}${border('║')}`,
+    `${border('   ║')}${warning(centerText('ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED', BANNER_WIDTH))}${border('║')}`,
     border(`   ╚${'═'.repeat(BANNER_WIDTH)}╝`),
     '',
   ].join('\n');

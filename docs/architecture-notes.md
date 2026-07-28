@@ -20,7 +20,7 @@ Request bodies are capped at 64 MiB in compressed and decompressed form. Identit
 
 Claude Code uses the service selected before entering the interactive menu. The default service is `routerlab`; `--service llm` carries the LLM service, token namespace, endpoint, strategy catalog, and model environment through the same launch path. Executable discovery runs `claude --version` with a five-second limit per candidate and continues to the next candidate after a failure or timeout. Version 2.1.220 is the minimum supported release; absence, an unparseable version, or an older version is fatal before credential resolution or network access.
 
-The LLM `claude` strategy is launchable when discovery reports `claude-opus-4-8`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`. All LLM Claude Code strategies force `CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-5`; service-scoped environment construction prevents that policy from changing the `routerlab` subagent model.
+The LLM `claude` strategy is launchable when discovery reports `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`. All LLM Claude Code strategies force `CLAUDE_CODE_SUBAGENT_MODEL=claude-haiku-4-5`; service-scoped environment construction prevents that policy from changing the `routerlab` subagent model.
 
 Service bases are fixed before credential use. `ANTHROPIC_BASE_URL` and service-specific base URL variables are ignored with a credential-free warning. `ANTHROPIC_AUTH_TOKEN` remains a deprecated input-token fallback. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both token sources are present. `--token` is rejected for Claude Code before launch because process command lines are externally observable.
 
@@ -48,17 +48,17 @@ References:
 
 Codex CLI 0.144.1 or newer is invoked through the resolved executable or Windows shim. The same invocation builder is used for version detection and interactive launch.
 
-Codex always connects directly to the fixed service `/v1` endpoint. There is no Codex proxy, local gateway credential, or generated model catalog. Codex presence/version is checked once before token resolution and model discovery. An explicit token is validated before any network request. User endpoint variables are ignored with warnings.
+Codex always connects directly to the fixed service `/v1` endpoint. There is no Codex proxy or local gateway credential. Codex presence/version is checked once before token resolution and model discovery. An explicit token is validated before any network request. User endpoint variables are ignored with warnings.
 
 `GET /v1/models` is used only to intersect returned identifiers with the service allowlist. Every discovery failure is fatal, including 401/403, network errors, timeouts, malformed JSON, server failures, and an empty intersection. Explicit model identifiers require an exact match. Interactive launch selects among the intersection; non-interactive launch without a model requires `gpt-5.6-sol`.
 
-Runtime overrides contain exactly six values: `model_provider`, `model`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged through that child-only environment variable. User sandbox, approvals, instructions, context, reasoning effort, modalities, tools, search, truncation, priorities, features, MCP settings, hooks, auth files, and other active policy remain native to Codex. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
+Runtime overrides contain exactly seven values: `model_provider`, `model`, `model_catalog_json`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged through that child-only environment variable. User sandbox, approvals, MCP settings, hooks, auth files, and other active policy remain native to Codex. npm-style Windows command shims preserve quoted TOML overrides through their `%*` forwarding layer.
 
 Forwarded Codex arguments are validated before CLI detection, token resolution, or network access. Provider/model overrides, alternate local providers, configuration profiles, and remote app-server transports are rejected; route-neutral native arguments remain byte-for-byte unchanged. Model discovery uses manual redirect handling and treats every 3xx response as fatal so the service token is never forwarded to another origin.
 
 The RouterLab destination invariant is scoped to model traffic configured by the wrapper: `GET /v1/models` discovery and Responses inference requests for the selected provider. It is not a process-wide network sandbox. Independent network activity owned by the official Codex binary or its user-configured native integrations—such as update checks, MCP, tools, and search—remains outside the wrapper transport boundary and is neither disabled nor modified.
 
-`codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path writes neither. A known backup may be restored automatically, but a current `config.toml` without that backup is never deleted; legacy wrapper detection then reports `manualCleanupRequired`. The dedicated legacy model catalog remains independently removable.
+`codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path never writes persistent Codex configuration. It creates only a per-launch catalog in the operating system's temporary directory and removes it after the child exits or startup fails. A known backup may be restored automatically, but a current `config.toml` without that backup is never deleted; legacy wrapper detection then reports `manualCleanupRequired`. The dedicated legacy model catalog remains independently removable.
 
 An interactive non-zero Codex exit or startup exception is reported and returns to the main menu without retaining the child exit code. A successful interactive session closes the wrapper, while direct launches preserve the Codex exit code.
 
@@ -68,7 +68,11 @@ Codex receives `wire_api="responses"` and calls the fixed RouterLab `/v1` endpoi
 
 ## Model catalog
 
-The current Codex path has no model catalog. LiteLLM metadata may remain useful inside RouterLab, but the wrapper consumes only exact model identifiers from `/v1/models` for pre-launch availability. It never converts metadata into Codex context, instructions, reasoning, modality, tool, or search configuration.
+After successful discovery, the wrapper generates a per-launch Codex catalog containing only the ordered intersection between exact `/v1/models` identifiers and the selected service allowlist. The explicitly selected model remains the runtime default, and Codex `app-server` exposes the catalog through `model/list`, which feeds the interactive `/model` selector.
+
+RouterLab metadata is normalized into the Codex fields used for display name, description, context window, input modalities, reasoning levels, parallel tool support, web search, and related capability hints. When optional metadata is absent, the wrapper uses conservative values rather than inventing provider-specific capabilities. These defaults are metadata fallbacks only: there is no fallback model or fallback catalog when discovery fails.
+
+The catalog is written with owner-only permissions where supported, contains no credential, and stays present only while the Codex child process is alive. Cleanup runs after successful exit, non-zero exit, and launch exceptions. `config.toml`, `auth.json`, sandbox policy, approvals, MCP configuration, profiles, and other persistent Codex settings are never modified by the current launch path.
 
 ## Credential storage
 

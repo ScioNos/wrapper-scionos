@@ -2,56 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
-## 5.0.0 - 2026-07-26
+## 5.0.0 - 2026-07-28
 
 ### Breaking Changes
 
-- Codex now connects directly to the fixed RouterLab Responses endpoint with native runtime provider overrides; the wrapper-managed Codex proxy, generated catalog, and transport flags are removed.
+- Codex now connects directly to the fixed RouterLab Responses endpoint; the wrapper-managed Codex proxy, local gateway credential, and `--direct`/`--proxy`/`--transport` flags are removed.
 - Claude Desktop is proxy-only; direct profiles that persisted RouterLab credentials are refused and require explicit replacement or official restoration.
+- Every Codex model-discovery failure, including an empty authorized intersection, prevents launch. There is no discovery or model fallback.
 
-### Security
+### Codex
+
+- Added a temporary, service-scoped Codex model catalog so `/model` displays only the currently discovered and allowlisted RouterLab models. The catalog is loaded at startup, remains available for the session, and is deleted when Codex exits.
+- Codex launch supplies seven runtime overrides: provider, selected model, temporary catalog path, provider name, fixed base URL, Responses wire API, and the child-only `OPENAI_API_KEY` source. It never modifies `~/.codex/config.toml` or Codex authentication files.
+- Catalog entries use normalized `/v1/models` metadata for display names, context, reasoning, modalities, instructions, parallel tools, and search support. Conservative values fill missing metadata fields only; they do not bypass failed discovery.
+- The RouterLab LLM Codex list is now `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `grok-4.5`, and `MiniMax-M3`; `kimi-k3` was removed.
+- Added `minimax-m3` to the RouterLab Codex model allowlist.
+
+### Claude Code and Desktop
 
 - Claude Code and Claude Desktop fail closed on model discovery, enforce verified model intersections locally, sanitize child credentials and routing, and reject redirect or provider-bypass paths.
-- Production RouterLab destinations are immutable, local listeners are authenticated loopback-only services, and Linux persistence requires Secret Service.
-
-### Release
-
-- Corrected Claude Code token-recovery guidance so it no longer recommends the unsupported `--token` option.
-- Added a prominent red warning before commands using the strongly degraded `--service llm`.
-- Hardened CI with read-only permissions, immutable current GitHub Action revisions, and cancellation of superseded runs.
-- Removed the tracked CodeGraph placeholder while keeping the machine-local `.codegraph/` index ignored.
-- Added `minimax-m3` to the RouterLab Codex model allowlist.
+- RouterLab LLM Claude Native maps Opus to `claude-opus-5`, Sonnet to `claude-sonnet-5`, Haiku to `claude-haiku-4-5`, and all LLM subagents to `claude-haiku-4-5`.
 - Aligned the RouterLab Claude Desktop catalogue with Claude Code: four Claude Native models plus AWS, GPT, DeepSeek, Kimi, GLM, and `minimax-m3` routes.
 - Corrected the RouterLab Claude Code Kimi strategy to use the exact `kimi-k2.7-code` model identifier.
+- Corrected Claude Code token-recovery guidance so it no longer recommends the unsupported `--token` option.
+
+### Security and Release
+
+- Production RouterLab destinations are immutable, local listeners are authenticated loopback-only services, and Linux persistence requires Secret Service.
+- Replaced the former do-not-use LLM alert with a limited-availability notice: `ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED`.
+- Hardened CI with read-only permissions, immutable current GitHub Action revisions, and cancellation of superseded runs.
 - Added both real Claude Code and minimum-version Codex CLI smoke tests to the release gate and cross-platform CI.
 - Removed obsolete 4.x migration and internal archive documents from the published package.
-
-## [5.0.0-beta.1] - 2026-07-25
-
-### Security
-
-- Make Claude Desktop proxy-only, remove direct profile application, and reject direct or unmanaged profiles unless explicitly replaced.
-- Discover authorized Desktop models before every apply/start, persist only verified schema-v2 routes, and synchronize catalogue changes while preserving the random local credential.
-- Restrict the Desktop proxy to the Messages and message-batches API, with local fail-closed model/path/method validation and full batch model rewriting.
-- Enforce canonical loopback origins and preserve valid foreign Desktop configuration fields while refusing invalid existing JSON.
-- Reject Codex passthrough options that can replace the RouterLab provider, selected model, configuration profile, local provider, or remote app-server transport.
-- Reject every `/v1/models` redirect without forwarding the RouterLab token or discovery headers to another origin.
-- Preserve `config.toml` when no known wrapper backup exists; legacy status/restore now reports that manual cleanup is required while retaining independent catalog cleanup.
-- Require Claude Code 2.1.220 or newer and make every Claude model-discovery failure fatal before proxy or child startup.
-- Sanitize Claude's child environment, remove raw RouterLab credentials and alternate-provider routing, mark the provider as wrapper-managed, and bypass environment proxies for loopback and discovery.
-- Enforce the verified RouterLab Claude model intersection inside the local proxy; denied models receive a local 403 and never reach the upstream service.
-- Reject `--token` for Claude Code launches and require Linux Secret Service for persisted tokens; legacy plaintext files are never read and are deleted only after a verified migration.
-
-### Tests
-
-- Cover Desktop discovery failures, empty intersections, verified metadata, malicious loopback URLs, unknown/missing/batch models, unsupported paths/methods, migration, token redaction, and zero upstream calls on local rejection.
-- Add real Claude Code 2.1.220 gateway coverage with hostile settings and no production API access, plus cross-platform CI installation of the pinned CLI.
-- Cover fail-closed discovery, child-environment redaction, model enforcement, compressed requests, token counting, cleanup error precedence, and Linux Secret Service migration.
-
-### Documentation
-
-- Define the RouterLab-only guarantee as the model discovery and inference traffic configured by the wrapper, without changing unrelated native Codex networking or integrations.
-- Document `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` as an intentional Claude Code gateway-compatibility exception, including its suppression scope and MCP tool-search tradeoff.
 
 ## [5.0.0-alpha.1] - 2026-07-25
 

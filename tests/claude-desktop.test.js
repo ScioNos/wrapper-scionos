@@ -172,21 +172,21 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'deepseek-v4',
   ]);
   assert.deepEqual(llmRoutes.map((route) => route.routeId), [
+    'claude-opus-5',
     'claude-sonnet-5',
     'claude-haiku-4-5',
-    'claude-opus-4-8',
     'claude-5.6-sol',
+    'claude-5.6-terra',
+    'claude-5.6-luna',
     'claude-lm5.2',
     'claude-wen3.7-max',
     'claude-max-m3',
     'claude-deev4-pro',
     'claude-deev4-flash',
-    'claude-5.6-terra-pro',
-    'claude-5.6-sol-pro',
   ]);
   assert.equal(llmRoutes.some((route) => (
     route.routeId === 'claude-haiku-4-5'
-      && route.upstreamModel === 'claude-haiku-4-5-20251001'
+      && route.upstreamModel === 'claude-haiku-4-5'
       && !Object.hasOwn(route, 'supports1m')
   )), true);
   assert.equal(llmRoutes.some((route) => route.upstreamModel === 'claude-opus-4-6'), false);
@@ -194,7 +194,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-sonnet-5-gpt-special'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.5-sp'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.4-mini-sp'), false);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.6-sol-pro' && route.upstreamModel === 'gpt-5.6-sol-pro' && route.labelOverride === 'gpt-5.6-sol-pro'), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-5.6-luna' && route.upstreamModel === 'gpt-5.6-luna' && route.labelOverride === 'gpt-5.6-luna'), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro' && route.upstreamModel === 'deepseek-v4-pro' && route.labelOverride === 'deepseek-v4-pro' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash' && route.upstreamModel === 'deepseek-v4-flash' && route.labelOverride === 'deepseek-v4-flash' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'MiniMax-M3' && route.labelOverride === 'MiniMax-M3' && !Object.hasOwn(route, 'supports1m')), true);

@@ -56,7 +56,7 @@ test('Claude Code launch environment is sanitized without changing native tool v
 
   assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
   assert.equal(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
-  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-sonnet-5');
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5');
   assert.equal(env.ANTHROPIC_BASE_URL, service.baseUrl);
   assert.equal(env.ANTHROPIC_AUTH_TOKEN, 'generated-local-token-with-enough-length');
   assert.equal(env.ANTHROPIC_API_KEY, '');
@@ -107,17 +107,17 @@ test('Claude Code launch screens use wrapper-branded guided layout', () => {
     {
       name: 'Claude',
       value: 'claude',
-      description: 'Opus => Claude Opus 4.8, Sonnet => Claude Sonnet 5, Haiku => Claude Haiku 4.5, subagents => Claude Sonnet 5.',
+      description: 'Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
     },
     {
       name: 'OpenAI GPT',
       value: 'claude-gpt',
-      description: 'Opus => GPT 5.6 Sol Pro, Sonnet => GPT 5.6 Sol, Haiku => GPT 5.6 Terra Pro, subagents => Claude Sonnet 5.',
+      description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna, subagents => Claude Haiku 4.5.',
     },
   ]);
   assert.match(menu, /Select Model Strategy:/);
   assert.match(menu, /1\. Claude/);
-  assert.match(menu, /Opus => Claude Opus 4\.8, Sonnet => Claude Sonnet 5/);
+  assert.match(menu, /Opus => Claude Opus 5, Sonnet => Claude Sonnet 5/);
   assert.match(menu, /2\. OpenAI GPT/);
 });
 

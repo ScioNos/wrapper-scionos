@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   CODEX_ALLOWED_MODELS,
   CODEX_MODEL_CATALOG_FILENAME,
+  buildCodexModelCatalog,
   buildCodexConfigPreview,
   buildCodexRuntimeArgs,
   buildCodexThirdPartyConfig,
@@ -33,7 +34,6 @@ test('Codex allowlists stay service-scoped', () => {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
-    'kimi-k3',
     'grok-4.5',
     'MiniMax-M3',
   ]);
@@ -58,7 +58,7 @@ test('Codex native template contains only provider routing fields', () => {
   assert.doesNotMatch(config, /model_catalog_json|context_window|reasoning|shell_type|modalities|tool|truncation|priority/);
 });
 
-test('Codex runtime uses exactly six native overrides and preserves the model id', () => {
+test('Codex provider-only runtime args preserve all six routing settings and the model id', () => {
   const model = 'MiniMax-M3';
   const args = buildCodexRuntimeArgs({
     providerName: 'llm',
@@ -77,7 +77,38 @@ test('Codex runtime uses exactly six native overrides and preserves the model id
   assert.equal(args.some((value) => value.includes('model_catalog_json')), false);
 });
 
-test('Codex preview is read-only and has no catalog property', (t) => {
+test('Codex runtime catalog exposes only RouterLab models to the native picker', () => {
+  const catalog = buildCodexModelCatalog({
+    models: ['MiniMax-M3', 'gpt-5.6-sol'],
+    modelMetadata: [{
+      id: 'MiniMax-M3',
+      displayName: 'MiniMax M3',
+      contextWindow: 200000,
+      inputModalities: ['text'],
+      supportedReasoningLevels: [{ effort: 'medium', description: 'Medium' }],
+    }],
+  });
+
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), ['MiniMax-M3', 'gpt-5.6-sol']);
+  assert.equal(catalog.models[0].display_name, 'MiniMax M3');
+  assert.equal(catalog.models[0].context_window, 200000);
+  assert.equal(catalog.models[0].visibility, 'list');
+  assert.equal(catalog.models[1].context_window, 128000);
+});
+
+test('Codex runtime args can point the native model picker at a temporary catalog', () => {
+  const args = buildCodexRuntimeArgs({
+    providerName: 'llm',
+    baseUrl: 'https://llm-api.routerlab.ch/v1',
+    model: 'MiniMax-M3',
+    modelCatalogPath: 'C:\\temp\\routerlab-models.json',
+  });
+
+  assert.equal(args.filter((value) => value === '-c').length, 7);
+  assert.ok(args.includes('model_catalog_json="C:\\\\temp\\\\routerlab-models.json"'));
+});
+
+test('Codex preview is read-only and limited to provider configuration', (t) => {
   const dir = nativeTempDir(t, 'preview');
   const paths = getCodexPaths({ CODEX_HOME: dir });
   const preview = buildCodexConfigPreview({

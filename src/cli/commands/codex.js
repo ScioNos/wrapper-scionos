@@ -12,6 +12,7 @@ import {
   assertCodexCliAvailable,
   buildCodexConfigPreview,
   buildCodexRuntimeArgs,
+  cleanupCodexRuntimeModelCatalog,
   codexModelDisplayName,
   codexModelsForService,
   defaultCodexModelForService,
@@ -19,15 +20,18 @@ import {
   launchCodex,
   readCodexStatus,
   restoreCodexConfig,
+  writeCodexRuntimeModelCatalog,
 } from '../../apps/codex.js';
 import { print } from './output.js';
 
 const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
   assertCodexCliAvailable,
+  cleanupCodexRuntimeModelCatalog,
   fetchModels,
   launchCodex,
   resolveTokenWithSource,
   selectModel: select,
+  writeCodexRuntimeModelCatalog,
 });
 
 export async function launchCodexForService(options, dependencies = {}) {
@@ -84,17 +88,26 @@ export async function launchCodexForService(options, dependencies = {}) {
     noPrompt: options.noPrompt,
     selectModel: deps.selectModel,
   });
-  const codexArgs = buildCodexRuntimeArgs({
-    providerName: service.value,
-    baseUrl: appendCodexApiPath(service.baseUrl),
-    model,
+  const catalog = deps.writeCodexRuntimeModelCatalog({
+    models: availableModels,
+    modelMetadata: modelResult.modelMetadata ?? [],
   });
-  return deps.launchCodex({
-    apiKey: resolvedToken.token,
-    codexArgs: [...codexArgs, ...forwarded],
-    codex,
-    updateProcessExitCode: options.updateProcessExitCode ?? true,
-  });
+  try {
+    const codexArgs = buildCodexRuntimeArgs({
+      providerName: service.value,
+      baseUrl: appendCodexApiPath(service.baseUrl),
+      model,
+      modelCatalogPath: catalog.path,
+    });
+    return await deps.launchCodex({
+      apiKey: resolvedToken.token,
+      codexArgs: [...codexArgs, ...forwarded],
+      codex,
+      updateProcessExitCode: options.updateProcessExitCode ?? true,
+    });
+  } finally {
+    deps.cleanupCodexRuntimeModelCatalog(catalog);
+  }
 }
 
 export async function handleCodex(action, options) {

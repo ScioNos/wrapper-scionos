@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { launchCodexForService } from '../src/cli/commands/codex.js';
 
 const NATIVE_TEST_TOKEN = 'native-codex-token-with-enough-length';
 
-function launchDependencies(modelResult) {
-  const calls = { launches: [], fetches: [] };
+function launchDependencies(modelResult, { launchError = null } = {}) {
+  const calls = { launches: [], fetches: [], catalogPath: null };
   return {
     calls,
     dependencies: {
@@ -16,6 +17,12 @@ function launchDependencies(modelResult) {
       },
       launchCodex: async (options) => {
         calls.launches.push(options);
+        const catalogOverride = options.codexArgs.find(
+          (value) => value.startsWith('model_catalog_json='),
+        );
+        calls.catalogPath = JSON.parse(catalogOverride.slice('model_catalog_json='.length));
+        assert.equal(fs.existsSync(calls.catalogPath), true);
+        if (launchError) throw launchError;
         return 0;
       },
       resolveTokenWithSource: async () => {
@@ -56,12 +63,36 @@ test('Codex launch is direct, native, and forwards the original RouterLab token'
   const launch = fixture.calls.launches[0];
   assert.equal(launch.apiKey, NATIVE_TEST_TOKEN);
   assert.equal(launch.updateProcessExitCode, false);
-  assert.equal(launch.codexArgs.filter((value) => value === '-c').length, 6);
+  assert.equal(launch.codexArgs.filter((value) => value === '-c').length, 7);
   assert.deepEqual(launch.codexArgs.slice(-2), ['--sandbox', 'workspace-write']);
   assert.ok(launch.codexArgs.includes('model="MiniMax-M3"'));
   assert.ok(launch.codexArgs.includes('model_providers.custom.base_url="https://llm-api.routerlab.ch/v1"'));
-  assert.equal(launch.codexArgs.some((value) => value.includes('model_catalog_json')), false);
+  assert.equal(launch.codexArgs.some((value) => value.includes('model_catalog_json')), true);
   assert.equal(launch.codexArgs.some((value) => /^http:\/\/127\.0\.0\.1/.test(value)), false);
+  assert.equal(fs.existsSync(fixture.calls.catalogPath), false);
+});
+
+test('Codex removes the temporary model catalog when launch fails', async () => {
+  const fixture = launchDependencies({
+    valid: true,
+    models: ['gpt-5.6-sol'],
+    modelMetadata: [],
+  }, {
+    launchError: new Error('simulated Codex startup failure'),
+  });
+
+  await assert.rejects(
+    launchCodexForService({
+      service: 'routerlab',
+      token: NATIVE_TEST_TOKEN,
+      noPrompt: true,
+    }, fixture.dependencies),
+    /simulated Codex startup failure/,
+  );
+
+  assert.equal(fixture.calls.launches.length, 1);
+  assert.ok(fixture.calls.catalogPath);
+  assert.equal(fs.existsSync(fixture.calls.catalogPath), false);
 });
 
 test('Codex rejects routing overrides before CLI detection, token use, or model discovery', async () => {

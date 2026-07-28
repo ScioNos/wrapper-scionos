@@ -23,7 +23,6 @@ export const CODEX_ALLOWED_MODELS = {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
-    'kimi-k3',
     'grok-4.5',
     'MiniMax-M3',
   ],
@@ -40,9 +39,15 @@ export const CODEX_ROUTERLAB_MODELS = CODEX_ALLOWED_MODELS.routerlab;
 export const CODEX_LLM_MODELS = CODEX_ALLOWED_MODELS.llm;
 export const DEFAULT_CODEX_LLM_MODEL = DEFAULT_CODEX_MODEL.llm;
 
-// Kept only so status/restore can detect and remove files created by older releases.
 export const CODEX_MODEL_CATALOG_FILENAME = 'wrapper-scionos-model-catalog.json';
 export const CODEX_CONFIG_BACKUP_FILENAME = 'config.toml.wrapper-scionos-backup';
+const FALLBACK_CONTEXT_WINDOW = 128000;
+const FALLBACK_BASE_INSTRUCTIONS = 'You are Codex, a coding agent. Follow the active system, developer, and user instructions.';
+const FALLBACK_REASONING_LEVELS = [
+  { effort: 'low', description: 'Fast responses with lighter reasoning' },
+  { effort: 'medium', description: 'Balanced speed and reasoning depth' },
+  { effort: 'high', description: 'Greater reasoning depth for complex tasks' },
+];
 export function assertCodexCliAvailable() {
   const codex = detectCodexCli();
   if (!codex.installed) {
@@ -107,11 +112,13 @@ export function buildCodexRuntimeArgs({
   providerName = 'routerlab',
   baseUrl,
   model = DEFAULT_CODEX_MODEL.routerlab,
+  modelCatalogPath = null,
 } = {}) {
   const q = (value) => JSON.stringify(value);
   const overrides = [
     `model_provider=${q('custom')}`,
     `model=${q(model)}`,
+    ...(modelCatalogPath ? [`model_catalog_json=${q(modelCatalogPath)}`] : []),
     `model_providers.custom.name=${q(providerName)}`,
     `model_providers.custom.base_url=${q(baseUrl)}`,
     `model_providers.custom.wire_api=${q('responses')}`,
@@ -131,6 +138,79 @@ export function defaultCodexModelForService(serviceValue = 'routerlab') {
 
 export function buildCodexAuth(apiKey = '') {
   return { OPENAI_API_KEY: apiKey };
+}
+
+export function buildCodexModelCatalog({
+  models = CODEX_ALLOWED_MODELS.routerlab,
+  modelMetadata = [],
+} = {}) {
+  const metadataById = new Map(modelMetadata.map((entry) => [entry.id, entry]));
+
+  return {
+    models: models.map((model, index) => {
+      const metadata = metadataById.get(model) ?? {};
+      const contextWindow = metadata.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+      const inputModalities = Array.isArray(metadata.inputModalities) && metadata.inputModalities.length > 0
+        ? metadata.inputModalities
+        : ['text'];
+      const displayName = metadata.displayName ?? codexModelDisplayName(model);
+
+      return {
+        slug: model,
+        display_name: displayName,
+        description: metadata.description ?? displayName,
+        default_reasoning_level: metadata.defaultReasoningLevel ?? 'medium',
+        supported_reasoning_levels: metadata.supportedReasoningLevels ?? FALLBACK_REASONING_LEVELS,
+        shell_type: 'shell_command',
+        visibility: 'list',
+        supported_in_api: true,
+        priority: 1000 + index,
+        additional_speed_tiers: [],
+        service_tiers: [],
+        default_service_tier: null,
+        availability_nux: null,
+        upgrade: null,
+        base_instructions: metadata.baseInstructions ?? FALLBACK_BASE_INSTRUCTIONS,
+        default_reasoning_summary: 'none',
+        support_verbosity: false,
+        default_verbosity: null,
+        truncation_policy: { mode: 'bytes', limit: 10000 },
+        supports_parallel_tool_calls: metadata.supportsParallelToolCalls === true,
+        supports_image_detail_original: inputModalities.includes('image'),
+        context_window: contextWindow,
+        max_context_window: contextWindow,
+        effective_context_window_percent: 95,
+        experimental_supported_tools: [],
+        input_modalities: inputModalities,
+        supports_search_tool: metadata.supportsSearch === true,
+      };
+    }),
+  };
+}
+
+export function writeCodexRuntimeModelCatalog({
+  models = CODEX_ALLOWED_MODELS.routerlab,
+  modelMetadata = [],
+  tmpDir = os.tmpdir(),
+} = {}) {
+  const catalogDir = fs.mkdtempSync(path.join(tmpDir, 'wrapper-scionos-codex-'));
+  const catalogPath = path.join(catalogDir, CODEX_MODEL_CATALOG_FILENAME);
+  fs.writeFileSync(
+    catalogPath,
+    `${JSON.stringify(buildCodexModelCatalog({ models, modelMetadata }), null, 2)}\n`,
+    { encoding: 'utf8', mode: 0o600 },
+  );
+  return { path: catalogPath, directory: catalogDir };
+}
+
+export function cleanupCodexRuntimeModelCatalog(catalog) {
+  if (!catalog?.path || !catalog?.directory) return;
+  fs.rmSync(catalog.path, { force: true });
+  try {
+    fs.rmdirSync(catalog.directory);
+  } catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY') throw error;
+  }
 }
 
 function resolveCodexPaths(paths) {

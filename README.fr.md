@@ -12,7 +12,7 @@ Wrapper en ligne de commande ScioNos pour Claude Code, Claude Desktop et Codex C
 - Codex CLI >=0.144.1 pour les lancements Codex.
 - Windows, macOS ou claude-desktop-debian sous Linux pour les profils Claude Desktop.
 
-> **Avertissement :** `--service llm` est actuellement fortement dégradé et ne doit pas être utilisé. Le wrapper affiche une alerte très visible avant toute commande exécutée avec ce service.
+> **Disponibilité limitée :** certaines fonctionnalités de `--service llm` peuvent être limitées. Le wrapper affiche `ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED` avant les commandes qui utilisent ce service.
 
 ## Installation et modes d’entrée
 
@@ -81,7 +81,7 @@ Claude Code 2.1.220 ou plus récent est lancé via un proxy loopback. Les identi
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Résume ce dépôt"
 
-Pour `--service llm`, la stratégie `claude` est active et associe Opus à `claude-opus-4-8`, Sonnet à `claude-sonnet-5` et Haiku à `claude-haiku-4-5-20251001`. Les sous-agents Claude Code utilisent `claude-sonnet-5` pour toutes les stratégies LLM.
+Pour `--service llm`, la stratégie `claude` est active et associe Opus à `claude-opus-5`, Sonnet à `claude-sonnet-5` et Haiku à `claude-haiku-4-5`. Les sous-agents Claude Code utilisent `claude-haiku-4-5` pour toutes les stratégies LLM.
 
 Claude Code cible toujours le service officiel via son proxy loopback dédié. Le wrapper génère `ANTHROPIC_BASE_URL` uniquement pour le processus enfant ; une valeur utilisateur est ignorée. L’ancien `ANTHROPIC_AUTH_TOKEN` reste accepté comme source d’entrée avec son avertissement de dépréciation, mais le token brut et toutes les variables de token RouterLab sont retirés de l’environnement enfant. Claude reçoit seulement un identifiant aléatoire propre au proxy local et à la durée du processus. Les variables de fournisseur, endpoint, authentification, en-têtes et routage de modèle sont assainies ; les variables natives indépendantes concernant outils, MCP, certificats et réseau restent héritées. Le loopback est ajouté à `NO_PROXY` et `no_proxy`.
 
@@ -124,15 +124,17 @@ Codex se connecte directement au point d’accès Responses RouterLab sélection
 Le wrapper autorise les modèles initiaux suivants :
 
 - `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`, `minimax-m3`.
-- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `kimi-k3`, `grok-4.5`, `MiniMax-M3`.
+- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `grok-4.5`, `MiniMax-M3`.
 
 Avant le lancement, `GET /v1/models` sert uniquement à croiser cette liste avec les identifiants actuellement disponibles sur RouterLab. Un `--model` explicite doit correspondre exactement à un identifiant disponible ; aucune substitution n’est faite. Le mode interactif propose l’intersection et sélectionne automatiquement le modèle lorsqu’il n’en reste qu’un. `--no-prompt` sans `--model` exige que `gpt-5.6-sol` soit disponible.
 
 Tous les échecs de découverte bloquent le lancement : erreur réseau, timeout, JSON invalide, HTTP 401/403, erreur serveur ou intersection vide. Les options `--direct`, `--proxy` et `--transport` ont été supprimées, car l’accès direct est désormais le seul transport Codex.
 
-La session reçoit seulement six surcharges Codex : `model_provider`, `model`, le `name` du fournisseur, son `base_url`, `wire_api="responses"` et `env_key="OPENAI_API_KEY"`. Le token RouterLab est transmis sans modification au processus Codex via `OPENAI_API_KEY`. Les arguments natifs après `--` sont conservés, sauf ceux qui peuvent remplacer le routage ou la sélection validés par le wrapper : `-c`/`--config`, `-m`/`--model`, `--oss`, `--local-provider`, `-p`/`--profile`, `--remote` et `--remote-auth-token-env`. Utilise `--model` avant `--` pour choisir un modèle RouterLab autorisé.
+Au lancement, la session reçoit sept surcharges Codex : `model_provider`, `model`, `model_catalog_json`, le `name` du fournisseur, son `base_url`, `wire_api="responses"` et `env_key="OPENAI_API_KEY"`. Le token RouterLab est transmis sans modification au processus Codex via `OPENAI_API_KEY`. Les arguments natifs après `--` sont conservés, sauf ceux qui peuvent remplacer le routage ou la sélection validés par le wrapper : `-c`/`--config`, `-m`/`--model`, `--oss`, `--local-provider`, `-p`/`--profile`, `--remote` et `--remote-auth-token-env`. Utilise `--model` avant `--` pour choisir un modèle RouterLab autorisé.
 
-Le wrapper ne génère aucun catalogue. Il ne fournit ni fenêtre de contexte, ni instructions, ni niveaux de raisonnement, ni modalités, ni déclaration de shell/outils, ni recherche, troncature ou priorité. Il ne modifie pas non plus le sandbox, les approbations, MCP, les hooks ou les fichiers d’authentification. Codex conserve son comportement natif et son propre sélecteur après le démarrage ; RouterLab/LiteLLM reste l’autorité finale pour tout changement ultérieur de modèle.
+Après une découverte réussie, le wrapper écrit un catalogue de démarrage temporaire contenant uniquement l’intersection entre les modèles découverts et ceux autorisés pour le service sélectionné, dans l’ordre configuré. Les métadonnées RouterLab sont normalisées pour Codex ; des valeurs conservatrices sont utilisées lorsque des champs optionnels manquent. Il n’existe aucun fallback en cas d’échec de découverte : le lancement s’arrête au lieu d’exposer un catalogue périmé. Cette liste est celle affichée par `/model`.
+
+Le catalogue ne contient aucun identifiant, reste disponible uniquement pendant l’exécution du processus enfant Codex et est supprimé après un lancement réussi comme après une erreur. Le wrapper n’écrit jamais `config.toml`, `auth.json`, les réglages sandbox/approbation, MCP, profils ou autres préférences Codex.
 
 Les destinations de production sont fixes : `routerlab` utilise `https://api.routerlab.ch/v1` et `llm` utilise `https://llm-api.routerlab.ch/v1`. Les valeurs utilisateur de `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL` et `ANTHROPIC_BASE_URL` sont ignorées avec un avertissement. Les variables de token restent prises en charge.
 
@@ -142,7 +144,7 @@ L’exclusivité RouterLab concerne uniquement le trafic de découverte et d’i
 
 Quand Codex est choisi depuis le menu interactif, un échec de démarrage ou une sortie Codex non nulle affiche l’erreur et revient au menu principal. Une sortie Codex normale ferme le wrapper. Les commandes directes `codex launch` conservent le code de sortie du processus Codex.
 
-`codex template` affiche la configuration native non persistante du fournisseur, sans catalogue. `codex status` et `codex restore` restent disponibles uniquement pour inspecter et nettoyer les configurations ou catalogues créés par d’anciennes versions. Un backup historique est restauré automatiquement ; sans backup, `config.toml` est toujours conservé et un nettoyage manuel est signalé. Le catalogue historique propre au wrapper peut être supprimé séparément.
+`codex template` affiche les six réglages de routage du fournisseur et du modèle. Le chemin éphémère `model_catalog_json` est créé uniquement par `codex launch`, après la découverte des modèles. `codex status` et `codex restore` restent disponibles uniquement pour inspecter et nettoyer les configurations ou catalogues créés par d’anciennes versions. Un backup historique est restauré automatiquement ; sans backup, `config.toml` est toujours conservé et un nettoyage manuel est signalé. L’état d’exécution actuel est nettoyé automatiquement.
 
 ## Compatibilité 4.x
 
@@ -168,7 +170,7 @@ Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ig
 
 `npm run test:entry-modes` empaquette l’arbre de travail courant dans un tarball temporaire, l’installe dans un préfixe isolé, puis ouvre et quitte le menu interactif via `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos` et `npx wrapper-scionos --service llm`. Il ne nécessite ni installation globale ni version npm déjà publiée.
 
-`npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles, et `npm run test:codex-real` valide le Codex installé avec les surcharges natives du fournisseur et sans catalogue. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
+`npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles. `npm run test:codex-real` valide une vraie requête Codex non interactive contre un endpoint Responses local et vérifie via `app-server` que `model/list` expose le catalogue temporaire dans l’ordre attendu avec le modèle sélectionné actif. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
 Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.0.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 

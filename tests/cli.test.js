@@ -36,8 +36,8 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   );
   assert.match(stripVTControlCharacters(formatBanner('A'.repeat(60))), /A{60}/);
   const llmAlert = stripVTControlCharacters(formatServiceHealthAlert(' LLM '));
-  assert.match(llmAlert, /SERVICE FORTEMENT DÉGRADÉ/);
-  assert.match(llmAlert, /ROUTERLAB LLM — NE PAS UTILISER/);
+  assert.match(llmAlert, /LIMITED AVAILABILITY/);
+  assert.match(llmAlert, /ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED/);
   assert.match(llmAlert, /╔═+╗/);
   assert.equal(formatServiceHealthAlert('routerlab'), '');
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {

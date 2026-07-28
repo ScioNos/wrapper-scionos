@@ -5,14 +5,20 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { buildCodexRuntimeArgs } from '../src/apps/codex.js';
+import {
+  buildCodexRuntimeArgs,
+  cleanupCodexRuntimeModelCatalog,
+  writeCodexRuntimeModelCatalog,
+} from '../src/apps/codex.js';
 import { detectCodexCli } from '../src/platform/detect.js';
 import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 
 const MODEL = 'gpt-5.6-sol';
+const CATALOG_MODELS = [MODEL, 'MiniMax-M3'];
+const CATALOG_LABELS = ['GPT 5.6 Sol', 'MiniMax M3'];
 const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 
-test('installed Codex accepts the native RouterLab provider configuration without a catalog', {
+test('installed Codex uses the temporary RouterLab catalog and direct Responses transport', {
   timeout: 45000,
 }, async (t) => {
   const codex = detectCodexCli();
@@ -25,6 +31,8 @@ test('installed Codex accepts the native RouterLab provider configuration withou
   fs.mkdirSync(codexHome, { recursive: true });
   const requests = [];
   let server = null;
+  let catalog = null;
+  let catalogPath = null;
 
   try {
     server = createResponsesServer(requests);
@@ -33,6 +41,16 @@ test('installed Codex accepts the native RouterLab provider configuration withou
     assert.equal(typeof address, 'object');
     assert.equal(address.address, '127.0.0.1');
     const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+    catalog = writeCodexRuntimeModelCatalog({
+      models: CATALOG_MODELS,
+      modelMetadata: [
+        { id: MODEL, displayName: CATALOG_LABELS[0] },
+        { id: 'MiniMax-M3', displayName: CATALOG_LABELS[1] },
+      ],
+      tmpDir: tempDir,
+    });
+    catalogPath = catalog.path;
+    assert.equal(fs.existsSync(catalogPath), true);
 
     const args = [
       'exec',
@@ -51,9 +69,39 @@ test('installed Codex accepts the native RouterLab provider configuration withou
         providerName: 'routerlab-local-smoke',
         baseUrl,
         model: MODEL,
+        modelCatalogPath: catalogPath,
       }),
       'Reply with exactly codex-smoke-ok and do not call tools.',
     ];
+    const catalogOverride = `model_catalog_json=${JSON.stringify(catalogPath)}`;
+    assert.equal(args.includes(catalogOverride), true);
+
+    const listedModels = await listCodexModels(
+      codex.cliPath,
+      [
+        ...buildCodexRuntimeArgs({
+          providerName: 'routerlab-local-smoke',
+          baseUrl,
+          model: MODEL,
+          modelCatalogPath: catalogPath,
+        }),
+        'app-server',
+      ],
+      {
+        ...process.env,
+        CODEX_HOME: codexHome,
+        OPENAI_API_KEY: LOCAL_API_KEY,
+        NO_COLOR: '1',
+      },
+    );
+    assert.deepEqual(listedModels.data.map((entry) => entry.model), CATALOG_MODELS);
+    assert.deepEqual(listedModels.data.map((entry) => entry.displayName), CATALOG_LABELS);
+    assert.deepEqual(
+      listedModels.data.map((entry) => entry.isDefault),
+      [true, false],
+    );
+    assert.equal(fs.existsSync(catalogPath), true);
+
     const result = await runCodex(codex.cliPath, args, {
       ...process.env,
       CODEX_HOME: codexHome,
@@ -71,9 +119,11 @@ test('installed Codex accepts the native RouterLab provider configuration withou
     assert.equal(request.url, '/v1/responses');
     assert.equal(request.authorization, `Bearer ${LOCAL_API_KEY}`);
     assert.equal(request.body.model, MODEL);
-    assert.equal(args.some((argument) => argument.includes('model_catalog_json')), false);
+    assert.equal(fs.existsSync(catalogPath), true);
   } finally {
     await closeServer(server);
+    cleanupCodexRuntimeModelCatalog(catalog);
+    if (catalogPath) assert.equal(fs.existsSync(catalogPath), false);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
@@ -238,6 +288,102 @@ async function runCodex(command, args, env) {
     };
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+async function listCodexModels(command, args, env) {
+  const invocation = buildInteractiveCliInvocation(command, args);
+  const child = spawn(invocation.command, invocation.args, {
+    cwd: process.cwd(),
+    env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+    ...(invocation.spawnOptions ?? {}),
+  });
+  let stdout = '';
+  let stderr = '';
+  let buffer = '';
+  let initialized = false;
+  let settled = false;
+  let timer = null;
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      const succeed = (result) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      const diagnostic = () => `stdout:\n${stdout}\nstderr:\n${stderr}`;
+
+      child.once('error', fail);
+      child.once('exit', (code, signal) => {
+        fail(new Error(`Codex app-server exited before model/list completed (${code ?? signal}).\n${diagnostic()}`));
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      child.stdout.on('data', (chunk) => {
+        const text = chunk.toString();
+        stdout += text;
+        buffer += text;
+        let newline;
+        while ((newline = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, newline).trim();
+          buffer = buffer.slice(newline + 1);
+          if (!line) continue;
+
+          let message;
+          try {
+            message = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (message.id === 0 && !initialized) {
+            initialized = true;
+            child.stdin.write(`${JSON.stringify({ method: 'initialized' })}\n`);
+            child.stdin.write(`${JSON.stringify({
+              method: 'model/list',
+              id: 1,
+              params: { limit: 100, includeHidden: false },
+            })}\n`);
+          } else if (message.id === 1) {
+            if (message.error) {
+              fail(new Error(`Codex model/list failed: ${JSON.stringify(message.error)}\n${diagnostic()}`));
+            } else {
+              succeed(message.result);
+            }
+          }
+        }
+      });
+
+      timer = setTimeout(() => {
+        fail(new Error(`Codex app-server model/list timed out.\n${diagnostic()}`));
+      }, 30000);
+      timer.unref?.();
+
+      child.stdin.write(`${JSON.stringify({
+        method: 'initialize',
+        id: 0,
+        params: {
+          clientInfo: {
+            name: 'wrapper-scionos-smoke',
+            title: 'wrapper-scionos smoke test',
+            version: '5.0.0',
+          },
+          capabilities: null,
+        },
+      })}\n`);
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+    child.stdin.end();
+    terminateChildTree(child);
   }
 }
 

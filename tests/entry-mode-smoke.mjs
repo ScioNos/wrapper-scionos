@@ -64,8 +64,8 @@ assert.equal(result.code, 0, `CLI exited with ${result.code}.\nstdout:\n${stdout
 assert.match(stdout, /Choose where you want to go:/);
 if (args.includes('llm')) {
   assert.match(stdout, /Service: RouterLab LLM/);
-  assert.match(stderr, /LIMITED AVAILABILITY/);
-  assert.match(stderr, /ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED/);
+  assert.match(stderr, /MODEL AVAILABILITY/);
+  assert.match(stderr, /ROUTERLAB LLM — AVAILABLE MODELS MAY VARY/);
 } else {
   assert.match(stdout, /Service: RouterLab(?! LLM)/);
   assert.doesNotMatch(stderr, /LIMITED AVAILABILITY/);

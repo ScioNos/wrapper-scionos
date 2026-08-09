@@ -1,7 +1,12 @@
 import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './services.js';
 
-export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5-20251001';
+export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5';
 export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
+export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
+  'claude-haiku-4-5',
+  'deepseek-v4-flash-0731',
+  'gpt-5.6-luna',
+];
 
 export const DEFAULT_CLAUDE_MODELS = [
   'claude-fable-5',
@@ -11,26 +16,21 @@ export const DEFAULT_CLAUDE_MODELS = [
 ];
 
 export const LLM_CLAUDE_MODELS = [
+  'claude-fable-5',
   'claude-opus-5',
   'claude-sonnet-5',
-  'claude-haiku-4-5',
 ];
 
 export const AWS_CLAUDE_MODELS = [
-  'aws-claude-haiku-4-5-20251001',
-  'aws-claude-sonnet-4-6',
-  'aws-claude-opus-4-8',
+  'aws-claude-haiku-4-5',
+  'aws-claude-sonnet-5',
+  'aws-claude-opus-5',
 ];
 
 export const OPENAI_GPT_MODELS = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
   'gpt-5.6-luna',
-  ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL,
-];
-
-export const DEEPSEEK_V4_MODELS = [
-  'deepseek-v4-pro',
   ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL,
 ];
 
@@ -97,24 +97,23 @@ export const STRATEGIES = [
     selectionDescription: 'Use aws-claude-haiku, aws-claude-sonnet, aws-claude-opus.',
     requiredModels: AWS_CLAUDE_MODELS,
     environment: createModelEnvironment({
-      opus: 'aws-claude-opus-4-8',
-      sonnet: 'aws-claude-sonnet-4-6',
-      haiku: 'aws-claude-haiku-4-5-20251001',
-      subagent: 'aws-claude-haiku-4-5-20251001',
+      opus: 'aws-claude-opus-5',
+      sonnet: 'aws-claude-sonnet-5',
+      haiku: 'aws-claude-haiku-4-5',
+      subagent: 'aws-claude-haiku-4-5',
     }),
   },
   {
     value: 'claude',
     name: 'Claude',
-    description: 'Sets Claude Code model environment variables to standard Claude variants.',
+    description: 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5.',
     selectionName: 'Claude',
-    selectionDescription: 'Use claude-haiku, claude-sonnet, claude-opus.',
+    selectionDescription: 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5.',
     requiredModels: LLM_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-opus-5',
       sonnet: 'claude-sonnet-5',
-      haiku: 'claude-haiku-4-5',
-      subagent: 'claude-haiku-4-5',
+      haiku: 'claude-fable-5',
     }),
   },
   {
@@ -128,57 +127,6 @@ export const STRATEGIES = [
       opus: 'gpt-5.6-sol',
       sonnet: 'gpt-5.6-terra',
       haiku: 'gpt-5.6-luna',
-    }),
-  },
-  {
-    value: 'deepseek-v4',
-    name: 'deepseek-v4',
-    selectionName: 'deepseek-v4',
-    description: 'Uses deepseek-v4-pro for all main model aliases.',
-    selectionDescription: 'Uses deepseek-v4-pro for Opus, Sonnet, and Haiku.',
-    aliases: ['deepseek-v4-beta'],
-    requiredModels: DEEPSEEK_V4_MODELS,
-    environment: createModelEnvironment({
-      opus: 'deepseek-v4-pro',
-      sonnet: 'deepseek-v4-pro',
-      haiku: 'deepseek-v4-pro',
-    }),
-  },
-  {
-    value: 'claude-MiniMax-M3',
-    name: 'MiniMax-M3',
-    selectionName: 'MiniMax-M3',
-    description: 'Sets all Claude Code model environment variables to claude-MiniMax-M3.',
-    selectionDescription: 'Uses claude-MiniMax-M3 for all model aliases.',
-    requiredModels: ['claude-MiniMax-M3'],
-    environment: createSingleModelEnvironment('claude-MiniMax-M3'),
-  },
-  {
-    value: 'claude-qwen3.7-max',
-    name: 'qwen3.7-max',
-    selectionName: 'qwen3.7-max',
-    description: 'Sets Claude Code main model aliases to claude-qwen3.7-max and subagents to claude-qwen3.6-flash.',
-    selectionDescription: 'Uses claude-qwen3.7-max for main model aliases and claude-qwen3.6-flash for subagents.',
-    requiredModels: ['claude-qwen3.7-max', 'claude-qwen3.6-flash'],
-    environment: createModelEnvironment({
-      opus: 'claude-qwen3.7-max',
-      sonnet: 'claude-qwen3.7-max',
-      haiku: 'claude-qwen3.7-max',
-      subagent: 'claude-qwen3.6-flash',
-    }),
-  },
-  {
-    value: 'claude-kimi-k2.7-code',
-    name: 'kimi-k2.7-code',
-    selectionName: 'kimi-k2.7-code',
-    description: 'Uses kimi-k2.7-code for all main model aliases.',
-    selectionDescription: 'Uses kimi-k2.7-code for Opus, Sonnet, and Haiku.',
-    aliases: ['kimi-k2.7', 'kimi-k2.7-code'],
-    requiredModels: ['kimi-k2.7-code', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'kimi-k2.7-code',
-      sonnet: 'kimi-k2.7-code',
-      haiku: 'kimi-k2.7-code',
     }),
   },
   {
@@ -214,24 +162,95 @@ export const STRATEGIES = [
       haiku: 'minimax-m3',
     }),
   },
+  {
+    value: 'qwen3.8-max',
+    name: 'qwen3.8-max',
+    selectionName: 'qwen3.8-max',
+    description: 'Uses qwen3.8-max for all main model aliases.',
+    selectionDescription: 'Uses qwen3.8-max for Opus, Sonnet, and Haiku.',
+    requiredModels: ['qwen3.8-max'],
+    environment: createModelEnvironment({
+      opus: 'qwen3.8-max',
+      sonnet: 'qwen3.8-max',
+      haiku: 'qwen3.8-max',
+    }),
+  },
+  {
+    value: 'kimi-k3',
+    name: 'kimi-k3',
+    selectionName: 'kimi-k3',
+    description: 'Uses kimi-k3 for all main model aliases.',
+    selectionDescription: 'Uses kimi-k3 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['kimi-k3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'kimi-k3',
+      sonnet: 'kimi-k3',
+      haiku: 'kimi-k3',
+    }),
+  },
+  {
+    value: 'grok-4.5',
+    name: 'grok-4.5',
+    selectionName: 'grok-4.5',
+    description: 'Uses grok-4.5 for all main model aliases.',
+    selectionDescription: 'Uses grok-4.5 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['grok-4.5'],
+    environment: createModelEnvironment({
+      opus: 'grok-4.5',
+      sonnet: 'grok-4.5',
+      haiku: 'grok-4.5',
+    }),
+  },
+  {
+    value: 'deepseek-v4-flash-0731',
+    name: 'deepseek-v4-flash-0731',
+    selectionName: 'deepseek-v4-flash-0731',
+    description: 'Uses deepseek-v4-flash-0731 for all main model aliases.',
+    selectionDescription: 'Uses deepseek-v4-flash-0731 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['deepseek-v4-flash-0731', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'deepseek-v4-flash-0731',
+      sonnet: 'deepseek-v4-flash-0731',
+      haiku: 'deepseek-v4-flash-0731',
+    }),
+  },
 ];
+
+function llmSingleModelStrategy(model) {
+  return {
+    description: `Uses ${model} for all main model aliases. Select a subagent model at launch.`,
+    selectionDescription: `Uses ${model} for all main model aliases. Select a subagent model at launch.`,
+    requiredModels: [model],
+    allowSubagentOverride: false,
+    environment: createModelEnvironment({ opus: model, sonnet: model, haiku: model }),
+  };
+}
 
 const LLM_STRATEGY_OVERRIDES = {
   claude: {
-    description: 'Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
-    selectionDescription: 'Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
+    description: 'Custom and Haiku => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
+    selectionDescription: 'Custom and Haiku => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
     requiredModels: LLM_CLAUDE_MODELS,
     allowSubagentOverride: false,
+    claudeCodeEnvironment: {
+      ANTHROPIC_CUSTOM_MODEL_OPTION: 'claude-fable-5',
+      ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
+      ...createModelEnvironment({
+        opus: 'claude-opus-5',
+        sonnet: 'claude-sonnet-5',
+        haiku: 'claude-fable-5',
+      }),
+    },
     environment: createModelEnvironment({
       opus: 'claude-opus-5',
       sonnet: 'claude-sonnet-5',
-      haiku: 'claude-haiku-4-5',
+      haiku: 'claude-fable-5',
     }),
   },
   'claude-gpt': {
-    description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna, subagents => Claude Haiku 4.5.',
-    selectionDescription: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna, subagents => Claude Haiku 4.5.',
-    requiredModels: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
+    description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna. Select a subagent model at launch.',
+    selectionDescription: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna. Select a subagent model at launch.',
+    requiredModels: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'gpt-5.6-sol',
@@ -240,9 +259,9 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'glm-5.2': {
-    description: 'Uses glm-5.2 for all main model aliases and Claude Haiku 4.5 for subagents.',
-    selectionDescription: 'Uses glm-5.2 for all main model aliases and Claude Haiku 4.5 for subagents.',
-    requiredModels: ['glm-5.2', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
+    description: 'Uses glm-5.2 for all main model aliases. Select a subagent model at launch.',
+    selectionDescription: 'Uses glm-5.2 for all main model aliases. Select a subagent model at launch.',
+    requiredModels: ['glm-5.2'],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'glm-5.2',
@@ -250,39 +269,11 @@ const LLM_STRATEGY_OVERRIDES = {
       haiku: 'glm-5.2',
     }),
   },
-  'claude-qwen3.7-max': {
-    description: 'Uses qwen3.7-max for all main model aliases and Claude Haiku 4.5 for subagents.',
-    selectionDescription: 'Uses qwen3.7-max for all main model aliases and Claude Haiku 4.5 for subagents.',
-    requiredModels: ['qwen3.7-max', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'qwen3.7-max',
-      sonnet: 'qwen3.7-max',
-      haiku: 'qwen3.7-max',
-    }),
-  },
-  'claude-MiniMax-M3': {
-    description: 'Uses MiniMax-M3 for all main model aliases and Claude Haiku 4.5 for subagents.',
-    selectionDescription: 'Uses MiniMax-M3 for all main model aliases and Claude Haiku 4.5 for subagents.',
-    requiredModels: ['MiniMax-M3', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'MiniMax-M3',
-      sonnet: 'MiniMax-M3',
-      haiku: 'MiniMax-M3',
-    }),
-  },
-  'deepseek-v4': {
-    description: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Haiku 4.5.',
-    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro, Haiku => deepseek-v4-flash, subagents => Claude Haiku 4.5.',
-    requiredModels: ['deepseek-v4-pro', 'deepseek-v4-flash', LLM_CLAUDE_CODE_SUBAGENT_MODEL],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'deepseek-v4-pro',
-      sonnet: 'deepseek-v4-pro',
-      haiku: 'deepseek-v4-flash',
-    }),
-  },
+  'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
+  'kimi-k3': llmSingleModelStrategy('kimi-k3'),
+  'minimax-m3': llmSingleModelStrategy('minimax-m3'),
+  'grok-4.5': llmSingleModelStrategy('grok-4.5'),
+  'deepseek-v4-flash-0731': llmSingleModelStrategy('deepseek-v4-flash-0731'),
 };
 
 export function normalizeStrategyValue(strategyValue) {
@@ -374,7 +365,15 @@ export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
       if (model) models.add(model);
     }
   }
+  if (normalizeServiceValue(serviceValue) === 'llm') {
+    for (const model of LLM_CLAUDE_CODE_SUBAGENT_MODELS) models.add(model);
+  }
   return [...models];
+}
+
+export function isSupportedClaudeCodeSubagentModel(model, serviceValue = DEFAULT_SERVICE) {
+  return normalizeServiceValue(serviceValue) === 'llm'
+    && LLM_CLAUDE_CODE_SUBAGENT_MODELS.includes(String(model ?? '').trim());
 }
 
 export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAULT_SERVICE) {

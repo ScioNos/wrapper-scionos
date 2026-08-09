@@ -18,8 +18,8 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
     ['gpt-5.6-sol', 'glm-5.2', 'minimax-m3'],
   );
   assert.deepEqual(
-    availableCodexModels('llm', ['MiniMax-M3', 'gpt-5.6-luna']),
-    ['gpt-5.6-luna', 'MiniMax-M3'],
+    availableCodexModels('llm', ['deepseek-v4-flash-0731', 'qwen3.8-max', 'gpt-5.6-luna']),
+    ['gpt-5.6-luna', 'qwen3.8-max', 'deepseek-v4-flash-0731'],
   );
 });
 
@@ -59,13 +59,13 @@ test('Codex forwarded arguments preserve native options but cannot replace Route
 test('Codex exact requested model is preserved and never substituted', async () => {
   const service = requireServiceConfig('llm');
   assert.equal(await resolveCodexLaunchModel({
-    requestedModel: 'MiniMax-M3',
-    availableModels: ['gpt-5.6-sol', 'MiniMax-M3'],
+    requestedModel: 'qwen3.8-max',
+    availableModels: ['gpt-5.6-sol', 'qwen3.8-max'],
     service,
-  }), 'MiniMax-M3');
+  }), 'qwen3.8-max');
   await assert.rejects(resolveCodexLaunchModel({
-    requestedModel: 'minimax-m3',
-    availableModels: ['MiniMax-M3'],
+    requestedModel: 'qwen3.7-max',
+    availableModels: ['qwen3.8-max'],
     service,
   }), /not available/);
 });

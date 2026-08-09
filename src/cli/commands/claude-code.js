@@ -8,6 +8,7 @@ export async function handleClaudeCode(options, version = null, claudeArgs = opt
   return launchClaudeCode({
     serviceValue: options.service,
     strategyValue: options.strategy,
+    subagentModel: options.subagentModel,
     token: options.token,
     noPrompt: options.noPrompt,
     claudeArgs,

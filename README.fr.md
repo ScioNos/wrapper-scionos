@@ -81,7 +81,7 @@ Claude Code 2.1.220 ou plus récent est lancé via un proxy loopback. Les identi
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Résume ce dépôt"
 
-Pour `--service llm`, la stratégie `claude` est active et associe Opus à `claude-opus-5`, Sonnet à `claude-sonnet-5` et Haiku à `claude-haiku-4-5`. Les sous-agents Claude Code utilisent `claude-haiku-4-5` pour toutes les stratégies LLM.
+Pour `--service llm`, la stratégie `claude` associe Custom et Haiku à `claude-fable-5`, Opus à `claude-opus-5` et Sonnet à `claude-sonnet-5`. Le catalogue des stratégies LLM est : `claude`, `claude-gpt`, `qwen3.8-max`, `kimi-k3`, `minimax-m3`, `grok-4.5`, `glm-5.2` et `deepseek-v4-flash-0731`. Après le choix de stratégie, Claude Code permet de choisir le sous-agent parmi `claude-haiku-4-5`, `deepseek-v4-flash-0731` et `gpt-5.6-luna`, lorsqu’ils sont présents dans le catalogue de service vérifié. `claude-haiku-4-5` reste la valeur par défaut en mode non interactif ; utilisez `--subagent-model <id>` pour un choix explicite.
 
 Claude Code cible toujours le service officiel via son proxy loopback dédié. Le wrapper génère `ANTHROPIC_BASE_URL` uniquement pour le processus enfant ; une valeur utilisateur est ignorée. L’ancien `ANTHROPIC_AUTH_TOKEN` reste accepté comme source d’entrée avec son avertissement de dépréciation, mais le token brut et toutes les variables de token RouterLab sont retirés de l’environnement enfant. Claude reçoit seulement un identifiant aléatoire propre au proxy local et à la durée du processus. Les variables de fournisseur, endpoint, authentification, en-têtes et routage de modèle sont assainies ; les variables natives indépendantes concernant outils, MCP, certificats et réseau restent héritées. Le loopback est ajouté à `NO_PROXY` et `no_proxy`.
 
@@ -100,7 +100,7 @@ Claude Desktop est pris en charge uniquement via le proxy local authentifié ave
 
 `apply-proxy` ne stocke dans le profil qu’un identifiant local aléatoire de 32 octets ; le token RouterLab reste dans sa source sécurisée. Avant l’application et avant chaque démarrage, le wrapper découvre `/v1/models` directement sur l’endpoint RouterLab fixe et n’expose que l’intersection avec les routes Desktop configurées. Les erreurs de découverte, authentification, redirection, timeout, JSON invalide, catalogue vide ou intersection vide bloquent tout et ne modifient aucun profil.
 
-Pour `--service routerlab`, le catalogue Desktop reflète les stratégies Claude Code de RouterLab. Claude Native expose `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5` et `claude-haiku-4-5-20251001` ; les autres routes couvrent AWS Claude, GPT 5.6, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2` et `minimax-m3`. Seuls les modèles retournés par la découverte RouterLab sont affichés.
+Pour `--service routerlab`, le catalogue Desktop reflète les stratégies Claude Code de RouterLab. Claude Native expose `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5` et `claude-haiku-4-5-20251001` ; les autres routes couvrent AWS Claude, GPT 5.6, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2` et `minimax-m3`. Seuls les modèles retournés par la découverte RouterLab sont affichés.
 
 Les profils utilisent le schéma de métadonnées `wrapperScionos` v2 avec le service fixe, les stratégies, l’origine loopback et les routes vérifiées, sans token RouterLab. Un profil proxy v1 valide est migré après redécouverte en conservant son identifiant local aléatoire. Un profil direct, non géré ou sans métadonnées exige un remplacement explicite avec `apply-proxy --yes` ou une restauration officielle ; un ancien token direct n’est jamais réutilisé.
 
@@ -123,8 +123,8 @@ Codex se connecte directement au point d’accès Responses RouterLab sélection
 
 Le wrapper autorise les modèles initiaux suivants :
 
-- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro`, `kimi-k2.7-code`, `glm-5.2`, `minimax-m3`.
-- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `grok-4.5`, `MiniMax-M3`.
+- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, `minimax-m3`.
+- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `kimi-k3`, `minimax-m3`, `grok-4.5`, `glm-5.2`, `deepseek-v4-flash-0731`.
 
 Avant le lancement, `GET /v1/models` sert uniquement à croiser cette liste avec les identifiants actuellement disponibles sur RouterLab. Un `--model` explicite doit correspondre exactement à un identifiant disponible ; aucune substitution n’est faite. Le mode interactif propose l’intersection et sélectionne automatiquement le modèle lorsqu’il n’en reste qu’un. `--no-prompt` sans `--model` exige que `gpt-5.6-sol` soit disponible.
 
@@ -172,6 +172,6 @@ Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ig
 
 `npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles. `npm run test:codex-real` valide une vraie requête Codex non interactive contre un endpoint Responses local et vérifie via `app-server` que `model/list` expose le catalogue temporaire dans l’ordre attendu avec le modèle sélectionné actif. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.0.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.1.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

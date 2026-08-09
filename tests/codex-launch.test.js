@@ -38,12 +38,12 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
 test('Codex launch is direct, native, and forwards the original RouterLab token', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['not-allowed', 'MiniMax-M3', 'gpt-5.6-sol'],
+    models: ['not-allowed', 'qwen3.8-max', 'gpt-5.6-sol'],
     modelMetadata: [],
   });
   await launchCodexForService({
     service: 'llm',
-    model: 'MiniMax-M3',
+    model: 'qwen3.8-max',
     token: NATIVE_TEST_TOKEN,
     noPrompt: true,
     forwarded: ['--sandbox', 'workspace-write'],
@@ -65,7 +65,7 @@ test('Codex launch is direct, native, and forwards the original RouterLab token'
   assert.equal(launch.updateProcessExitCode, false);
   assert.equal(launch.codexArgs.filter((value) => value === '-c').length, 7);
   assert.deepEqual(launch.codexArgs.slice(-2), ['--sandbox', 'workspace-write']);
-  assert.ok(launch.codexArgs.includes('model="MiniMax-M3"'));
+  assert.ok(launch.codexArgs.includes('model="qwen3.8-max"'));
   assert.ok(launch.codexArgs.includes('model_providers.custom.base_url="https://llm-api.routerlab.ch/v1"'));
   assert.equal(launch.codexArgs.some((value) => value.includes('model_catalog_json')), true);
   assert.equal(launch.codexArgs.some((value) => /^http:\/\/127\.0\.0\.1/.test(value)), false);

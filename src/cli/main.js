@@ -3,7 +3,7 @@ import { CliUsageError, COMMON_OPTION_DEFINITIONS, emitOptionDeprecations, isRec
 import { warnDeprecationOnce } from './deprecations.js';
 import { MENU_ROUTES, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { findStrategy } from '../routerlab/strategies.js';
+import { findStrategy, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
 import { handleAuth } from './commands/auth.js';
 import { handleClaudeCode } from './commands/claude-code.js';
@@ -121,7 +121,7 @@ export function shouldOpenInteractiveMenu(options) {
 }
 
 const OPTION_LABELS = {
-  service: '--service', strategy: '--strategy', model: '--model', token: '--token',
+  service: '--service', strategy: '--strategy', subagentModel: '--subagent-model', model: '--model', token: '--token',
   host: '--host', port: '--port', allowOrigins: '--allow-origin',
   noPrompt: '--no-prompt', yes: '--yes', dryRun: '--dry-run', json: '--json',
   listStrategies: '--list-strategies',
@@ -154,7 +154,7 @@ const COMMAND_OPTIONS = {
 function validateCommand(name, action, options) {
   if (name === 'claude-code') {
     if (options.json) throw usageError('--json cannot be used while launching Claude Code.');
-    validateOptions(name, null, options, new Set(['service', 'strategy', 'noPrompt']));
+    validateOptions(name, null, options, new Set(['service', 'strategy', 'subagentModel', 'noPrompt']));
     validateClaudeOptions(options);
     return;
   }
@@ -199,6 +199,9 @@ function validateClaudeOptions(options) {
   }
   if (options.strategy && !findStrategy(options.strategy, service.value)) {
     throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
+  }
+  if (options.subagentModel && !isSupportedClaudeCodeSubagentModel(options.subagentModel, service.value)) {
+    throw usageError('--subagent-model must be one of: claude-haiku-4-5, deepseek-v4-flash-0731, gpt-5.6-luna (only available with --service llm).');
   }
 }
 

@@ -148,6 +148,40 @@ test('Claude Code rejects a verified catalog with no authorized model', async ()
   assert.equal(proxyStarts, 0);
 });
 
+test('Claude Code accepts a verified RouterLab LLM subagent selection', async () => {
+  const calls = {};
+  await launchClaudeCode({
+    serviceValue: 'llm',
+    strategyValue: 'glm-5.2',
+    subagentModel: 'deepseek-v4-flash-0731',
+    token: 'llm-subagent-token-with-enough-length',
+    noPrompt: true,
+    claudeArgs: ['--print'],
+  }, {
+    detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
+    fetchModelsFn: async () => ({
+      valid: true,
+      models: ['glm-5.2', 'deepseek-v4-flash-0731'],
+    }),
+    chooseStrategyFn: async () => 'glm-5.2',
+    startLongRunningLlmProxyFn: async (options) => {
+      calls.proxy = options;
+      return {
+        baseUrl: 'http://127.0.0.1:43123',
+        gatewayToken: 'generated-local-token',
+        server: {},
+      };
+    },
+    runInteractiveCliFn: async (_cliPath, _args, options) => {
+      calls.env = options.env;
+    },
+    stopLongRunningLlmProxyFn: async () => {},
+  });
+
+  assert.deepEqual(calls.proxy.allowedModels, ['glm-5.2', 'deepseek-v4-flash-0731']);
+  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+});
+
 test('Claude Code preserves a child failure when proxy cleanup also fails', async () => {
   const childError = new Error('child startup failed');
   const cleanupError = new Error('proxy cleanup failed');
@@ -167,7 +201,7 @@ test('Claude Code preserves a child failure when proxy cleanup also fails', asyn
           'gpt-5.6-sol',
           'gpt-5.6-terra',
           'gpt-5.6-luna',
-          'aws-claude-haiku-4-5-20251001',
+          'aws-claude-haiku-4-5',
         ],
       }),
       startLongRunningLlmProxyFn: async () => ({

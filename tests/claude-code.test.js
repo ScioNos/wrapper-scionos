@@ -76,6 +76,30 @@ test('Claude Code launch environment is sanitized without changing native tool v
   assert.equal(env.no_proxy, env.NO_PROXY);
 });
 
+test('Claude Code uses a selected RouterLab LLM subagent model', () => {
+  const service = {
+    ...requireServiceConfig('llm'),
+    baseUrl: 'http://127.0.0.1:43123',
+  };
+  const env = buildClaudeCodeEnvironment(
+    'generated-local-token-with-enough-length',
+    service,
+    'glm-5.2',
+    { env: {}, subagentModel: 'deepseek-v4-flash-0731' },
+  );
+
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+  assert.throws(
+    () => buildClaudeCodeEnvironment(
+      'generated-local-token-with-enough-length',
+      service,
+      'glm-5.2',
+      { env: {}, subagentModel: 'not-allowed' },
+    ),
+    /not supported/,
+  );
+});
+
 test('Claude Native injects the verified Fable option and official model aliases', () => {
   const service = {
     ...requireServiceConfig('routerlab'),
@@ -128,11 +152,12 @@ test('Claude Code exposes Back only when launched from the interactive menu', ()
   assert.equal(guidedChoices.at(-1).value, 'back');
   assert.equal(guidedChoices.at(-1).name, '← Back to home');
 });
-test('Claude Code subagent overrides are removed from the CLI', () => {
-  assert.throws(() => parseOptions([
+test('Claude Code accepts the selected subagent model from the CLI', () => {
+  const options = parseOptions([
     '--subagent-model',
-    'haiku',
-  ]), /has been removed/);
+    'deepseek-v4-flash-0731',
+  ]);
+  assert.equal(options.subagentModel, 'deepseek-v4-flash-0731');
 });
 
 test('Claude Code reports environment precedence without exposing either token', () => {

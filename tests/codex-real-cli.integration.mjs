@@ -14,8 +14,8 @@ import { detectCodexCli } from '../src/platform/detect.js';
 import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 
 const MODEL = 'gpt-5.6-sol';
-const CATALOG_MODELS = [MODEL, 'MiniMax-M3'];
-const CATALOG_LABELS = ['GPT 5.6 Sol', 'MiniMax M3'];
+const CATALOG_MODELS = [MODEL, 'qwen3.8-max'];
+const CATALOG_LABELS = ['GPT 5.6 Sol', 'Qwen 3.8 Max'];
 const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 
 test('installed Codex uses the temporary RouterLab catalog and direct Responses transport', {
@@ -45,7 +45,7 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
       models: CATALOG_MODELS,
       modelMetadata: [
         { id: MODEL, displayName: CATALOG_LABELS[0] },
-        { id: 'MiniMax-M3', displayName: CATALOG_LABELS[1] },
+        { id: 'qwen3.8-max', displayName: CATALOG_LABELS[1] },
       ],
       tmpDir: tempDir,
     });

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.1.0 - 2026-08-09
+
+### Changed
+
+- Refreshed the Codex catalogues. RouterLab now offers `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, and `minimax-m3`; RouterLab LLM additionally offers `qwen3.8-max` and `grok-4.5`.
+- Updated Claude Code routes: RouterLab AWS now uses `aws-claude-opus-5`, `aws-claude-sonnet-5`, and `aws-claude-haiku-4-5`; its DeepSeek and Kimi routes now use `deepseek-v4-flash-0731` and `kimi-k3`.
+- Updated the RouterLab LLM Claude strategy to map Custom and Haiku to `claude-fable-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. It now supports explicit subagent selection among `claude-haiku-4-5`, `deepseek-v4-flash-0731`, and `gpt-5.6-luna`.
+- Aligned the Claude Desktop RouterLab catalogue with the current Claude Code routes.
+- Replaced the LLM availability warning with the softer `MODEL AVAILABILITY — AVAILABLE MODELS MAY VARY` notice.
+- Upgraded `chalk` from 5.6.2 to 6.0.0. The project already requires Node.js 22.13 or newer, which satisfies Chalk 6's Node.js 22 minimum.
+
 ## 5.0.0 - 2026-07-28
 
 ### Breaking Changes

@@ -25,8 +25,8 @@ test('Codex allowlists stay service-scoped', () => {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
-    'deepseek-v4-pro',
-    'kimi-k2.7-code',
+    'deepseek-v4-flash-0731',
+    'kimi-k3',
     'glm-5.2',
     'minimax-m3',
   ]);
@@ -34,8 +34,12 @@ test('Codex allowlists stay service-scoped', () => {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'qwen3.8-max',
+    'kimi-k3',
+    'minimax-m3',
     'grok-4.5',
-    'MiniMax-M3',
+    'glm-5.2',
+    'deepseek-v4-flash-0731',
   ]);
 });
 
@@ -43,11 +47,11 @@ test('Codex native template contains only provider routing fields', () => {
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'deepseek-v4-pro',
+    model: 'deepseek-v4-flash-0731',
   });
   assert.deepEqual(config.split('\n'), [
     'model_provider = "custom"',
-    'model = "deepseek-v4-pro"',
+    'model = "deepseek-v4-flash-0731"',
     '',
     '[model_providers.custom]',
     'name = "routerlab"',
@@ -59,7 +63,7 @@ test('Codex native template contains only provider routing fields', () => {
 });
 
 test('Codex provider-only runtime args preserve all six routing settings and the model id', () => {
-  const model = 'MiniMax-M3';
+  const model = 'qwen3.8-max';
   const args = buildCodexRuntimeArgs({
     providerName: 'llm',
     baseUrl: 'https://llm-api.routerlab.ch/v1',
@@ -79,18 +83,18 @@ test('Codex provider-only runtime args preserve all six routing settings and the
 
 test('Codex runtime catalog exposes only RouterLab models to the native picker', () => {
   const catalog = buildCodexModelCatalog({
-    models: ['MiniMax-M3', 'gpt-5.6-sol'],
+    models: ['qwen3.8-max', 'gpt-5.6-sol'],
     modelMetadata: [{
-      id: 'MiniMax-M3',
-      displayName: 'MiniMax M3',
+      id: 'qwen3.8-max',
+      displayName: 'Qwen 3.8 Max',
       contextWindow: 200000,
       inputModalities: ['text'],
       supportedReasoningLevels: [{ effort: 'medium', description: 'Medium' }],
     }],
   });
 
-  assert.deepEqual(catalog.models.map((entry) => entry.slug), ['MiniMax-M3', 'gpt-5.6-sol']);
-  assert.equal(catalog.models[0].display_name, 'MiniMax M3');
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), ['qwen3.8-max', 'gpt-5.6-sol']);
+  assert.equal(catalog.models[0].display_name, 'Qwen 3.8 Max');
   assert.equal(catalog.models[0].context_window, 200000);
   assert.equal(catalog.models[0].visibility, 'list');
   assert.equal(catalog.models[1].context_window, 128000);
@@ -100,7 +104,7 @@ test('Codex runtime args can point the native model picker at a temporary catalo
   const args = buildCodexRuntimeArgs({
     providerName: 'llm',
     baseUrl: 'https://llm-api.routerlab.ch/v1',
-    model: 'MiniMax-M3',
+    model: 'qwen3.8-max',
     modelCatalogPath: 'C:\\temp\\routerlab-models.json',
   });
 

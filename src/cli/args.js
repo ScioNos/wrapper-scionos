@@ -7,6 +7,7 @@ export { isLoopbackHost };
 export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--service'], value: '<routerlab|llm>', description: 'Select the RouterLab service.' },
   { flags: ['--strategy'], value: '<value>', description: 'Select a model-routing strategy.' },
+  { flags: ['--subagent-model'], value: '<id>', description: 'Select an LLM Claude Code subagent model.' },
   { flags: ['--model'], value: '<value>', description: 'Select the initial Codex model.' },
   { flags: ['--token'], value: '<value>', description: 'Override the service token for supported commands (not Claude Code; visible in shell history).' },
   { flags: ['--host'], value: '<loopback>', description: 'Bind a local proxy to a loopback address.' },
@@ -30,7 +31,7 @@ export class CliUsageError extends Error {
 }
 
 export const OPTION_WITH_VALUE = new Set([
-  '--service', '--strategy', '--model', '--token', '--port', '--host', '--allow-origin',
+  '--service', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host', '--allow-origin',
 ]);
 
 const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--list-strategies']);
@@ -49,6 +50,7 @@ export function parseOptions(argv) {
   const options = {
     service: DEFAULT_SERVICE,
     strategy: null,
+    subagentModel: null,
     model: null,
     noPrompt: false,
     yes: false,
@@ -85,9 +87,6 @@ export function parseOptions(argv) {
     const key = inline?.[1] ?? arg;
     const inlineValue = inline?.[2];
 
-    if (key === '--subagent-model') {
-      throw new CliUsageError('--subagent-model has been removed because Claude Code subagent models are fixed by the selected service.');
-    }
     if (REMOVED_OPTIONS.has(key)) {
       throw new CliUsageError(`${key} has been removed. Codex now connects directly to RouterLab.`);
     }
@@ -100,6 +99,7 @@ export function parseOptions(argv) {
       options.providedOptions.add(optionProperty(key));
       if (key === '--service') options.service = value;
       if (key === '--strategy') options.strategy = value;
+      if (key === '--subagent-model') options.subagentModel = value;
       if (key === '--model') options.model = value;
       if (key === '--token') options.token = value;
       if (key === '--host') {
@@ -178,6 +178,7 @@ function optionProperty(flag) {
   return {
     '--service': 'service',
     '--strategy': 'strategy',
+    '--subagent-model': 'subagentModel',
     '--model': 'model',
     '--token': 'token',
     '--host': 'host',

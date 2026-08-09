@@ -36,8 +36,8 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   );
   assert.match(stripVTControlCharacters(formatBanner('A'.repeat(60))), /A{60}/);
   const llmAlert = stripVTControlCharacters(formatServiceHealthAlert(' LLM '));
-  assert.match(llmAlert, /LIMITED AVAILABILITY/);
-  assert.match(llmAlert, /ROUTERLAB LLM — SOME FEATURES MAY BE LIMITED/);
+  assert.match(llmAlert, /MODEL AVAILABILITY/);
+  assert.match(llmAlert, /ROUTERLAB LLM — AVAILABLE MODELS MAY VARY/);
   assert.match(llmAlert, /╔═+╗/);
   assert.equal(formatServiceHealthAlert('routerlab'), '');
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
@@ -58,7 +58,7 @@ test('wrapper options without a command keep the user in the main menu', () => {
   assert.equal(shouldOpenInteractiveMenu(parseOptions([])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm'])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm', '--strategy', 'claude-gpt'])), true);
-  assert.equal(parseOptions(['codex', 'launch', '--model', 'deepseek-v4-pro']).model, 'deepseek-v4-pro');
+  assert.equal(parseOptions(['codex', 'launch', '--model', 'deepseek-v4-flash-0731']).model, 'deepseek-v4-flash-0731');
   assert.equal(Object.hasOwn(parseOptions(['codex', 'launch']), 'transport'), false);
   assert.throws(() => parseOptions(['codex', 'launch', '--direct']), /--direct has been removed/);
   assert.throws(() => parseOptions(['codex', 'launch', '--transport', 'direct']), /--transport has been removed/);

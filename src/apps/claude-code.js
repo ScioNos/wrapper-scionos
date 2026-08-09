@@ -5,7 +5,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/l
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel, LLM_CLAUDE_CODE_SUBAGENT_MODELS } from '../routerlab/strategies.js';
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 
@@ -15,7 +15,15 @@ export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
 };
 
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
-  const { env: sourceEnv = process.env, ...strategyOptions } = options;
+  const { env: sourceEnv = process.env, subagentModel = null, ...strategyOptions } = options;
+  const requestedSubagentModel = subagentModel?.trim() || null;
+  if (
+    requestedSubagentModel
+    && service.value === 'llm'
+    && !isSupportedClaudeCodeSubagentModel(requestedSubagentModel, service.value)
+  ) {
+    throw new Error(`Subagent model "${requestedSubagentModel}" is not supported for ${service.label}.`);
+  }
   const environment = {};
   for (const [key, value] of Object.entries(sourceEnv)) {
     if (!isClaudeCodeRoutingEnvironmentKey(key)) {
@@ -32,6 +40,7 @@ export function buildClaudeCodeEnvironment(token, service, strategyValue, option
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
     ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, strategyOptions),
+    ...(service.value === 'llm' && requestedSubagentModel ? { CLAUDE_CODE_SUBAGENT_MODEL: requestedSubagentModel } : {}),
   };
 }
 
@@ -290,14 +299,56 @@ export function buildStrategyPromptChoices(modelIds, serviceValue) {
 export async function chooseSubagentModel({
   serviceValue,
   strategyValue,
+  noPrompt = false,
+  preferredSubagentModel = null,
+  modelIds = [],
+  selectFn = select,
 } = {}) {
-  return getClaudeCodeStrategyEnvironment(strategyValue, serviceValue).CLAUDE_CODE_SUBAGENT_MODEL
+  const defaultModel = getClaudeCodeStrategyEnvironment(strategyValue, serviceValue).CLAUDE_CODE_SUBAGENT_MODEL
     ?? 'strategy default';
+  if (serviceValue !== 'llm') return defaultModel;
+
+  const requestedModel = preferredSubagentModel?.trim() || null;
+  if (requestedModel) {
+    if (!isSupportedClaudeCodeSubagentModel(requestedModel, serviceValue)) {
+      throw new Error(`Subagent model "${requestedModel}" is not supported for RouterLab LLM.`);
+    }
+    if (!modelIds.includes(requestedModel)) {
+      throw new Error(`Subagent model "${requestedModel}" is not available on RouterLab LLM.`);
+    }
+    return requestedModel;
+  }
+
+  if (noPrompt) {
+    if (!modelIds.includes(defaultModel)) {
+      throw new Error(`Default subagent model "${defaultModel}" is not available on RouterLab LLM.`);
+    }
+    return defaultModel;
+  }
+
+  const choices = LLM_CLAUDE_CODE_SUBAGENT_MODELS.map((model) => ({
+    name: model,
+    value: model,
+    description: model,
+    disabled: modelIds.includes(model) ? false : 'Not currently available on RouterLab LLM.',
+  }));
+  const availableChoices = choices.filter((choice) => !choice.disabled);
+  if (availableChoices.length === 0) {
+    throw new Error('No supported subagent model is currently available on RouterLab LLM.');
+  }
+  if (availableChoices.length === 1) return availableChoices[0].value;
+
+  return selectFn({
+    message: 'Select Subagent Model:',
+    choices,
+    pageSize: choices.length,
+  });
 }
 
 export async function launchClaudeCode(
-  { serviceValue, strategyValue, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false },
+  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false },
   {
+    chooseSubagentModelFn = chooseSubagentModel,
     chooseStrategyFn = chooseStrategy,
     detectClaudeCodeFn = detectClaudeCode,
     fetchModelsFn = fetchModelsDirect,
@@ -367,9 +418,12 @@ export async function launchClaudeCode(
     allowBack,
   });
   if (selectedStrategy === null) return { kind: 'back' };
-  const selectedSubagentModel = await chooseSubagentModel({
+  const selectedSubagentModel = await chooseSubagentModelFn({
     serviceValue: service.value,
     strategyValue: selectedStrategy,
+    noPrompt,
+    preferredSubagentModel: subagentModel,
+    modelIds,
   });
 
   let proxy = null;
@@ -381,7 +435,9 @@ export async function launchClaudeCode(
       allowedModels: modelIds,
     });
     const proxiedService = { ...service, baseUrl: proxy.baseUrl };
-    const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy);
+    const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy, {
+      subagentModel: selectedSubagentModel,
+    });
     const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
 
     if (!noPrompt) {

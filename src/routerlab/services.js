@@ -42,8 +42,9 @@ export const SERVICES = {
       'claude-gpt',
       'qwen3.8-max',
       'minimax-m3',
+      'grok-4.6',
       'glm-5.2',
-      'deepseek-v4-flash-0731',
+      'deepseek',
     ],
   },
 };

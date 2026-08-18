@@ -176,6 +176,34 @@ export const STRATEGIES = [
     }),
   },
   {
+    value: 'grok-4.6',
+    name: 'grok-4.6',
+    selectionName: 'grok-4.6',
+    description: 'Uses grok-4.6 for all main model aliases.',
+    selectionDescription: 'Uses grok-4.6 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['grok-4.6'],
+    environment: createModelEnvironment({
+      opus: 'grok-4.6',
+      sonnet: 'grok-4.6',
+      haiku: 'grok-4.6',
+    }),
+  },
+  {
+    value: 'deepseek',
+    name: 'DeepSeek V4',
+    selectionName: 'DeepSeek V4',
+    description: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731.',
+    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731.',
+    aliases: ['deepseek-v4', 'claude-deepseek'],
+    requiredModels: ['deepseek-v4-pro-0813', 'deepseek-v4-flash-0731'],
+    environment: createModelEnvironment({
+      opus: 'deepseek-v4-pro-0813',
+      sonnet: 'deepseek-v4-pro-0813',
+      haiku: 'deepseek-v4-flash-0731',
+      subagent: 'deepseek-v4-flash-0731',
+    }),
+  },
+  {
     value: 'deepseek-v4-flash-0731',
     name: 'deepseek-v4-flash-0731',
     selectionName: 'deepseek-v4-flash-0731',
@@ -245,12 +273,27 @@ const LLM_STRATEGY_OVERRIDES = {
   },
   'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
   'minimax-m3': llmSingleModelStrategy('minimax-m3'),
+  'grok-4.6': llmSingleModelStrategy('grok-4.6'),
+  deepseek: {
+    description: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',
+    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',
+    requiredModels: ['deepseek-v4-pro-0813', 'deepseek-v4-flash-0731'],
+    allowSubagentOverride: false,
+    environment: createModelEnvironment({
+      opus: 'deepseek-v4-pro-0813',
+      sonnet: 'deepseek-v4-pro-0813',
+      haiku: 'deepseek-v4-flash-0731',
+    }),
+  },
   'deepseek-v4-flash-0731': llmSingleModelStrategy('deepseek-v4-flash-0731'),
 };
 
 export function normalizeStrategyValue(strategyValue) {
   if (strategyValue === 'claude-gpt-5.4') {
     return 'claude-gpt';
+  }
+  if (strategyValue === 'deepseek-v4' || strategyValue === 'claude-deepseek') {
+    return 'deepseek';
   }
   return strategyValue;
 }

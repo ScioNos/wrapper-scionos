@@ -21,8 +21,9 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'claude-gpt',
     'qwen3.8-max',
     'minimax-m3',
+    'grok-4.6',
     'glm-5.2',
-    'deepseek-v4-flash-0731',
+    'deepseek',
   ],
 };
 
@@ -253,11 +254,23 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'Kimi K2.7',
     supports1m: false,
   },
+  'deepseek-v4-pro-0813': {
+    desktopRouteId: 'claude-deev4-pro-0813',
+    label: 'deepseek-v4-pro-0813',
+    codexModel: 'deepseek-v4-pro-0813',
+    codexDisplayName: 'DeepSeek V4 Pro 0813',
+  },
   'deepseek-v4-flash-0731': {
     desktopRouteId: 'claude-deev4-flash-0731',
     label: 'deepseek-v4-flash-0731',
     codexModel: 'deepseek-v4-flash-0731',
     codexDisplayName: 'DeepSeek V4 Flash 0731',
+  },
+  'grok-4.6': {
+    desktopRouteId: 'claude-grok4.6',
+    label: 'grok-4.6',
+    codexModel: 'grok-4.6',
+    codexDisplayName: 'Grok 4.6',
   },
   'claude-glm-5.1': {
     desktopRouteId: 'claude-lm5.1',
@@ -303,6 +316,8 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-lm5.2',
   'claude-wen3.8-max',
   'claude-max-m3',
+  'claude-grok4.6',
+  'claude-deev4-pro-0813',
   'claude-deev4-flash-0731',
   'claude-wen3.7-max',
   'claude-wen3.6-flash',
@@ -322,6 +337,8 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['gpt-5.6-luna', 'GPT 5.6 Luna'],
   ['gpt-5.6-terra-pro', 'GPT 5.6 Terra Pro'],
   ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
+  ['grok-4.6', 'Grok 4.6'],
+  ['deepseek-v4-pro-0813', 'DeepSeek V4 Pro 0813'],
   ['minimax-m3', 'MiniMax M3'],
 ]);
 

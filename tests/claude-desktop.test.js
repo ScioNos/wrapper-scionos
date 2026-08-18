@@ -113,8 +113,9 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-gpt',
     'qwen3.8-max',
     'minimax-m3',
+    'grok-4.6',
     'glm-5.2',
-    'deepseek-v4-flash-0731',
+    'deepseek',
   ]);
 
   const routes = modelRoutesForDesktopMapping('routerlab');
@@ -161,7 +162,8 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'glm-5.2',
     'qwen3.8-max',
     'minimax-m3',
-    'deepseek-v4-flash-0731',
+    'grok-4.6',
+    'deepseek',
   ]);
   assert.deepEqual(llmRoutes.map((route) => route.routeId), [
     'claude-fable-5',
@@ -173,6 +175,8 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-lm5.2',
     'claude-wen3.8-max',
     'claude-max-m3',
+    'claude-grok4.6',
+    'claude-deev4-pro-0813',
     'claude-deev4-flash-0731',
   ]);
   assert.equal(llmRoutes.some((route) => (
@@ -189,6 +193,8 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash-0731' && route.upstreamModel === 'deepseek-v4-flash-0731' && route.labelOverride === 'deepseek-v4-flash-0731' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'minimax-m3' && route.labelOverride === 'minimax-m3' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.8-max' && route.upstreamModel === 'qwen3.8-max' && route.labelOverride === 'qwen3.8-max' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-grok4.6' && route.upstreamModel === 'grok-4.6' && route.labelOverride === 'grok-4.6' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro-0813' && route.upstreamModel === 'deepseek-v4-pro-0813' && route.labelOverride === 'deepseek-v4-pro-0813' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.6-flash'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.2' && route.upstreamModel === 'glm-5.2' && route.labelOverride === 'glm-5.2' && !Object.hasOwn(route, 'supports1m')), true);
 });

@@ -81,7 +81,7 @@ Claude Code 2.1.220 or newer is launched through a loopback proxy. Wrapper-owned
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
 
-For `--service llm`, the `claude` strategy maps Custom and Haiku to `claude-fable-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. The LLM strategy catalogue is `claude`, `claude-gpt`, `qwen3.8-max`, `minimax-m3`, `glm-5.2`, and `deepseek-v4-flash-0731`. After choosing a strategy, Claude Code lets you select a subagent from `claude-haiku-4-5`, `deepseek-v4-flash-0731`, and `gpt-5.6-luna`, when available in the verified service catalog. `claude-haiku-4-5` remains the non-interactive default; use `--subagent-model <id>` to choose explicitly.
+For `--service llm`, the `claude` strategy maps Custom and Haiku to `claude-fable-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. The LLM strategy catalogue is `claude`, `claude-gpt`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, and `deepseek` (Opus & Sonnet => `deepseek-v4-pro-0813`, Haiku => `deepseek-v4-flash-0731`). After choosing a strategy, Claude Code lets you select a subagent from `claude-haiku-4-5`, `deepseek-v4-flash-0731`, and `gpt-5.6-luna`, when available in the verified service catalog. `claude-haiku-4-5` remains the non-interactive default; use `--subagent-model <id>` to choose explicitly.
 
 Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted as an input token source with its deprecation warning, but the raw token and every RouterLab token variable are removed from the child environment. Claude receives only a random, process-local proxy credential. Provider, endpoint, authentication, header, and model-routing variables are sanitized; unrelated native tool, MCP, certificate, and network variables remain inherited. Loopback is merged into `NO_PROXY`/`no_proxy`.
 
@@ -124,7 +124,7 @@ Codex connects directly to the selected RouterLab Responses endpoint:
 The wrapper allowlists these initial models:
 
 - `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-flash-0731`, `glm-5.2`, `minimax-m3`.
-- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `minimax-m3`, `glm-5.2`, `deepseek-v4-flash-0731`.
+- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`.
 
 Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. Interactive launch asks among the intersection and automatically selects it when only one model remains. `--no-prompt` without `--model` requires `gpt-5.6-sol` to be available.
 

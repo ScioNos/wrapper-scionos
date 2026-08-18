@@ -183,7 +183,23 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.6-terra',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.6-luna',
   });
-  for (const model of ['qwen3.8-max', 'minimax-m3', 'glm-5.2', 'deepseek-v4-flash-0731']) {
+  assert.deepEqual(getStrategyEnvironment('deepseek', 'llm'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
+  });
+  assert.deepEqual(getClaudeCodeStrategyEnvironment('deepseek', 'llm'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5',
+  });
+  assert.deepEqual(getStrategyEnvironment('deepseek-v4', 'llm'), {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro-0813',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
+  });
+  for (const model of ['qwen3.8-max', 'minimax-m3', 'grok-4.6', 'glm-5.2']) {
     assert.deepEqual(getStrategyEnvironment(model, 'llm'), {
       ANTHROPIC_DEFAULT_OPUS_MODEL: model,
       ANTHROPIC_DEFAULT_SONNET_MODEL: model,
@@ -287,8 +303,9 @@ test('service strategy lists stay scoped', () => {
     'claude-gpt',
     'qwen3.8-max',
     'minimax-m3',
+    'grok-4.6',
     'glm-5.2',
-    'deepseek-v4-flash-0731',
+    'deepseek',
   ]);
 });
 
@@ -307,6 +324,8 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'minimax-m3').name, 'minimax-m3');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'qwen3.8-max').name, 'qwen3.8-max');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'grok-4.6').name, 'grok-4.6');
+  assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'deepseek').name, 'DeepSeek V4');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'glm-5.2').description, 'Uses glm-5.2 for all main model aliases. Select a subagent model at launch.');
   assert.equal(getStrategyDisplayName('qwen3.8-max', 'llm'), 'qwen3.8-max');
   assert.equal(getStrategyChoices([], 'llm').find((choice) => choice.value === 'qwen3.8-max').description, 'Uses qwen3.8-max for all main model aliases. Select a subagent model at launch.');

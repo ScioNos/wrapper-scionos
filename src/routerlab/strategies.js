@@ -176,32 +176,6 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'kimi-k3',
-    name: 'kimi-k3',
-    selectionName: 'kimi-k3',
-    description: 'Uses kimi-k3 for all main model aliases.',
-    selectionDescription: 'Uses kimi-k3 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['kimi-k3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'kimi-k3',
-      sonnet: 'kimi-k3',
-      haiku: 'kimi-k3',
-    }),
-  },
-  {
-    value: 'grok-4.5',
-    name: 'grok-4.5',
-    selectionName: 'grok-4.5',
-    description: 'Uses grok-4.5 for all main model aliases.',
-    selectionDescription: 'Uses grok-4.5 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['grok-4.5'],
-    environment: createModelEnvironment({
-      opus: 'grok-4.5',
-      sonnet: 'grok-4.5',
-      haiku: 'grok-4.5',
-    }),
-  },
-  {
     value: 'deepseek-v4-flash-0731',
     name: 'deepseek-v4-flash-0731',
     selectionName: 'deepseek-v4-flash-0731',
@@ -270,9 +244,7 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
-  'kimi-k3': llmSingleModelStrategy('kimi-k3'),
   'minimax-m3': llmSingleModelStrategy('minimax-m3'),
-  'grok-4.5': llmSingleModelStrategy('grok-4.5'),
   'deepseek-v4-flash-0731': llmSingleModelStrategy('deepseek-v4-flash-0731'),
 };
 

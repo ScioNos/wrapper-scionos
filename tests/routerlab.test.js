@@ -140,11 +140,6 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-flash-0731',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
   });
-  assert.deepEqual(getStrategyEnvironment('kimi-k3', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k3',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k3',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k3',
-  });
   assert.deepEqual(getStrategyEnvironment('glm-5.2', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-5.2',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-5.2',
@@ -188,7 +183,7 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.6-terra',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.6-luna',
   });
-  for (const model of ['qwen3.8-max', 'kimi-k3', 'minimax-m3', 'grok-4.5', 'glm-5.2', 'deepseek-v4-flash-0731']) {
+  for (const model of ['qwen3.8-max', 'minimax-m3', 'glm-5.2', 'deepseek-v4-flash-0731']) {
     assert.deepEqual(getStrategyEnvironment(model, 'llm'), {
       ANTHROPIC_DEFAULT_OPUS_MODEL: model,
       ANTHROPIC_DEFAULT_SONNET_MODEL: model,
@@ -206,6 +201,8 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.equal(allowsSubagentModelOverride('claude-gpt', 'routerlab'), false);
   assert.throws(() => getStrategyEnvironment('claude-gpt-special', 'llm'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('minimax-m2.7', 'llm'), /Unknown strategy/);
+  assert.throws(() => getStrategyEnvironment('kimi-k3', 'llm'), /Unknown strategy/);
+  assert.throws(() => getStrategyEnvironment('grok-4.5', 'llm'), /Unknown strategy/);
 });
 
 test('Claude Code lets RouterLab LLM choose an available subagent model', async () => {
@@ -282,7 +279,6 @@ test('service strategy lists stay scoped', () => {
     'aws',
     'claude-gpt',
     'deepseek-v4-flash-0731',
-    'kimi-k3',
     'glm-5.2',
     'minimax-m3',
   ]);
@@ -290,9 +286,7 @@ test('service strategy lists stay scoped', () => {
     'claude',
     'claude-gpt',
     'qwen3.8-max',
-    'kimi-k3',
     'minimax-m3',
-    'grok-4.5',
     'glm-5.2',
     'deepseek-v4-flash-0731',
   ]);
@@ -303,9 +297,9 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'aws').name, '💸 Claude via AWS (-50%)');
   assert.equal(choices.some((choice) => choice.value === 'deepseek-v4'), false);
   assert.equal(choices.find((choice) => choice.value === 'deepseek-v4-flash-0731').name, 'deepseek-v4-flash-0731');
-  assert.equal(choices.find((choice) => choice.value === 'kimi-k3').name, 'kimi-k3');
   assert.throws(() => getStrategyEnvironment('deepseek-v4', 'routerlab'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('kimi-k2.7-code', 'routerlab'), /Unknown strategy/);
+  assert.throws(() => getStrategyEnvironment('kimi-k3', 'routerlab'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('claude-fable-5', 'routerlab'), /Unknown strategy/);
   assert.equal(choices.find((choice) => choice.value === 'default').description, 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.');
   assert.equal(choices.some((choice) => choice.value === 'claude-fable-5'), false);

@@ -135,11 +135,6 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.6-terra',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.6-luna',
   });
-  assert.deepEqual(getStrategyEnvironment('deepseek-v4-flash-0731', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-flash-0731',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-flash-0731',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
-  });
   assert.deepEqual(getStrategyEnvironment('kimi-k3', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k3',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k3',

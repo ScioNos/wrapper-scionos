@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.2.0 - 2026-08-18
+
+### Added
+
+- Added `grok-4.6` model strategy to RouterLab LLM (`--service llm`) and exposed it in the Claude Desktop routing catalog as `claude-rok4.6` and in Codex CLI allowlist.
+- Added combined `deepseek` (DeepSeek V4) strategy across both services (`routerlab` and `llm`), mapping Opus and Sonnet to `deepseek-v4-pro-0813`, and Haiku/subagents to `deepseek-v4-flash-0731`.
+- Added `kimi-k3` and `deepseek-v4-pro-0813` to default `routerlab` service for Claude Code, Claude Desktop (`claude-kim3`, `claude-deev4-pro-0813`), and Codex CLI allowlist.
+- Added interactive and CLI subagent model selection (`--subagent-model <id>`) to the default `routerlab` service (`claude-haiku-4-5`, `aws-claude-haiku-4-5`, `deepseek-v4-flash-0731`, `gpt-5.6-luna`), matching the behavior of `--service llm`.
+
+### Changed
+
+- Updated default Claude Native Haiku model identifier from `claude-haiku-4-5-20251001` to `claude-haiku-4-5` across all strategy environments and Desktop routes.
+- Removed deprecated `grok-4.5` model.
+
 ## 5.1.0 - 2026-08-09
 
 ### Changed

@@ -172,6 +172,6 @@ Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ig
 
 `npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles. `npm run test:codex-real` valide une vraie requête Codex non interactive contre un endpoint Responses local et vérifie via `app-server` que `model/list` expose le catalogue temporaire dans l’ordre attendu avec le modèle sélectionné actif. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.1.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.2.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

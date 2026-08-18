@@ -267,7 +267,7 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'DeepSeek V4 Flash 0731',
   },
   'grok-4.6': {
-    desktopRouteId: 'claude-grok4.6',
+    desktopRouteId: 'claude-rok4.6',
     label: 'grok-4.6',
     codexModel: 'grok-4.6',
     codexDisplayName: 'Grok 4.6',
@@ -316,7 +316,7 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-lm5.2',
   'claude-wen3.8-max',
   'claude-max-m3',
-  'claude-grok4.6',
+  'claude-rok4.6',
   'claude-deev4-pro-0813',
   'claude-deev4-flash-0731',
   'claude-wen3.7-max',

@@ -175,7 +175,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-lm5.2',
     'claude-wen3.8-max',
     'claude-max-m3',
-    'claude-grok4.6',
+    'claude-rok4.6',
     'claude-deev4-pro-0813',
     'claude-deev4-flash-0731',
   ]);
@@ -193,7 +193,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-flash-0731' && route.upstreamModel === 'deepseek-v4-flash-0731' && route.labelOverride === 'deepseek-v4-flash-0731' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'minimax-m3' && route.labelOverride === 'minimax-m3' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.8-max' && route.upstreamModel === 'qwen3.8-max' && route.labelOverride === 'qwen3.8-max' && !Object.hasOwn(route, 'supports1m')), true);
-  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-grok4.6' && route.upstreamModel === 'grok-4.6' && route.labelOverride === 'grok-4.6' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(llmRoutes.some((route) => route.routeId === 'claude-rok4.6' && route.upstreamModel === 'grok-4.6' && route.labelOverride === 'grok-4.6' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-deev4-pro-0813' && route.upstreamModel === 'deepseek-v4-pro-0813' && route.labelOverride === 'deepseek-v4-pro-0813' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-wen3.6-flash'), false);
   assert.equal(llmRoutes.some((route) => route.routeId === 'claude-lm5.2' && route.upstreamModel === 'glm-5.2' && route.labelOverride === 'glm-5.2' && !Object.hasOwn(route, 'supports1m')), true);

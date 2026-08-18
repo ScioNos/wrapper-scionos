@@ -100,7 +100,7 @@ Claude Desktop is supported only through the authenticated local mapping proxy. 
 
 `apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation.
 
-For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5-20251001`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-flash-0731`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
+For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-flash-0731`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
 
 Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
 

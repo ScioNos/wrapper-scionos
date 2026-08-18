@@ -119,7 +119,7 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.deepEqual(getStrategyEnvironment('default', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('default', 'routerlab'), {
@@ -127,8 +127,8 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5',
   });
   assert.deepEqual(getStrategyEnvironment('claude-gpt', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.6-sol',
@@ -226,7 +226,7 @@ test('Claude Code lets RouterLab LLM choose an available subagent model', async 
     serviceValue: 'routerlab',
     strategyValue: 'default',
     preferredSubagentModel: 'haiku',
-  }), 'claude-haiku-4-5-20251001');
+  }), 'claude-haiku-4-5');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'claude-gpt',
@@ -342,7 +342,7 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
     'claude-fable-5',
     'claude-opus-5',
     'claude-sonnet-5',
-    'claude-haiku-4-5-20251001',
+    'claude-haiku-4-5',
   ], 'routerlab').ready, true);
   assert.equal(assessStrategyLaunch('claude', [
     'claude-fable-5',
@@ -402,7 +402,7 @@ test('strategy model normalization covers native, mapped, fallback, labels, and 
 });
 
 test('Claude strategy selection covers verified choices, aliases, invalid preferences, and disabled prompts', async () => {
-  const completeDefault = ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
+  const completeDefault = ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
   assert.equal(await chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: completeDefault }), 'default');
   await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'missing', modelIds: [] }), /Unknown strategy/);
   await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: ['claude-opus-5'] }), /requires all/);
@@ -479,7 +479,7 @@ test('strategy helpers cover always-available routes and subagent override appli
     ),
     {
       EXISTING: 'value',
-      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5-20251001',
+      CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5',
     },
   );
   assert.deepEqual(

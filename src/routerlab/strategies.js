@@ -12,7 +12,7 @@ export const DEFAULT_CLAUDE_MODELS = [
   'claude-fable-5',
   'claude-opus-5',
   'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
+  'claude-haiku-4-5',
 ];
 
 export const LLM_CLAUDE_MODELS = [
@@ -36,7 +36,7 @@ export const OPENAI_GPT_MODELS = [
 
 export const SUBAGENT_MODEL_CHOICES = {
   default: null,
-  haiku: 'claude-haiku-4-5-20251001',
+  haiku: 'claude-haiku-4-5',
   'gpt-5.4-mini': 'claude-gpt-5.4-mini',
   'claude-deepseek-v4-flash': 'claude-deepseek-v4-flash',
 };
@@ -75,7 +75,7 @@ export const STRATEGIES = [
     environment: createModelEnvironment({
       opus: 'claude-opus-5',
       sonnet: 'claude-sonnet-5',
-      haiku: 'claude-haiku-4-5-20251001',
+      haiku: 'claude-haiku-4-5',
       subagent: 'claude-fable-5',
     }),
     claudeCodeEnvironment: {
@@ -84,8 +84,8 @@ export const STRATEGIES = [
       ...createModelEnvironment({
         opus: 'claude-opus-5',
         sonnet: 'claude-sonnet-5',
-        haiku: 'claude-haiku-4-5-20251001',
-        subagent: 'claude-haiku-4-5-20251001',
+        haiku: 'claude-haiku-4-5',
+        subagent: 'claude-haiku-4-5',
       }),
     },
   },

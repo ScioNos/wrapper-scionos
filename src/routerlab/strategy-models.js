@@ -31,7 +31,7 @@ const DEFAULT_NATIVE_STRATEGY_MODELS = [
   { role: 'fable', model: 'claude-fable-5' },
   { role: 'opus', model: 'claude-opus-5' },
   { role: 'sonnet', model: 'claude-sonnet-5' },
-  { role: 'haiku', model: 'claude-haiku-4-5-20251001' },
+  { role: 'haiku', model: 'claude-haiku-4-5' },
 ];
 
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {

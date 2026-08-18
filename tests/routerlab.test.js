@@ -227,16 +227,37 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.throws(() => getStrategyEnvironment('grok-4.5', 'llm'), /Unknown strategy/);
 });
 
-test('Claude Code lets RouterLab LLM choose an available subagent model', async () => {
+test('Claude Code lets both RouterLab and LLM services choose an available subagent model', async () => {
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'default',
-    preferredSubagentModel: 'haiku',
+    noPrompt: true,
   }), 'claude-haiku-4-5');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'claude-gpt',
-    preferredSubagentModel: 'haiku',
+    noPrompt: true,
+  }), 'aws-claude-haiku-4-5');
+  assert.equal(await chooseSubagentModel({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    preferredSubagentModel: 'deepseek-v4-flash-0731',
+    modelIds: ['deepseek-v4-flash-0731'],
+  }), 'deepseek-v4-flash-0731');
+  assert.equal(await chooseSubagentModel({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    modelIds: ['claude-haiku-4-5', 'aws-claude-haiku-4-5'],
+    selectFn: async ({ choices }) => {
+      assert.deepEqual(choices.map((choice) => choice.value), [
+        'claude-haiku-4-5',
+        'aws-claude-haiku-4-5',
+        'deepseek-v4-flash-0731',
+        'gpt-5.6-luna',
+      ]);
+      assert.equal(choices[2].disabled, 'Not currently available on RouterLab.');
+      return 'aws-claude-haiku-4-5';
+    },
   }), 'aws-claude-haiku-4-5');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'llm',

@@ -3,7 +3,7 @@ import { CliUsageError, COMMON_OPTION_DEFINITIONS, emitOptionDeprecations, isRec
 import { warnDeprecationOnce } from './deprecations.js';
 import { MENU_ROUTES, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { findStrategy, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
+import { findStrategy, getClaudeCodeSubagentModels, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
 import { handleAuth } from './commands/auth.js';
 import { handleClaudeCode } from './commands/claude-code.js';
@@ -201,7 +201,8 @@ function validateClaudeOptions(options) {
     throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
   }
   if (options.subagentModel && !isSupportedClaudeCodeSubagentModel(options.subagentModel, service.value)) {
-    throw usageError('--subagent-model must be one of: claude-haiku-4-5, deepseek-v4-flash-0731, gpt-5.6-luna (only available with --service llm).');
+    const supported = getClaudeCodeSubagentModels(service.value).join(', ');
+    throw usageError(`--subagent-model must be one of: ${supported}.`);
   }
 }
 

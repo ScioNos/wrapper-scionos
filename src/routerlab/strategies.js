@@ -2,6 +2,12 @@ import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './
 
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5';
 export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
+export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
+  'claude-haiku-4-5',
+  'aws-claude-haiku-4-5',
+  'deepseek-v4-flash-0731',
+  'gpt-5.6-luna',
+];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
   'deepseek-v4-flash-0731',
@@ -377,6 +383,12 @@ export function getClaudeCodeStrategyEnvironment(strategyValue, serviceValue = D
   return applySubagentModelOverride(strategy, env, options);
 }
 
+export function getClaudeCodeSubagentModels(serviceValue = DEFAULT_SERVICE) {
+  return normalizeServiceValue(serviceValue) === 'llm'
+    ? LLM_CLAUDE_CODE_SUBAGENT_MODELS
+    : ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS;
+}
+
 export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
   const modelKeys = [
     'ANTHROPIC_CUSTOM_MODEL_OPTION',
@@ -393,15 +405,15 @@ export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
       if (model) models.add(model);
     }
   }
-  if (normalizeServiceValue(serviceValue) === 'llm') {
-    for (const model of LLM_CLAUDE_CODE_SUBAGENT_MODELS) models.add(model);
+  for (const model of getClaudeCodeSubagentModels(serviceValue)) {
+    models.add(model);
   }
   return [...models];
 }
 
 export function isSupportedClaudeCodeSubagentModel(model, serviceValue = DEFAULT_SERVICE) {
-  return normalizeServiceValue(serviceValue) === 'llm'
-    && LLM_CLAUDE_CODE_SUBAGENT_MODELS.includes(String(model ?? '').trim());
+  const normalized = String(model ?? '').trim();
+  return getClaudeCodeSubagentModels(serviceValue).includes(normalized);
 }
 
 export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAULT_SERVICE) {

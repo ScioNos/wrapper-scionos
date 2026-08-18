@@ -26,7 +26,7 @@ test('Claude Code targets the official service and receives the generated local 
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async (_token, options) => {
         calls.discovery = options;
-        return { valid: true, models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] };
+        return { valid: true, models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'aws-claude-haiku-4-5'] };
       },
       chooseStrategyFn: async () => 'claude-gpt',
       startLongRunningLlmProxyFn: async (options) => {
@@ -49,7 +49,7 @@ test('Claude Code targets the official service and receives the generated local 
     assert.equal(calls.discovery.baseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.targetBaseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.upstreamAuth, 'anthropic');
-    assert.deepEqual(calls.proxy.allowedModels, ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+    assert.deepEqual(calls.proxy.allowedModels, ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'aws-claude-haiku-4-5']);
     assert.equal(calls.child.env.ANTHROPIC_BASE_URL, 'http://127.0.0.1:43123');
     assert.equal(calls.child.env.ANTHROPIC_AUTH_TOKEN, 'generated-local-token');
     assert.equal(calls.child.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');

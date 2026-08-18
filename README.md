@@ -98,21 +98,19 @@ Claude Desktop is supported only through the authenticated local mapping proxy. 
     wrapper-scionos claude-desktop apply-proxy --service llm --yes
     wrapper-scionos claude-desktop proxy --service llm
 
-`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation.
-
-For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-flash-0731`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
+`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation. For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
 
 Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
 
-From the interactive menu, Start Local Mapping uses the service shown in the banner. A missing profile is created immediately, an equivalent healthy profile is reused without rotating its local credential, and replacement of a different, direct, legacy, or unhealthy profile requires confirmation. The stored host and port are preserved unless explicitly overridden; changing services refreshes the service-specific mapping catalog.
+From the interactive menu, Start Local Mapping uses the service displayed in the banner. A missing profile is created directly, a healthy equivalent profile is reused without rotating its local credential, and replacement of a differing, direct, legacy, or invalid profile asks for confirmation. The stored host and port are preserved unless explicitly overridden; switching services reloads the service-specific catalog.
 
-The selected service base URL is validated before a token is resolved, a listener opens, or a profile changes. Generated profiles allow Cowork egress only to their exact gateway hostname. `claude-desktop status` keeps the existing fields and also reports `profileExists`, `applied`, `healthy`, and stable `issues` codes without exposing credentials.
+The selected service base URL is validated before token resolution, listener binding, or profile mutation. Generated profiles authorize Cowork egress only to their gateway exact hostname. `claude-desktop status` preserves existing fields and adds `profileExists`, `applied`, `healthy`, and stable `issues` codes without exposing credentials.
 
-The proxy binds only to exact loopback hosts (`localhost`, `::1`, or a valid address in `127.0.0.0/8`) and an explicit port from 1 to 65535. It permits only the Messages API: model listing, messages, token counting, and creation/list/read/cancel/results/delete operations for message batches. Unsupported paths and methods fail locally, as do missing or unverified models; mixed invalid batches are rejected in full before any upstream request. Browser origins are rejected by default. An exact HTTP(S) origin can be allowed with repeatable --allow-origin; only a matching CORS OPTIONS preflight may return 204 without authentication.
+The proxy listens on exact loopback hosts only (`localhost`, `::1`, or a valid `127.0.0.0/8` IPv4) and an explicit port between 1 and 65535. It permits Messages API operations only: model listing, message creation, token counting, and batch create/list/retrieve/cancel/results/delete. Unsupported paths, methods, and unmapped models fail locally; a mixed invalid batch is rejected entirely before any upstream call. Browser origins are rejected by default.
 
-Requests are limited to 64 MiB both before and after decompression. Identity, gzip, deflate, and Brotli bodies are accepted; zstd is accepted when the active Node runtime exposes it, otherwise HTTP 415 unsupported_content_encoding is returned. Invalid JSON returns HTTP 400. Header receipt is limited to 30 seconds and body receipt to 120 seconds. Long generations have no total timeout.
+Requests are limited to 64 MiB before and after decompression. Identity, gzip, deflate, and Brotli bodies are accepted; zstd is accepted when supported by the active Node runtime, otherwise returning HTTP 415 unsupported_content_encoding. Invalid JSON returns HTTP 400. Header reception is limited to 30 seconds and body transmission to 120 seconds. Long generations have no overall timeout.
 
-When the proxy was started from the interactive menu, Ctrl+C stops it and returns to the Claude Desktop submenu without leaving a failure exit code. For the direct `claude-desktop proxy` command, Ctrl+C terminates with exit code 130; SIGTERM terminates with 143 in both modes.
+When the proxy is started from the interactive menu, Ctrl+C stops it and returns to the Claude Desktop submenu without preserving an exit code. For the direct `claude-desktop proxy` command, Ctrl+C exits with 130; SIGTERM exits with 143 in both modes.
 
 ## Codex CLI
 
@@ -123,7 +121,7 @@ Codex connects directly to the selected RouterLab Responses endpoint:
 
 The wrapper allowlists these initial models:
 
-- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-flash-0731`, `glm-5.2`, `minimax-m3`.
+- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, `minimax-m3`.
 - `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`.
 
 Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. Interactive launch asks among the intersection and automatically selects it when only one model remains. `--no-prompt` without `--model` requires `gpt-5.6-sol` to be available.

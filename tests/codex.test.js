@@ -25,7 +25,9 @@ test('Codex allowlists stay service-scoped', () => {
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'deepseek-v4-pro-0813',
     'deepseek-v4-flash-0731',
+    'kimi-k3',
     'glm-5.2',
     'minimax-m3',
   ]);

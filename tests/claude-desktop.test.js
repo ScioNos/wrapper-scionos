@@ -104,7 +104,8 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'default',
     'aws',
     'claude-gpt',
-    'deepseek-v4-flash-0731',
+    'deepseek',
+    'kimi-k3',
     'glm-5.2',
     'minimax-m3',
   ]);
@@ -124,8 +125,9 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'aws',
     'claude-gpt',
     'glm-5.2',
+    'kimi-k3',
     'minimax-m3',
-    'deepseek-v4-flash-0731',
+    'deepseek',
   ]);
   assert.deepEqual(routes.map((route) => route.routeId), [
     'claude-fable-5',
@@ -139,7 +141,9 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-5.6-terra',
     'claude-5.6-luna',
     'claude-lm5.2',
+    'claude-kim3',
     'claude-max-m3',
+    'claude-deev4-pro-0813',
     'claude-deev4-flash-0731',
   ]);
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-opus-5' && route.labelOverride === 'claude-opus-5'), true);
@@ -150,8 +154,10 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-5' && route.labelOverride === 'aws-claude-sonnet-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-4-5' && route.labelOverride === 'aws-claude-haiku-4-5' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-5.6-sol' && route.labelOverride === 'gpt-5.6-sol'), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-kim3' && route.labelOverride === 'kimi-k3' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-lm5.2' && route.labelOverride === 'glm-5.2' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-max-m3' && route.upstreamModel === 'minimax-m3'), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-deev4-pro-0813' && route.upstreamModel === 'deepseek-v4-pro-0813'), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-deev4-flash-0731' && route.upstreamModel === 'deepseek-v4-flash-0731'), true);
   assert.equal(new Set(routes.map((route) => route.routeId)).size, routes.length);
 

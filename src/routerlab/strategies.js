@@ -204,6 +204,19 @@ export const STRATEGIES = [
     }),
   },
   {
+    value: 'kimi-k3',
+    name: 'kimi-k3',
+    selectionName: 'kimi-k3',
+    description: 'Uses kimi-k3 for all main model aliases.',
+    selectionDescription: 'Uses kimi-k3 for Opus, Sonnet, and Haiku.',
+    requiredModels: ['kimi-k3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'kimi-k3',
+      sonnet: 'kimi-k3',
+      haiku: 'kimi-k3',
+    }),
+  },
+  {
     value: 'deepseek-v4-flash-0731',
     name: 'deepseek-v4-flash-0731',
     selectionName: 'deepseek-v4-flash-0731',

@@ -39,6 +39,7 @@ test('Codex allowlists stay service-scoped', () => {
     'minimax-m3',
     'grok-4.6',
     'glm-5.2',
+    'kimi-k3',
     'deepseek-v4-pro-0813',
     'deepseek-v4-flash-0731',
   ]);

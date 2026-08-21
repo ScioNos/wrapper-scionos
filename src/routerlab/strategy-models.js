@@ -24,6 +24,7 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'minimax-m3',
     'grok-4.6',
     'glm-5.2',
+    'kimi-k3',
     'deepseek',
   ],
 };

@@ -293,6 +293,7 @@ const LLM_STRATEGY_OVERRIDES = {
   'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
   'minimax-m3': llmSingleModelStrategy('minimax-m3'),
   'grok-4.6': llmSingleModelStrategy('grok-4.6'),
+  'kimi-k3': llmSingleModelStrategy('kimi-k3'),
   deepseek: {
     description: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',
     selectionDescription: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',

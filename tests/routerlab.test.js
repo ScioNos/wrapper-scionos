@@ -205,7 +205,7 @@ test('Claude Code strategy mapping is service-aware', () => {
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro-0813',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash-0731',
   });
-  for (const model of ['qwen3.8-max', 'minimax-m3', 'grok-4.6', 'glm-5.2']) {
+  for (const model of ['qwen3.8-max', 'minimax-m3', 'grok-4.6', 'glm-5.2', 'kimi-k3']) {
     assert.deepEqual(getStrategyEnvironment(model, 'llm'), {
       ANTHROPIC_DEFAULT_OPUS_MODEL: model,
       ANTHROPIC_DEFAULT_SONNET_MODEL: model,
@@ -223,7 +223,6 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.equal(allowsSubagentModelOverride('claude-gpt', 'routerlab'), false);
   assert.throws(() => getStrategyEnvironment('claude-gpt-special', 'llm'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('minimax-m2.7', 'llm'), /Unknown strategy/);
-  assert.throws(() => getStrategyEnvironment('kimi-k3', 'llm'), /Unknown strategy/);
   assert.throws(() => getStrategyEnvironment('grok-4.5', 'llm'), /Unknown strategy/);
 });
 
@@ -333,6 +332,7 @@ test('service strategy lists stay scoped', () => {
     'minimax-m3',
     'grok-4.6',
     'glm-5.2',
+    'kimi-k3',
     'deepseek',
   ]);
 });

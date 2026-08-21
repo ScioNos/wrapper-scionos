@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 5.3.0 - 2026-08-21
+
+### Added
+
+- Added `kimi-k3` model strategy to RouterLab LLM (`--service llm`) for Claude Code (`--strategy kimi-k3`), Claude Desktop proxy routing (`claude-kim3`), and Codex CLI allowlist.
+
 ## 5.2.0 - 2026-08-18
 
 ### Added

@@ -5,7 +5,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/l
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel, LLM_CLAUDE_CODE_SUBAGENT_MODELS } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { formatBanner } from '../cli/menu.js';
 

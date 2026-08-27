@@ -23,8 +23,11 @@ export const SERVICES = {
       'claude-gpt',
       'deepseek',
       'kimi-k3',
-      'glm-5.2',
       'minimax-m3',
+      'qwen3.8-max',
+      'glm-5.3-flash',
+      'grok-4.6',
+      'gemini-3.7-flash',
     ],
   },
   llm: {
@@ -40,13 +43,11 @@ export const SERVICES = {
     baseUrlEnvKeys: ['ROUTERLAB_LLM_BASE_URL', 'WRAPPER_SCIONOS_LLM_BASE_URL'],
     strategyValues: [
       'claude',
+      'glm-5.3',
       'claude-gpt',
       'qwen3.8-max',
       'minimax-m3',
-      'grok-4.6',
-      'glm-5.2',
       'kimi-k3',
-      'deepseek',
     ],
   },
 };

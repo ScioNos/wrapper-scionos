@@ -16,10 +16,15 @@ const npmCommand = process.platform === 'win32'
 const npxCommand = process.platform === 'win32'
   ? path.join(path.dirname(process.execPath), 'npx.cmd')
   : 'npx';
+const npmEnv = {
+  ...process.env,
+  npm_config_cache: path.join(tempDir, 'npm-cache'),
+};
 
 try {
   const packResult = runCommand(npmCommand, ['pack', '--silent', PROJECT_ROOT], {
     cwd: tempDir,
+    env: npmEnv,
     encoding: 'utf8',
   });
   const tarballName = packResult.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1);
@@ -30,6 +35,7 @@ try {
 
   runCommand(npmCommand, ['install', '--prefix', installPrefix, tarballPath], {
     cwd: tempDir,
+    env: npmEnv,
     stdio: 'inherit',
   });
 
@@ -70,7 +76,7 @@ try {
       ...smokeCase.args,
     ], {
       cwd: PROJECT_ROOT,
-      env: process.env,
+      env: npmEnv,
       stdio: 'inherit',
     });
     if (result.error) throw result.error;

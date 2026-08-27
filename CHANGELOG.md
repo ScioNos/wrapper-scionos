@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 6.0.0 - 2026-08-27
+
+### Breaking Changes
+
+- Removed `glm-5.2` from the default RouterLab Claude Code, Claude Desktop, and Codex catalogues. Scripts selecting the former `glm-5.2` strategy or model must select a replacement.
+- Removed `glm-5.2`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, and `grok-4.6` from the RouterLab LLM main-model catalogues for Claude Code, Claude Desktop, and Codex. `deepseek-v4-flash-0731` remains available as a Claude Code subagent model.
+
+### Added
+
+- Added the RouterLab LLM `glm-5.3` strategy as the second Claude Code choice, routing Opus and Sonnet to `glm-5.3` and Haiku/subagents to `glm-5.3-flash`. Both models are also available in Claude Desktop and Codex, and `glm-5.3-flash` is available in the Claude Code subagent picker.
+- Added `qwen3.8-max`, `glm-5.3-flash`, `grok-4.6`, and `gemini-3.7-flash` to the default RouterLab Claude Code and Codex catalogues. The Claude Desktop RouterLab catalogue mirrors the same additions.
+- Added explicit Codex runtime catalog metadata for `glm-5.3`, `glm-5.3-flash`, `qwen3.8-max`, `grok-4.6`, and `gemini-3.7-flash`.
+
+### Fixed
+
+- Marked `kimi-k3` as supporting its documented 1,048,576-token context.
+- Preserved Claude Code's 1M mode and normalized compatible decorated requests such as `kimi-k3[1m]` to the RouterLab identifier `kimi-k3` before forwarding. Batch requests are normalized consistently.
+
 ## 5.3.0 - 2026-08-21
 
 ### Added

@@ -10,6 +10,7 @@ export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
 ];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
+  'glm-5.3-flash',
   'deepseek-v4-flash-0731',
   'gpt-5.6-luna',
 ];
@@ -123,6 +124,20 @@ export const STRATEGIES = [
     }),
   },
   {
+    value: 'glm-5.3',
+    name: 'GLM 5.3',
+    selectionName: 'GLM 5.3',
+    description: 'Opus and Sonnet => glm-5.3, Haiku and subagent => glm-5.3-flash.',
+    selectionDescription: 'Opus and Sonnet => glm-5.3, Haiku and subagent => glm-5.3-flash.',
+    requiredModels: ['glm-5.3', 'glm-5.3-flash'],
+    environment: createModelEnvironment({
+      opus: 'glm-5.3',
+      sonnet: 'glm-5.3',
+      haiku: 'glm-5.3-flash',
+      subagent: 'glm-5.3-flash',
+    }),
+  },
+  {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
     description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.',
@@ -144,18 +159,6 @@ export const STRATEGIES = [
     environment: createSingleModelEnvironment('claude-glm-5.1'),
   },
   {
-    value: 'glm-5.2',
-    name: 'glm-5.2',
-    description: 'Uses glm-5.2 for all main model aliases.',
-    selectionDescription: 'Uses glm-5.2 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['glm-5.2', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'glm-5.2',
-      sonnet: 'glm-5.2',
-      haiku: 'glm-5.2',
-    }),
-  },
-  {
     value: 'minimax-m3',
     name: 'minimax-m3',
     selectionName: 'minimax-m3',
@@ -174,11 +177,24 @@ export const STRATEGIES = [
     selectionName: 'qwen3.8-max',
     description: 'Uses qwen3.8-max for all main model aliases.',
     selectionDescription: 'Uses qwen3.8-max for Opus, Sonnet, and Haiku.',
-    requiredModels: ['qwen3.8-max'],
+    requiredModels: ['qwen3.8-max', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
     environment: createModelEnvironment({
       opus: 'qwen3.8-max',
       sonnet: 'qwen3.8-max',
       haiku: 'qwen3.8-max',
+    }),
+  },
+  {
+    value: 'glm-5.3-flash',
+    name: 'glm-5.3-flash',
+    selectionName: 'glm-5.3-flash',
+    description: 'Uses glm-5.3-flash for all main model aliases.',
+    selectionDescription: 'Uses glm-5.3-flash for Opus, Sonnet, and Haiku.',
+    requiredModels: ['glm-5.3-flash', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'glm-5.3-flash',
+      sonnet: 'glm-5.3-flash',
+      haiku: 'glm-5.3-flash',
     }),
   },
   {
@@ -187,11 +203,24 @@ export const STRATEGIES = [
     selectionName: 'grok-4.6',
     description: 'Uses grok-4.6 for all main model aliases.',
     selectionDescription: 'Uses grok-4.6 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['grok-4.6'],
+    requiredModels: ['grok-4.6', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
     environment: createModelEnvironment({
       opus: 'grok-4.6',
       sonnet: 'grok-4.6',
       haiku: 'grok-4.6',
+    }),
+  },
+  {
+    value: 'gemini-3.7-flash',
+    name: 'gemini-3.7-flash',
+    selectionName: 'gemini-3.7-flash',
+    description: 'Uses gemini-3.7-flash for all main model aliases.',
+    selectionDescription: 'Uses gemini-3.7-flash for Opus, Sonnet, and Haiku.',
+    requiredModels: ['gemini-3.7-flash', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
+    environment: createModelEnvironment({
+      opus: 'gemini-3.7-flash',
+      sonnet: 'gemini-3.7-flash',
+      haiku: 'gemini-3.7-flash',
     }),
   },
   {
@@ -279,33 +308,11 @@ const LLM_STRATEGY_OVERRIDES = {
       haiku: 'gpt-5.6-luna',
     }),
   },
-  'glm-5.2': {
-    description: 'Uses glm-5.2 for all main model aliases. Select a subagent model at launch.',
-    selectionDescription: 'Uses glm-5.2 for all main model aliases. Select a subagent model at launch.',
-    requiredModels: ['glm-5.2'],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'glm-5.2',
-      sonnet: 'glm-5.2',
-      haiku: 'glm-5.2',
-    }),
-  },
+
   'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
   'minimax-m3': llmSingleModelStrategy('minimax-m3'),
-  'grok-4.6': llmSingleModelStrategy('grok-4.6'),
   'kimi-k3': llmSingleModelStrategy('kimi-k3'),
-  deepseek: {
-    description: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',
-    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731. Select a subagent model at launch.',
-    requiredModels: ['deepseek-v4-pro-0813', 'deepseek-v4-flash-0731'],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({
-      opus: 'deepseek-v4-pro-0813',
-      sonnet: 'deepseek-v4-pro-0813',
-      haiku: 'deepseek-v4-flash-0731',
-    }),
-  },
-  'deepseek-v4-flash-0731': llmSingleModelStrategy('deepseek-v4-flash-0731'),
+
 };
 
 export function normalizeStrategyValue(strategyValue) {

@@ -28,20 +28,21 @@ test('Codex allowlists stay service-scoped', () => {
     'deepseek-v4-pro-0813',
     'deepseek-v4-flash-0731',
     'kimi-k3',
-    'glm-5.2',
     'minimax-m3',
+    'qwen3.8-max',
+    'glm-5.3-flash',
+    'grok-4.6',
+    'gemini-3.7-flash',
   ]);
   assert.deepEqual(CODEX_ALLOWED_MODELS.llm, [
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'glm-5.3',
+    'glm-5.3-flash',
     'qwen3.8-max',
     'minimax-m3',
-    'grok-4.6',
-    'glm-5.2',
     'kimi-k3',
-    'deepseek-v4-pro-0813',
-    'deepseek-v4-flash-0731',
   ]);
 });
 
@@ -83,6 +84,37 @@ test('Codex provider-only runtime args preserve all six routing settings and the
   assert.equal(args.some((value) => value.includes('model_catalog_json')), false);
 });
 
+test('Codex runtime catalog configures the GLM 5.3 models for the native picker', () => {
+  const catalog = buildCodexModelCatalog({
+    models: ['glm-5.3', 'glm-5.3-flash'],
+  });
+
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), ['glm-5.3', 'glm-5.3-flash']);
+  assert.deepEqual(catalog.models.map((entry) => entry.display_name), ['GLM 5.3', 'GLM 5.3 Flash']);
+  assert.deepEqual(catalog.models.map((entry) => entry.description), ['GLM 5.3', 'GLM 5.3 Flash']);
+  assert.equal(catalog.models.every((entry) => entry.visibility === 'list' && entry.supported_in_api === true), true);
+});
+
+test('Codex runtime catalog configures the added RouterLab models for the native picker', () => {
+  const catalog = buildCodexModelCatalog({
+    models: ['qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.7-flash'],
+  });
+
+  assert.deepEqual(catalog.models.map((entry) => entry.slug), [
+    'qwen3.8-max',
+    'glm-5.3-flash',
+    'grok-4.6',
+    'gemini-3.7-flash',
+  ]);
+  assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
+    'Qwen 3.8 Max',
+    'GLM 5.3 Flash',
+    'Grok 4.6',
+    'Gemini 3.7 Flash',
+  ]);
+  assert.equal(catalog.models.every((entry) => entry.visibility === 'list' && entry.supported_in_api === true), true);
+});
+
 test('Codex runtime catalog exposes only RouterLab models to the native picker', () => {
   const catalog = buildCodexModelCatalog({
     models: ['qwen3.8-max', 'gpt-5.6-sol'],
@@ -99,6 +131,7 @@ test('Codex runtime catalog exposes only RouterLab models to the native picker',
   assert.equal(catalog.models[0].display_name, 'Qwen 3.8 Max');
   assert.equal(catalog.models[0].context_window, 200000);
   assert.equal(catalog.models[0].visibility, 'list');
+  assert.equal(catalog.models[0].supports_reasoning_summaries, false);
   assert.equal(catalog.models[1].context_window, 128000);
 });
 

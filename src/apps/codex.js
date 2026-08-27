@@ -17,20 +17,21 @@ export const CODEX_ALLOWED_MODELS = {
     'deepseek-v4-pro-0813',
     'deepseek-v4-flash-0731',
     'kimi-k3',
-    'glm-5.2',
     'minimax-m3',
+    'qwen3.8-max',
+    'glm-5.3-flash',
+    'grok-4.6',
+    'gemini-3.7-flash',
   ],
   llm: [
     'gpt-5.6-sol',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'glm-5.3',
+    'glm-5.3-flash',
     'qwen3.8-max',
     'minimax-m3',
-    'grok-4.6',
-    'glm-5.2',
     'kimi-k3',
-    'deepseek-v4-pro-0813',
-    'deepseek-v4-flash-0731',
   ],
 };
 
@@ -54,6 +55,29 @@ const FALLBACK_REASONING_LEVELS = [
   { effort: 'medium', description: 'Balanced speed and reasoning depth' },
   { effort: 'high', description: 'Greater reasoning depth for complex tasks' },
 ];
+
+const CODEX_MODEL_METADATA = {
+  'glm-5.3': {
+    displayName: 'GLM 5.3',
+    description: 'GLM 5.3',
+  },
+  'glm-5.3-flash': {
+    displayName: 'GLM 5.3 Flash',
+    description: 'GLM 5.3 Flash',
+  },
+  'qwen3.8-max': {
+    displayName: 'Qwen 3.8 Max',
+    description: 'Qwen 3.8 Max',
+  },
+  'grok-4.6': {
+    displayName: 'Grok 4.6',
+    description: 'Grok 4.6',
+  },
+  'gemini-3.7-flash': {
+    displayName: 'Gemini 3.7 Flash',
+    description: 'Gemini 3.7 Flash',
+  },
+};
 export function assertCodexCliAvailable() {
   const codex = detectCodexCli();
   if (!codex.installed) {
@@ -154,7 +178,7 @@ export function buildCodexModelCatalog({
 
   return {
     models: models.map((model, index) => {
-      const metadata = metadataById.get(model) ?? {};
+      const metadata = { ...(CODEX_MODEL_METADATA[model] ?? {}), ...(metadataById.get(model) ?? {}) };
       const contextWindow = metadata.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
       const inputModalities = Array.isArray(metadata.inputModalities) && metadata.inputModalities.length > 0
         ? metadata.inputModalities
@@ -178,6 +202,7 @@ export function buildCodexModelCatalog({
         upgrade: null,
         base_instructions: metadata.baseInstructions ?? FALLBACK_BASE_INSTRUCTIONS,
         default_reasoning_summary: 'none',
+        supports_reasoning_summaries: metadata.supportsReasoningSummaries === true,
         support_verbosity: false,
         default_verbosity: null,
         truncation_policy: { mode: 'bytes', limit: 10000 },

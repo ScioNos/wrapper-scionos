@@ -91,7 +91,7 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
     ...requireServiceConfig('llm'),
     baseUrl: `http://127.0.0.1:${gateway.address().port}`,
   };
-  const env = buildClaudeCodeEnvironment(LOCAL_GATEWAY_TOKEN, service, 'glm-5.2', {
+  const env = buildClaudeCodeEnvironment(LOCAL_GATEWAY_TOKEN, service, 'glm-5.3', {
     env: {
       ...process.env,
       CLAUDE_CONFIG_DIR: configDir,
@@ -107,7 +107,7 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
     '--print',
     'Reply with exactly claude-smoke-ok.',
     '--model',
-    'glm-5.2',
+    'glm-5.3',
     '--output-format',
     'json',
     '--max-turns',
@@ -127,7 +127,10 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
     assert.equal(entry.authorization, `Bearer ${LOCAL_GATEWAY_TOKEN}`);
     assert.doesNotMatch(entry.body, new RegExp(RAW_ROUTERLAB_SENTINEL));
   }
-  assert.ok(modelRequests.every((entry) => JSON.parse(entry.body).model === 'glm-5.2'));
+  assert.ok(
+    modelRequests.every((entry) => ['glm-5.3', 'glm-5.3-flash'].includes(JSON.parse(entry.body).model)),
+    JSON.stringify(modelRequests.map((entry) => JSON.parse(entry.body).model), null, 2),
+  );
 });
 
 function writeClaudeMessageStream(res, model, text) {

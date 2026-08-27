@@ -34,7 +34,7 @@ On Windows, PowerShell may resolve the generated `wrapper-scionos.ps1` or `npx.p
 ## Main commands
 
     wrapper-scionos claude-code --service routerlab --strategy aws
-    wrapper-scionos claude-code --service llm --strategy glm-5.2
+    wrapper-scionos claude-code --service llm --strategy glm-5.3
     wrapper-scionos auth login --service routerlab
     wrapper-scionos auth logout --service routerlab
     wrapper-scionos auth status --service llm
@@ -81,7 +81,7 @@ Claude Code 2.1.220 or newer is launched through a loopback proxy. Wrapper-owned
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
 
-For both services (`routerlab` and `llm`), Claude Code allows selecting a subagent model at launch (or via `--subagent-model <id>`) from verified lightweight models (`claude-haiku-4-5`, `aws-claude-haiku-4-5`, `deepseek-v4-flash-0731`, `gpt-5.6-luna`). For `--service llm`, the `claude` strategy maps Custom and Haiku to `claude-fable-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. The LLM strategy catalogue is `claude`, `claude-gpt`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `kimi-k3`, and `deepseek` (Opus & Sonnet => `deepseek-v4-pro-0813`, Haiku => `deepseek-v4-flash-0731`).
+Claude Code allows selecting a verified subagent model at launch or via `--subagent-model <id>`. RouterLab supports `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `deepseek-v4-flash-0731`, and `gpt-5.6-luna`; RouterLab LLM supports `claude-haiku-4-5`, `glm-5.3-flash`, `deepseek-v4-flash-0731`, and `gpt-5.6-luna`. The RouterLab main-strategy catalogue is Claude, AWS Claude, OpenAI GPT, DeepSeek V4, Kimi K3, MiniMax M3, Qwen 3.8 Max, GLM 5.3 Flash, Grok 4.6, and Gemini 3.7 Flash. For `--service llm`, the `claude` strategy maps Custom and Haiku to `claude-fable-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. The second choice, `glm-5.3`, maps Opus and Sonnet to `glm-5.3`, and Haiku and the default subagent to `glm-5.3-flash`. The LLM main-strategy catalogue is `claude`, `glm-5.3`, `claude-gpt`, `qwen3.8-max`, `minimax-m3`, and `kimi-k3`; `glm-5.3-flash` and `deepseek-v4-flash-0731` are also available in the subagent picker.
 
 Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted as an input token source with its deprecation warning, but the raw token and every RouterLab token variable are removed from the child environment. Claude receives only a random, process-local proxy credential. Provider, endpoint, authentication, header, and model-routing variables are sanitized; unrelated native tool, MCP, certificate, and network variables remain inherited. Loopback is merged into `NO_PROXY`/`no_proxy`.
 
@@ -98,7 +98,7 @@ Claude Desktop is supported only through the authenticated local mapping proxy. 
     wrapper-scionos claude-desktop apply-proxy --service llm --yes
     wrapper-scionos claude-desktop proxy --service llm
 
-`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation. For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, and `minimax-m3`. Only models returned by RouterLab discovery are displayed.
+`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation. For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `glm-5.3-flash`, `grok-4.6`, and `gemini-3.7-flash`. Only models returned by RouterLab discovery are displayed.
 
 Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
 
@@ -121,8 +121,8 @@ Codex connects directly to the selected RouterLab Responses endpoint:
 
 The wrapper allowlists these initial models:
 
-- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, `minimax-m3`.
-- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `kimi-k3`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`.
+- `routerlab`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `glm-5.3-flash`, `grok-4.6`, `gemini-3.7-flash`.
+- `llm`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `glm-5.3`, `glm-5.3-flash`, `qwen3.8-max`, `minimax-m3`, `kimi-k3`.
 
 Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. Interactive launch asks among the intersection and automatically selects it when only one model remains. `--no-prompt` without `--model` requires `gpt-5.6-sol` to be available.
 
@@ -170,6 +170,6 @@ All user-provided base URL variables, including `ANTHROPIC_BASE_URL`, are ignore
 
 `npm test` uses internal dependency injection for local fixtures; production URL variables cannot redirect the wrapper. `npm run test:claude-real` validates the installed Claude Code CLI against hostile local settings. `npm run test:codex-real` validates a real non-interactive Codex request against a local Responses endpoint and checks through `app-server` that `model/list` exposes the temporary catalog in the expected order with the selected model active. Both smoke tests use loopback-only fake services and never contact RouterLab. Coverage gates remain 85% for lines/functions and 80% for branches.
 
-For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-5.3.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
+For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-6.0.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
 
 Architecture details are in [docs/architecture-notes.md](./docs/architecture-notes.md).

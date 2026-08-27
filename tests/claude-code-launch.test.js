@@ -148,12 +148,12 @@ test('Claude Code rejects a verified catalog with no authorized model', async ()
   assert.equal(proxyStarts, 0);
 });
 
-test('Claude Code accepts a verified RouterLab LLM subagent selection', async () => {
+test('Claude Code launches the two-model RouterLab LLM GLM strategy', async () => {
   const calls = {};
   await launchClaudeCode({
     serviceValue: 'llm',
-    strategyValue: 'glm-5.2',
-    subagentModel: 'deepseek-v4-flash-0731',
+    strategyValue: 'glm-5.3',
+    subagentModel: 'glm-5.3-flash',
     token: 'llm-subagent-token-with-enough-length',
     noPrompt: true,
     claudeArgs: ['--print'],
@@ -161,9 +161,9 @@ test('Claude Code accepts a verified RouterLab LLM subagent selection', async ()
     detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
     fetchModelsFn: async () => ({
       valid: true,
-      models: ['glm-5.2', 'deepseek-v4-flash-0731'],
+      models: ['glm-5.3', 'glm-5.3-flash'],
     }),
-    chooseStrategyFn: async () => 'glm-5.2',
+    chooseStrategyFn: async () => 'glm-5.3',
     startLongRunningLlmProxyFn: async (options) => {
       calls.proxy = options;
       return {
@@ -178,8 +178,11 @@ test('Claude Code accepts a verified RouterLab LLM subagent selection', async ()
     stopLongRunningLlmProxyFn: async () => {},
   });
 
-  assert.deepEqual(calls.proxy.allowedModels, ['glm-5.2', 'deepseek-v4-flash-0731']);
-  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+  assert.deepEqual(calls.proxy.allowedModels, ['glm-5.3', 'glm-5.3-flash']);
+  assert.equal(calls.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3');
+  assert.equal(calls.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'glm-5.3');
+  assert.equal(calls.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'glm-5.3-flash');
+  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'glm-5.3-flash');
 });
 
 test('Claude Code preserves a child failure when proxy cleanup also fails', async () => {

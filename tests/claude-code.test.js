@@ -50,7 +50,7 @@ test('Claude Code launch environment is sanitized without changing native tool v
   const env = buildClaudeCodeEnvironment(
     'generated-local-token-with-enough-length',
     service,
-    'glm-5.2',
+    'minimax-m3',
     { env: sourceEnv },
   );
 
@@ -84,20 +84,32 @@ test('Claude Code uses a selected RouterLab LLM subagent model', () => {
   const env = buildClaudeCodeEnvironment(
     'generated-local-token-with-enough-length',
     service,
-    'glm-5.2',
+    'minimax-m3',
     { env: {}, subagentModel: 'deepseek-v4-flash-0731' },
   );
 
   assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
-  assert.throws(
-    () => buildClaudeCodeEnvironment(
-      'generated-local-token-with-enough-length',
-      service,
-      'glm-5.2',
-      { env: {}, subagentModel: 'not-allowed' },
-    ),
-    /not supported/,
+  const glmEnv = buildClaudeCodeEnvironment(
+    'generated-local-token-with-enough-length',
+    service,
+    'glm-5.3',
+    { env: {} },
   );
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3');
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_SONNET_MODEL, 'glm-5.3');
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'glm-5.3-flash');
+  assert.equal(glmEnv.CLAUDE_CODE_SUBAGENT_MODEL, 'glm-5.3-flash');
+  for (const removedModel of ['glm-5.2', 'deepseek-v4-pro-0813', 'not-allowed']) {
+    assert.throws(
+      () => buildClaudeCodeEnvironment(
+        'generated-local-token-with-enough-length',
+        service,
+        'minimax-m3',
+        { env: {}, subagentModel: removedModel },
+      ),
+      /not supported/,
+    );
+  }
 });
 
 test('Claude Native injects the verified Fable option and official model aliases', () => {

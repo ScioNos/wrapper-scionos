@@ -367,8 +367,8 @@ test('Claude Desktop profile metadata restores loopback URL, service, and strate
     metaPath: path.join(dir, '_meta.json'),
   };
   const applied = applyProxyClaudeDesktop({
-    serviceValue: 'llm', strategyValue: 'glm-5.2', strategyValues: ['glm-5.2'],
-    routes: modelRoutesForDesktopMapping('llm', ['glm-5.2']),
+    serviceValue: 'llm', strategyValue: 'minimax-m3', strategyValues: ['minimax-m3'],
+    routes: modelRoutesForDesktopMapping('llm', ['minimax-m3']),
     host: '::1', port: 18080, gatewayToken: DESKTOP_TEST_TOKEN, dryRun: false, paths,
   });
   assert.equal(applied.profile.inferenceGatewayBaseUrl, 'http://[::1]:18080');
@@ -377,7 +377,7 @@ test('Claude Desktop profile metadata restores loopback URL, service, and strate
   assert.equal(credential.host, '::1');
   assert.equal(credential.port, 18080);
   assert.equal(credential.metadata.service, 'llm');
-  assert.deepEqual(credential.metadata.strategies, ['glm-5.2']);
+  assert.deepEqual(credential.metadata.strategies, ['minimax-m3']);
   assert.equal(credential.metadata.baseUrl, 'http://[::1]:18080');
 });
 
@@ -471,11 +471,11 @@ test('CLI process exit codes distinguish success, usage, and runtime failures', 
 test('Desktop stored proxy configuration helpers restore and reconcile explicit choices', () => {
   const credential = {
     host: '::1', port: 17000,
-    metadata: { schemaVersion: 1, mode: 'proxy', service: 'llm', strategy: null, strategies: ['glm-5.2'] },
+    metadata: { schemaVersion: 1, mode: 'proxy', service: 'llm', strategy: null, strategies: ['minimax-m3'] },
   };
   const baseOptions = parseOptions([]);
   const stored = storedProxyConfig(credential, baseOptions);
-  assert.deepEqual(stored, { serviceValue: 'llm', strategyValue: 'claude', strategyValues: ['glm-5.2'], host: '::1', port: 17000 });
+  assert.deepEqual(stored, { serviceValue: 'llm', strategyValue: 'claude', strategyValues: ['minimax-m3'], host: '::1', port: 17000 });
   assert.equal(defaultDesktopStrategy('routerlab'), 'default');
   assert.equal(defaultDesktopStrategy('llm'), 'claude');
 
@@ -487,11 +487,11 @@ test('Desktop stored proxy configuration helpers restore and reconcile explicit 
   assert.equal(sameProxyConfig(stored, merged), false);
   assert.equal(sameProxyConfig(stored, { ...stored }), true);
 
-  const requestedOptions = parseOptions(['--service', 'llm', '--strategy', 'glm-5.2', '--host', '[::1]', '--port', '18000']);
+  const requestedOptions = parseOptions(['--service', 'llm', '--strategy', 'minimax-m3', '--host', '[::1]', '--port', '18000']);
   const requested = requestedProxyConfig(requestedOptions);
-  assert.deepEqual(requested, { serviceValue: 'llm', strategyValue: 'glm-5.2', strategyValues: null, host: '::1', port: 18000 });
+  assert.deepEqual(requested, { serviceValue: 'llm', strategyValue: 'minimax-m3', strategyValues: null, host: '::1', port: 18000 });
   const reconciled = mergeExplicitProxyConfig(stored, requestedOptions);
-  assert.equal(reconciled.strategyValue, 'glm-5.2');
+  assert.equal(reconciled.strategyValue, 'minimax-m3');
   assert.equal(reconciled.strategyValues, null);
   assert.equal(reconciled.host, '::1');
 });
@@ -656,6 +656,10 @@ test('CLI help, version, dry-run logout, and errors honor JSON contracts', async
 test('CLI validation classifies invalid services and strategies as usage errors', async () => {
   await assert.rejects(() => main(['doctor', '--service', 'missing']), (error) => error.exitCode === 2);
   await assert.rejects(() => main(['claude-code', '--service', 'routerlab', '--strategy', 'missing']), (error) => error.exitCode === 2);
+  await assert.rejects(() => main(['claude-code', '--service', 'routerlab', '--strategy', 'glm-5.2']), (error) => error.exitCode === 2);
+  await assert.rejects(() => main(['claude-code', '--service', 'llm', '--strategy', 'glm-5.2']), (error) => error.exitCode === 2);
+  await assert.rejects(() => main(['claude-code', '--service', 'llm', '--strategy', 'deepseek']), (error) => error.exitCode === 2);
+  await assert.rejects(() => main(['claude-code', '--service', 'llm', '--strategy', 'grok-4.6']), (error) => error.exitCode === 2);
   await assert.rejects(() => main(['claude-desktop', 'apply-proxy', '--strategy', 'missing']), (error) => error.exitCode === 2);
 });
 

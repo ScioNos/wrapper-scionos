@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
 import { DEFAULT_ANTHROPIC_VERSION } from '../routerlab/services.js';
+import { supportsOneMillionContext } from '../routerlab/strategy-models.js';
 
 export const DEFAULT_LLM_PROXY_HOST = '127.0.0.1';
 export const LEGACY_LLM_PROXY_GATEWAY_TOKEN = 'scionos-local';
@@ -49,12 +50,12 @@ export function createLongRunningLlmProxy({
       }
 
       const bodyText = await readRequestBody(req);
-      validateAllowedModelRequest(req, bodyText, effectiveAllowedModels);
+      const normalizedBodyText = validateAllowedModelRequest(req, bodyText, effectiveAllowedModels);
 
       await forwardLongRunningLlmRequest(req, res, {
         targetBaseUrl,
         routerlabToken,
-        body: bodyText,
+        body: normalizedBodyText,
         upstreamAuth,
       });
     } catch (error) {
@@ -74,14 +75,18 @@ export function createLongRunningLlmProxy({
 }
 
 export function validateAllowedModelRequest(req, bodyText, allowedModels) {
-  if (!allowedModels) return;
+  return normalizeAllowedModelRequest(req, bodyText, allowedModels);
+}
+
+export function normalizeAllowedModelRequest(req, bodyText, allowedModels) {
+  if (!allowedModels) return bodyText;
   const pathname = new URL(req.url, 'http://127.0.0.1').pathname.replace(/\/+$/, '');
-  if (String(req.method).toUpperCase() !== 'POST') return;
+  if (String(req.method).toUpperCase() !== 'POST') return bodyText;
 
   const isMessageRequest = pathname.endsWith('/v1/messages')
     || pathname.endsWith('/v1/messages/count_tokens');
   const isBatchRequest = pathname.endsWith('/v1/messages/batches');
-  if (!isMessageRequest && !isBatchRequest) return;
+  if (!isMessageRequest && !isBatchRequest) return bodyText;
 
   let payload;
   try {
@@ -99,10 +104,36 @@ export function validateAllowedModelRequest(req, bodyText, allowedModels) {
     throw proxyError('Claude model request must include a model.', 400, 'missing_model');
   }
 
-  const denied = models.find((model) => !allowedModels.has(model));
-  if (denied) {
+  const normalizedModels = models.map((model) => normalizeAllowedModel(model, allowedModels));
+  const deniedIndex = normalizedModels.findIndex((model) => model === null);
+  if (deniedIndex !== -1) {
+    const denied = models[deniedIndex];
     throw proxyError(`Model "${denied}" is not allowed for this RouterLab Claude Code session.`, 403, 'model_not_allowed');
   }
+
+  if (isBatchRequest) {
+    normalizedModels.forEach((model, index) => {
+      payload.requests[index].params.model = model;
+    });
+  } else {
+    payload.model = normalizedModels[0];
+  }
+
+  return normalizedModels.some((model, index) => model !== models[index])
+    ? JSON.stringify(payload)
+    : bodyText;
+}
+
+function normalizeAllowedModel(model, allowedModels) {
+  if (allowedModels.has(model)) return model;
+
+  const match = model.match(/^(.*)\[1m\]$/);
+  if (!match) return null;
+
+  const baseModel = match[1];
+  return allowedModels.has(baseModel) && supportsOneMillionContext(baseModel)
+    ? baseModel
+    : null;
 }
 
 export async function startLongRunningLlmProxy({

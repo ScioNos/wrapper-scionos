@@ -14,12 +14,20 @@ import { requireServiceConfig } from '../src/routerlab/services.js';
 
 test('Codex availability is the allowlist/discovery intersection in allowlist order', () => {
   assert.deepEqual(
-    availableCodexModels('routerlab', ['unknown', 'minimax-m3', 'glm-5.2', 'gpt-5.6-sol']),
-    ['gpt-5.6-sol', 'glm-5.2', 'minimax-m3'],
+    availableCodexModels('routerlab', ['unknown', 'minimax-m3', 'kimi-k3', 'gpt-5.6-sol']),
+    ['gpt-5.6-sol', 'kimi-k3', 'minimax-m3'],
   );
   assert.deepEqual(
-    availableCodexModels('llm', ['deepseek-v4-flash-0731', 'qwen3.8-max', 'gpt-5.6-luna']),
-    ['gpt-5.6-luna', 'qwen3.8-max', 'deepseek-v4-flash-0731'],
+    availableCodexModels('llm', [
+      'deepseek-v4-flash-0731',
+      'deepseek-v4-pro-0813',
+      'glm-5.2',
+      'glm-5.3-flash',
+      'qwen3.8-max',
+      'glm-5.3',
+      'gpt-5.6-luna',
+    ]),
+    ['gpt-5.6-luna', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max'],
   );
 });
 

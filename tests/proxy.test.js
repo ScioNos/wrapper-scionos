@@ -59,7 +59,7 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-kim3' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-lm5.2' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3-flash' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-max-m3'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-deev4-pro-0813'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-deev4-flash-0731'), true);
@@ -357,6 +357,63 @@ test('Claude Code proxy enforces the discovered service model allowlist before f
 });
 
 test('shared long-running proxy preserves generic OpenAI-compatible requests', async () => {
+test('Claude Code Kimi K3 1M model variant is normalized before forwarding', async () => {
+  const captured = [];
+  const upstream = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      captured.push(JSON.parse(body));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true}');
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
+    routerlabToken: 'routerlab-token-with-enough-length',
+    upstreamAuth: 'anthropic',
+    allowedModels: ['kimi-k3', 'claude-haiku-4-5'],
+  });
+  const headers = {
+    authorization: `Bearer ${proxy.gatewayToken}`,
+    'content-type': 'application/json',
+  };
+
+  try {
+    const oneMillion = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'kimi-k3[1m]', messages: [] }),
+    });
+    assert.equal(oneMillion.status, 200);
+
+    const batch = await fetch(`${proxy.baseUrl}/v1/messages/batches`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        requests: [
+          { custom_id: 'kimi', params: { model: 'kimi-k3[1m]', messages: [] } },
+        ],
+      }),
+    });
+    assert.equal(batch.status, 200);
+
+    const unsupported = await fetch(`${proxy.baseUrl}/v1/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'claude-haiku-4-5[1m]', messages: [] }),
+    });
+    assert.equal(unsupported.status, 403);
+    assert.equal((await unsupported.json()).error.code, 'model_not_allowed');
+
+    assert.deepEqual(captured[0].model, 'kimi-k3');
+    assert.deepEqual(captured[1].requests[0].params.model, 'kimi-k3');
+  } finally {
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
   const captured = [];
   const upstream = http.createServer((req, res) => {
     const chunks = [];

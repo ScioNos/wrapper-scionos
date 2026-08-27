@@ -34,7 +34,7 @@ Sous Windows, PowerShell peut résoudre le shim `wrapper-scionos.ps1` ou `npx.ps
 ## Commandes principales
 
     wrapper-scionos claude-code --service routerlab --strategy aws
-    wrapper-scionos claude-code --service llm --strategy glm-5.2
+    wrapper-scionos claude-code --service llm --strategy glm-5.3
     wrapper-scionos auth login --service routerlab
     wrapper-scionos auth logout --service routerlab
     wrapper-scionos auth status --service llm
@@ -81,7 +81,7 @@ Claude Code 2.1.220 ou plus récent est lancé via un proxy loopback. Les identi
 
     wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Résume ce dépôt"
 
-Pour les deux services (`routerlab` et `llm`), Claude Code permet de choisir le sous-agent au lancement (ou via `--subagent-model <id>`) parmi les modèles légers vérifiés du service (`claude-haiku-4-5`, `aws-claude-haiku-4-5`, `deepseek-v4-flash-0731`, `gpt-5.6-luna`). Pour `--service llm`, la stratégie `claude` associe Custom et Haiku à `claude-fable-5`, Opus à `claude-opus-5` et Sonnet à `claude-sonnet-5`. Le catalogue des stratégies LLM est : `claude`, `claude-gpt`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `kimi-k3` et `deepseek` (Opus & Sonnet => `deepseek-v4-pro-0813`, Haiku => `deepseek-v4-flash-0731`).
+Claude Code permet de choisir un sous-agent vérifié au lancement ou via `--subagent-model <id>`. RouterLab prend en charge `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `deepseek-v4-flash-0731` et `gpt-5.6-luna` ; RouterLab LLM prend en charge `claude-haiku-4-5`, `glm-5.3-flash`, `deepseek-v4-flash-0731` et `gpt-5.6-luna`. Le catalogue des stratégies principales RouterLab est : Claude, AWS Claude, OpenAI GPT, DeepSeek V4, Kimi K3, MiniMax M3, Qwen 3.8 Max, GLM 5.3 Flash, Grok 4.6 et Gemini 3.7 Flash. Pour `--service llm`, la stratégie `claude` associe Custom et Haiku à `claude-fable-5`, Opus à `claude-opus-5` et Sonnet à `claude-sonnet-5`. Le deuxième choix, `glm-5.3`, associe Opus et Sonnet à `glm-5.3`, et Haiku ainsi que le sous-agent par défaut à `glm-5.3-flash`. Le catalogue des stratégies principales LLM est : `claude`, `glm-5.3`, `claude-gpt`, `qwen3.8-max`, `minimax-m3` et `kimi-k3` ; `glm-5.3-flash` et `deepseek-v4-flash-0731` sont également disponibles dans le sélecteur de sous-agent.
 
 Claude Code cible toujours le service officiel via son proxy loopback dédié. Le wrapper génère `ANTHROPIC_BASE_URL` uniquement pour le processus enfant ; une valeur utilisateur est ignorée. L’ancien `ANTHROPIC_AUTH_TOKEN` reste accepté comme source d’entrée avec son avertissement de dépréciation, mais le token brut et toutes les variables de token RouterLab sont retirés de l’environnement enfant. Claude reçoit seulement un identifiant aléatoire propre au proxy local et à la durée du processus. Les variables de fournisseur, endpoint, authentification, en-têtes et routage de modèle sont assainies ; les variables natives indépendantes concernant outils, MCP, certificats et réseau restent héritées. Le loopback est ajouté à `NO_PROXY` et `no_proxy`.
 
@@ -100,7 +100,7 @@ Claude Desktop est pris en charge uniquement via le proxy local authentifié ave
 
 `apply-proxy` ne stocke dans le profil qu’un identifiant local aléatoire de 32 octets ; le token RouterLab reste dans sa source sécurisée. Avant l’application et avant chaque démarrage, le wrapper découvre `/v1/models` directement sur l’endpoint RouterLab fixe et n’expose que l’intersection avec les routes Desktop configurées. Les erreurs de découverte, authentification, redirection, timeout, JSON invalide, catalogue vide ou intersection vide bloquent tout et ne modifient aucun profil.
 
-Pour `--service routerlab`, le catalogue Desktop reflète les stratégies Claude Code de RouterLab. Claude Native expose `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5` et `claude-haiku-4-5` ; les autres routes couvrent AWS Claude, GPT 5.6, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2` et `minimax-m3`. Seuls les modèles retournés par la découverte RouterLab sont affichés.
+Pour `--service routerlab`, le catalogue Desktop reflète les stratégies Claude Code de RouterLab. Claude Native expose `claude-fable-5`, `claude-opus-5`, `claude-sonnet-5` et `claude-haiku-4-5` ; les autres routes couvrent AWS Claude, GPT 5.6, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `glm-5.3-flash`, `grok-4.6` et `gemini-3.7-flash`. Seuls les modèles retournés par la découverte RouterLab sont affichés.
 
 Les profils utilisent le schéma de métadonnées `wrapperScionos` v2 avec le service fixe, les stratégies, l’origine loopback et les routes vérifiées, sans token RouterLab. Un profil proxy v1 valide est migré après redécouverte en conservant son identifiant local aléatoire. Un profil direct, non géré ou sans métadonnées exige un remplacement explicite avec `apply-proxy --yes` ou une restauration officielle ; un ancien token direct n’est jamais réutilisé.
 
@@ -123,8 +123,8 @@ Codex se connecte directement au point d’accès Responses RouterLab sélection
 
 Le wrapper autorise les modèles initiaux suivants :
 
-- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `glm-5.2`, `minimax-m3`.
-- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `qwen3.8-max`, `minimax-m3`, `grok-4.6`, `glm-5.2`, `kimi-k3`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`.
+- `routerlab` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4-pro-0813`, `deepseek-v4-flash-0731`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `glm-5.3-flash`, `grok-4.6`, `gemini-3.7-flash`.
+- `llm` : `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `glm-5.3`, `glm-5.3-flash`, `qwen3.8-max`, `minimax-m3`, `kimi-k3`.
 
 Avant le lancement, `GET /v1/models` sert uniquement à croiser cette liste avec les identifiants actuellement disponibles sur RouterLab. Un `--model` explicite doit correspondre exactement à un identifiant disponible ; aucune substitution n’est faite. Le mode interactif propose l’intersection et sélectionne automatiquement le modèle lorsqu’il n’en reste qu’un. `--no-prompt` sans `--model` exige que `gpt-5.6-sol` soit disponible.
 
@@ -172,6 +172,6 @@ Toutes les variables utilisateur de base URL, dont `ANTHROPIC_BASE_URL`, sont ig
 
 `npm test` utilise l’injection de dépendances interne pour les fixtures locales ; les variables d’URL de production ne peuvent pas rediriger le wrapper. `npm run test:claude-real` valide le Claude Code installé face à des réglages locaux hostiles. `npm run test:codex-real` valide une vraie requête Codex non interactive contre un endpoint Responses local et vérifie via `app-server` que `model/list` expose le catalogue temporaire dans l’ordre attendu avec le modèle sélectionné actif. Ces deux smoke tests utilisent uniquement de faux services loopback et ne contactent jamais RouterLab. Les seuils restent fixés à 85 % pour les lignes/fonctions et 80 % pour les branches.
 
-Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-5.3.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
+Pour une version non publiée, crée un tarball local avec `npm pack`, puis teste-le avec `npx --yes --package ./wrapper-scionos-6.0.0.tgz wrapper-scionos`. Les instructions pour une version publiée restent `npm install -g wrapper-scionos` et `npx wrapper-scionos`.
 
 Les détails d’architecture sont dans [docs/architecture-notes.md](./docs/architecture-notes.md).

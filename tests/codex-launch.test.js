@@ -124,7 +124,7 @@ test('Codex rejects routing overrides before CLI detection, token use, or model 
 test('Codex no-prompt launches the default only when discovered', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['glm-5.2', 'gpt-5.6-sol'],
+    models: ['kimi-k3', 'gpt-5.6-sol'],
     modelMetadata: [],
   });
   await launchCodexForService({
@@ -136,7 +136,7 @@ test('Codex no-prompt launches the default only when discovered', async () => {
 
   const missingDefault = launchDependencies({
     valid: true,
-    models: ['glm-5.2'],
+    models: ['kimi-k3'],
     modelMetadata: [],
   });
   await assert.rejects(
@@ -176,7 +176,7 @@ test('Codex refuses every model discovery failure without launching', async () =
 test('Codex does not silently substitute an unavailable explicit model', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['gpt-5.6-sol', 'glm-5.2'],
+    models: ['gpt-5.6-sol', 'kimi-k3'],
     modelMetadata: [],
   });
   await assert.rejects(

@@ -20,7 +20,7 @@ Request bodies are capped at 64 MiB in compressed and decompressed form. Identit
 
 Claude Code uses the service selected before entering the interactive menu. The default service is `routerlab`; `--service llm` carries the LLM service, token namespace, endpoint, strategy catalog, and model environment through the same launch path. Executable discovery runs `claude --version` with a five-second limit per candidate and continues to the next candidate after a failure or timeout. Version 2.1.220 is the minimum supported release; absence, an unparseable version, or an older version is fatal before credential resolution or network access.
 
-The LLM `claude` strategy is launchable when discovery reports `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`. All LLM Claude Code strategies force `CLAUDE_CODE_SUBAGENT_MODEL=claude-haiku-4-5`; service-scoped environment construction prevents that policy from changing the `routerlab` subagent model.
+The LLM `claude` strategy is launchable when discovery reports `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`. Both services use their service-scoped default `CLAUDE_CODE_SUBAGENT_MODEL`, while an explicitly selected and verified `--subagent-model` replaces that default for the launched Claude Code child.
 
 Service bases are fixed before credential use. `ANTHROPIC_BASE_URL` and service-specific base URL variables are ignored with a credential-free warning. `ANTHROPIC_AUTH_TOKEN` remains a deprecated input-token fallback. Claude Code preserves environment-before-storage token precedence and emits a credential-free warning when both token sources are present. `--token` is rejected for Claude Code before launch because process command lines are externally observable.
 

@@ -185,6 +185,40 @@ test('Claude Code launches the two-model RouterLab LLM GLM strategy', async () =
   assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'glm-5.3-flash');
 });
 
+test('Claude Code launches RouterLab with the selected subagent model', async () => {
+  const calls = {};
+  await launchClaudeCode({
+    serviceValue: 'routerlab',
+    strategyValue: 'default',
+    subagentModel: 'deepseek-v4-flash-0731',
+    token: 'routerlab-subagent-token-with-enough-length',
+    noPrompt: true,
+    claudeArgs: ['--print'],
+  }, {
+    detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
+    fetchModelsFn: async () => ({
+      valid: true,
+      models: ['deepseek-v4-flash-0731'],
+    }),
+    chooseStrategyFn: async () => 'default',
+    startLongRunningLlmProxyFn: async (options) => {
+      calls.proxy = options;
+      return {
+        baseUrl: 'http://127.0.0.1:43123',
+        gatewayToken: 'generated-local-token',
+        server: {},
+      };
+    },
+    runInteractiveCliFn: async (_cliPath, _args, options) => {
+      calls.env = options.env;
+    },
+    stopLongRunningLlmProxyFn: async () => {},
+  });
+
+  assert.deepEqual(calls.proxy.allowedModels, ['deepseek-v4-flash-0731']);
+  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+});
+
 test('Claude Code preserves a child failure when proxy cleanup also fails', async () => {
   const childError = new Error('child startup failed');
   const cleanupError = new Error('proxy cleanup failed');

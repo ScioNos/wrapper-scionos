@@ -112,6 +112,21 @@ test('Claude Code uses a selected RouterLab LLM subagent model', () => {
   }
 });
 
+test('Claude Code uses a selected RouterLab subagent model', () => {
+  const service = {
+    ...requireServiceConfig('routerlab'),
+    baseUrl: 'http://127.0.0.1:43124',
+  };
+  const env = buildClaudeCodeEnvironment(
+    'generated-local-token-with-enough-length',
+    service,
+    'default',
+    { env: {}, subagentModel: 'deepseek-v4-flash-0731' },
+  );
+
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+});
+
 test('Claude Native injects the verified Fable option and official model aliases', () => {
   const service = {
     ...requireServiceConfig('routerlab'),

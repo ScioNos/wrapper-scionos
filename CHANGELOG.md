@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 6.0.1 - 2026-09-09
+
+### Fixed
+
+- Fixed explicit Claude Code subagent model selection for the default `routerlab` service. A selected model such as `deepseek-v4-flash-0731` is now passed to the Claude Code child instead of being replaced by the strategy default.
+- Preserved the existing selected-subagent behavior for `--service llm` and documented the corrected service-scoped behavior.
+
 ## 6.0.0 - 2026-08-27
 
 ### Breaking Changes

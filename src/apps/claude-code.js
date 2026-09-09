@@ -39,7 +39,7 @@ export function buildClaudeCodeEnvironment(token, service, strategyValue, option
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
     ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, strategyOptions),
-    ...(service.value === 'llm' && requestedSubagentModel ? { CLAUDE_CODE_SUBAGENT_MODEL: requestedSubagentModel } : {}),
+    ...(requestedSubagentModel ? { CLAUDE_CODE_SUBAGENT_MODEL: requestedSubagentModel } : {}),
   };
 }
 

@@ -279,3 +279,11 @@ test('Claude Code rejects command-line tokens without changing other command int
     'auth-token-with-enough-length',
   );
 });
+
+test('Claude Code rejects DeepSeek as a RouterLab subagent before launch', async () => {
+  await assert.rejects(
+    () => main(['claude-code', '--service', 'routerlab', '--subagent-model', 'deepseek-v4-flash-0731']),
+    (error) => error.exitCode === 2
+      && /--subagent-model must be one of: claude-haiku-4-5, aws-claude-haiku-4-5, gpt-5\.6-luna\./.test(error.message),
+  );
+});

@@ -185,12 +185,12 @@ test('Claude Code launches the two-model RouterLab LLM GLM strategy', async () =
   assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'glm-5.3-flash');
 });
 
-test('Claude Code launches RouterLab with the selected subagent model', async () => {
+test('Claude Code launches RouterLab with a supported selected subagent model', async () => {
   const calls = {};
   await launchClaudeCode({
     serviceValue: 'routerlab',
     strategyValue: 'default',
-    subagentModel: 'deepseek-v4-flash-0731',
+    subagentModel: 'gpt-5.6-luna',
     token: 'routerlab-subagent-token-with-enough-length',
     noPrompt: true,
     claudeArgs: ['--print'],
@@ -198,7 +198,7 @@ test('Claude Code launches RouterLab with the selected subagent model', async ()
     detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
     fetchModelsFn: async () => ({
       valid: true,
-      models: ['deepseek-v4-flash-0731'],
+      models: ['gpt-5.6-luna'],
     }),
     chooseStrategyFn: async () => 'default',
     startLongRunningLlmProxyFn: async (options) => {
@@ -215,8 +215,8 @@ test('Claude Code launches RouterLab with the selected subagent model', async ()
     stopLongRunningLlmProxyFn: async () => {},
   });
 
-  assert.deepEqual(calls.proxy.allowedModels, ['deepseek-v4-flash-0731']);
-  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+  assert.deepEqual(calls.proxy.allowedModels, ['gpt-5.6-luna']);
+  assert.equal(calls.env.CLAUDE_CODE_SUBAGENT_MODEL, 'gpt-5.6-luna');
 });
 
 test('Claude Code preserves a child failure when proxy cleanup also fails', async () => {

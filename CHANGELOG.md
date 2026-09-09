@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 6.0.2 - 2026-09-09
+
+### Fixed
+
+- Removed `deepseek-v4-flash-0731` from the Claude Code subagent choices for the default `routerlab` service because its upstream route rejects Claude Code tool schemas. The RouterLab LLM service and the main-model DeepSeek strategies remain unchanged.
+
 ## 6.0.1 - 2026-09-09
 
 ### Fixed

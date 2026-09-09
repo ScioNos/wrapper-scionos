@@ -5,7 +5,6 @@ export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
   'aws-claude-haiku-4-5',
-  'deepseek-v4-flash-0731',
   'gpt-5.6-luna',
 ];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [

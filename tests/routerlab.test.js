@@ -248,12 +248,12 @@ test('Claude Code lets both RouterLab and LLM services choose an available subag
     strategyValue: 'claude-gpt',
     noPrompt: true,
   }), 'aws-claude-haiku-4-5');
-  assert.equal(await chooseSubagentModel({
+  await assert.rejects(chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'default',
     preferredSubagentModel: 'deepseek-v4-flash-0731',
     modelIds: ['deepseek-v4-flash-0731'],
-  }), 'deepseek-v4-flash-0731');
+  }), /not supported/);
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'default',
@@ -262,10 +262,8 @@ test('Claude Code lets both RouterLab and LLM services choose an available subag
       assert.deepEqual(choices.map((choice) => choice.value), [
         'claude-haiku-4-5',
         'aws-claude-haiku-4-5',
-        'deepseek-v4-flash-0731',
         'gpt-5.6-luna',
       ]);
-      assert.equal(choices[2].disabled, 'Not currently available on RouterLab.');
       return 'aws-claude-haiku-4-5';
     },
   }), 'aws-claude-haiku-4-5');

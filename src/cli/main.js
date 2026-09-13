@@ -1,7 +1,8 @@
 import { createRequire } from 'node:module';
 import { CliUsageError, COMMON_OPTION_DEFINITIONS, emitOptionDeprecations, isRecognizedWrapperOption, optionConsumesNextArgument, parseOptions } from './args.js';
 import { warnDeprecationOnce } from './deprecations.js';
-import { MENU_ROUTES, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
+import { getLocalizedMenuRoutes, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
+import { translate } from './i18n.js';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { findStrategy, getClaudeCodeSubagentModels, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
@@ -13,6 +14,7 @@ import {
   planInteractiveClaudeDesktopStart,
 } from './commands/claude-desktop.js';
 import { handleCodex, launchCodexForService } from './commands/codex.js';
+import { launchOpenCodeForService } from './commands/opencode.js';
 import { handleDoctor } from './commands/doctor.js';
 import { handleStrategies } from './commands/strategies.js';
 
@@ -49,6 +51,11 @@ export const COMMAND_DEFINITIONS = [
     description: 'Launch Codex CLI directly with RouterLab', defaultAction: 'launch',
     handler: ({ action, options }) => handleCodex(action, options),
   },
+  {
+    name: 'opencode', aliases: ['open-code'], usage: 'wrapper-scionos opencode [args]',
+    description: 'Launch OpenCode through the local RouterLab proxy', defaultAction: null,
+    handler: ({ options }) => launchOpenCodeForService(options),
+  },
 ];
 
 const COMMANDS = new Map();
@@ -84,7 +91,7 @@ export async function main(argv) {
     print(pkg.version, { ...options, command: 'version' });
     return;
   }
-  const serviceAlert = formatServiceHealthAlert(options.service);
+  const serviceAlert = formatServiceHealthAlert(options.service, options.language);
   if (serviceAlert) {
     console.error(serviceAlert);
   }
@@ -121,7 +128,7 @@ export function shouldOpenInteractiveMenu(options) {
 }
 
 const OPTION_LABELS = {
-  service: '--service', strategy: '--strategy', subagentModel: '--subagent-model', model: '--model', token: '--token',
+  service: '--service', language: '--lang', strategy: '--strategy', subagentModel: '--subagent-model', model: '--model', token: '--token',
   host: '--host', port: '--port', allowOrigins: '--allow-origin',
   noPrompt: '--no-prompt', yes: '--yes', dryRun: '--dry-run', json: '--json',
   listStrategies: '--list-strategies',
@@ -144,10 +151,13 @@ const COMMAND_OPTIONS = {
     proxy: ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'allowOrigins', 'yes'],
   },
   codex: {
-    launch: ['service', 'model', 'token', 'noPrompt'],
+    launch: ['service', 'strategy', 'model', 'token', 'noPrompt'],
     template: ['service', 'model', 'json'],
     restore: ['yes', 'dryRun', 'json'],
     status: ['json'],
+  },
+  opencode: {
+    '': ['service', 'strategy', 'model', 'token', 'noPrompt'],
   },
 };
 
@@ -156,6 +166,20 @@ function validateCommand(name, action, options) {
     if (options.json) throw usageError('--json cannot be used while launching Claude Code.');
     validateOptions(name, null, options, new Set(['service', 'strategy', 'subagentModel', 'noPrompt']));
     validateClaudeOptions(options);
+    return;
+  }
+  if (name === 'opencode') {
+    if (options.json) throw usageError('--json cannot be used while launching OpenCode.');
+    validateOptions(name, null, options, new Set(['service', 'strategy', 'model', 'token', 'noPrompt']));
+    let service;
+    try {
+      service = requireServiceConfig(options.service);
+    } catch (error) {
+      throw usageError(error.message);
+    }
+    if (options.strategy && !findStrategy(options.strategy, service.value)) {
+      throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
+    }
     return;
   }
   const actionTable = COMMAND_OPTIONS[name];
@@ -208,6 +232,7 @@ function validateClaudeOptions(options) {
 
 function validateOptions(name, action, options, allowed) {
   for (const option of options.providedOptions) {
+    if (option === 'language') continue;
     if (!allowed.has(option)) {
       throw usageError((OPTION_LABELS[option] ?? option) + ' is not valid for ' + name + (action ? ' ' + action : '') + '.');
     }
@@ -236,7 +261,7 @@ function showHelp(options = {}) {
     'Options:',
     formatOptionHelp(),
     '',
-    'Global options may appear before or after a command. Supported arguments after -- are passed through unchanged; Codex routing overrides are rejected.',
+    'Global options may appear before or after a command. Supported arguments after -- are passed through unchanged; Codex and OpenCode routing overrides are rejected.',
     'Claude Desktop: use apply-proxy; direct profiles are refused because they expose the RouterLab token.',
     '',
   ].join('\n');
@@ -266,6 +291,7 @@ export async function handleInteractiveMenu(options, overrides = {}) {
     askMenu,
     handleClaudeCode,
     launchCodexForService,
+    launchOpenCodeForService,
     handleInteractiveDesktopAction,
     handleAuth,
     handleStrategies,
@@ -273,13 +299,22 @@ export async function handleInteractiveMenu(options, overrides = {}) {
     ...overrides,
   };
   const service = requireServiceConfig(options.service);
+  const language = options.language ?? 'en';
+  const localizedRoutes = getLocalizedMenuRoutes(language);
+  const clientActions = {
+    'claude-code': () => runInteractiveClaudeCode(runtime, options),
+    codex: () => runInteractiveRoutedClient('Codex CLI', runtime.launchCodexForService, runtime, options, service),
+    opencode: () => runInteractiveRoutedClient('OpenCode', runtime.launchOpenCodeForService, runtime, options, service),
+  };
   let routeId = 'home';
   while (true) {
-    const route = MENU_ROUTES[routeId];
-    const action = await runtime.askMenu(formatBreadcrumb(routeId), route.items, {
+    const route = localizedRoutes[routeId];
+    const action = await runtime.askMenu(formatBreadcrumb(routeId, language, localizedRoutes), route.items, {
       interactiveSelect: true,
       version: routeId === 'home' ? pkg.version : null,
-      message: `${route.message}  Service: ${service.label}`,
+      language,
+      helpMode: routeId === 'home' ? 'home' : 'compact',
+      message: `${translate(language, 'serviceActive', { service: service.label })}\n\n${route.message}`,
     });
     const next = resolveNavigation(routeId, action);
     if (next.kind === 'exit') return;
@@ -287,29 +322,14 @@ export async function handleInteractiveMenu(options, overrides = {}) {
       routeId = next.routeId;
       continue;
     }
-    if (action === 'claude-code') {
-      const result = await runtime.handleClaudeCode({ ...options, passthrough: [], allowBack: true }, pkg.version, []);
+    const clientAction = clientActions[action];
+    if (clientAction) {
+      const result = await clientAction();
       if (result?.kind === 'back') {
         routeId = 'home';
         continue;
       }
       return;
-    }
-    if (action === 'codex') {
-      try {
-        const exitCode = await runtime.launchCodexForService({
-          ...options,
-          service: service.value,
-          updateProcessExitCode: false,
-        });
-        if (exitCode === undefined || exitCode === 0) return;
-        console.error(`ERROR Codex CLI exited with code ${exitCode}. Returning to ScioNos Wrapper.`);
-      } catch (error) {
-        console.error(`ERROR Codex CLI could not start for ${service.label}: ${error.message}`);
-      }
-      process.exitCode = 0;
-      routeId = 'home';
-      continue;
     }
     if (routeId === 'desktop') {
       const result = await runtime.handleInteractiveDesktopAction(action, options);
@@ -323,6 +343,35 @@ export async function handleInteractiveMenu(options, overrides = {}) {
   }
 }
 
+async function runInteractiveClaudeCode(runtime, options) {
+  try {
+    const result = await runtime.handleClaudeCode({ ...options, passthrough: [], allowBack: true }, pkg.version, []);
+    return result?.kind === 'back' ? { kind: 'back' } : { kind: 'terminate' };
+  } catch (error) {
+    if (error?.name === 'MenuBackError') return { kind: 'back' };
+    throw error;
+  }
+}
+
+async function runInteractiveRoutedClient(label, launch, runtime, options, service) {
+  try {
+    const exitCode = await launch.call(runtime, {
+      ...options,
+      service: service.value,
+      interactiveMenu: true,
+      updateProcessExitCode: false,
+    });
+    if (exitCode === undefined || exitCode === 0) return { kind: 'terminate' };
+    console.error(`ERROR ${label} exited with code ${exitCode}. Returning to ScioNos Wrapper.`);
+  } catch (error) {
+    if (error?.name === 'MenuBackError') return { kind: 'back' };
+    if (error?.name === 'MenuExitError') throw error;
+    console.error(`ERROR ${label} could not start for ${service.label}: ${error.message}`);
+  }
+  process.exitCode = 0;
+  return { kind: 'back' };
+}
+
 export async function handleInteractiveDesktopAction(action, options, overrides = {}) {
   const runtime = {
     askYesNo,
@@ -334,13 +383,13 @@ export async function handleInteractiveDesktopAction(action, options, overrides 
   if (action === 'proxy') {
     const plan = runtime.planInteractiveClaudeDesktopStart(options);
     if (plan.requiresConfirmation) {
-      const confirmed = await runtime.askYesNo(formatDesktopReplacementPrompt(plan), false);
+      const confirmed = await runtime.askYesNo(formatDesktopReplacementPrompt(plan, options.language), false);
       if (!confirmed) return { kind: 'cancelled' };
     }
     desktopOptions.interactiveDesktopPlan = plan;
     desktopOptions.returnToMenuOnSigint = true;
   } else if (action === 'restore-official') {
-    desktopOptions.yes = await runtime.askYesNo('Restore Claude Desktop official mode now?', false);
+    desktopOptions.yes = await runtime.askYesNo(translate(options.language, 'restoreOfficialConfirm'), false);
   }
   return runtime.handleClaudeDesktop(action, desktopOptions);
 }

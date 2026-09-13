@@ -23,26 +23,24 @@ function nativeTempDir(t, label) {
 test('Codex allowlists stay service-scoped', () => {
   assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, [
     'gpt-5.6-sol',
+    'gpt-6-astra',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
-    'deepseek-v4-pro-0813',
-    'deepseek-v4-flash-0731',
+    'deepseek-v4.1-flash',
     'kimi-k3',
-    'minimax-m3',
     'qwen3.8-max',
+    'glm-5.3',
     'glm-5.3-flash',
-    'grok-4.6',
-    'gemini-3.7-flash',
   ]);
   assert.deepEqual(CODEX_ALLOWED_MODELS.llm, [
     'gpt-5.6-sol',
+    'gpt-6-astra',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'gemini-3.8-flash',
+    'deepseek-v4.1-flash',
     'glm-5.3',
     'glm-5.3-flash',
-    'qwen3.8-max',
-    'minimax-m3',
-    'kimi-k3',
   ]);
 });
 
@@ -50,11 +48,11 @@ test('Codex native template contains only provider routing fields', () => {
   const config = buildCodexThirdPartyConfig({
     providerName: 'routerlab',
     baseUrl: 'https://api.routerlab.ch/v1',
-    model: 'deepseek-v4-flash-0731',
+    model: 'deepseek-v4.1-flash',
   });
   assert.deepEqual(config.split('\n'), [
     'model_provider = "custom"',
-    'model = "deepseek-v4-flash-0731"',
+    'model = "deepseek-v4.1-flash"',
     '',
     '[model_providers.custom]',
     'name = "routerlab"',
@@ -97,20 +95,24 @@ test('Codex runtime catalog configures the GLM 5.3 models for the native picker'
 
 test('Codex runtime catalog configures the added RouterLab models for the native picker', () => {
   const catalog = buildCodexModelCatalog({
-    models: ['qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.7-flash'],
+    models: ['gpt-6-astra', 'deepseek-v4.1-flash', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.8-flash'],
   });
 
   assert.deepEqual(catalog.models.map((entry) => entry.slug), [
+    'gpt-6-astra',
+    'deepseek-v4.1-flash',
     'qwen3.8-max',
     'glm-5.3-flash',
     'grok-4.6',
-    'gemini-3.7-flash',
+    'gemini-3.8-flash',
   ]);
   assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
+    'GPT 6 Astra',
+    'DeepSeek V4.1 Flash',
     'Qwen 3.8 Max',
     'GLM 5.3 Flash',
     'Grok 4.6',
-    'Gemini 3.7 Flash',
+    'Gemini 3.8 Flash',
   ]);
   assert.equal(catalog.models.every((entry) => entry.visibility === 'list' && entry.supported_in_api === true), true);
 });

@@ -1,11 +1,13 @@
 import { DEFAULT_SERVICE } from '../routerlab/services.js';
 import { isLoopbackHost, normalizeLoopbackHost, validateLoopbackPort } from '../platform/loopback.js';
 import { warnDeprecationOnce } from './deprecations.js';
+import { normalizeLanguage, resolveLanguage } from './i18n.js';
 
 export { isLoopbackHost };
 
 export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--service'], value: '<routerlab|llm>', description: 'Select the RouterLab service.' },
+  { flags: ['--lang', '--language'], value: '<en|fr|de>', description: 'Select the wrapper interface language.' },
   { flags: ['--strategy'], value: '<value>', description: 'Select a model-routing strategy.' },
   { flags: ['--subagent-model'], value: '<id>', description: 'Select an LLM Claude Code subagent model.' },
   { flags: ['--model'], value: '<value>', description: 'Select the initial Codex model.' },
@@ -31,7 +33,7 @@ export class CliUsageError extends Error {
 }
 
 export const OPTION_WITH_VALUE = new Set([
-  '--service', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host', '--allow-origin',
+  '--service', '--lang', '--language', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host', '--allow-origin',
 ]);
 
 const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--list-strategies']);
@@ -49,6 +51,7 @@ export function optionConsumesNextArgument(argument) {
 export function parseOptions(argv) {
   const options = {
     service: DEFAULT_SERVICE,
+    language: resolveLanguage(),
     strategy: null,
     subagentModel: null,
     model: null,
@@ -98,6 +101,11 @@ export function parseOptions(argv) {
       }
       options.providedOptions.add(optionProperty(key));
       if (key === '--service') options.service = value;
+      if (key === '--lang' || key === '--language') {
+        const language = normalizeLanguage(value);
+        if (!language) throw new CliUsageError(`${key} must be one of: en, fr, de.`);
+        options.language = language;
+      }
       if (key === '--strategy') options.strategy = value;
       if (key === '--subagent-model') options.subagentModel = value;
       if (key === '--model') options.model = value;
@@ -177,6 +185,8 @@ function normalizeOrigin(value) {
 function optionProperty(flag) {
   return {
     '--service': 'service',
+    '--lang': 'language',
+    '--language': 'language',
     '--strategy': 'strategy',
     '--subagent-model': 'subagentModel',
     '--model': 'model',

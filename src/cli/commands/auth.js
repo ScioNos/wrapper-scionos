@@ -4,6 +4,7 @@ import { requireServiceConfig, resolveServiceBaseUrl, resolveServiceEnvToken } f
 import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import { AUTH_MENU_ITEMS, askMenu } from '../menu.js';
+import { translate } from '../i18n.js';
 import { print } from './output.js';
 
 export function getAuthMenuContext(options) {
@@ -33,7 +34,8 @@ export async function handleAuth(action, options, {
       }, options);
       return;
     }
-    const token = options.token ?? await passwordFn({ message: service.label + ' token:' });
+    const language = options.language ?? 'en';
+    const token = options.token ?? await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` });
     const format = validateTokenFormat(token);
     if (!format.valid) throw new Error(format.message);
     const storage = storeTokenFn(token.trim(), service.value);

@@ -17,6 +17,7 @@ import {
 } from '../../apps/claude-desktop.js';
 import { startClaudeDesktopProxy } from '../../apps/claude-desktop-proxy.js';
 import { print } from './output.js';
+import { translate } from '../i18n.js';
 
 export async function handleClaudeDesktop(action, options) {
   if (action === 'status') {
@@ -43,7 +44,7 @@ export async function applyClaudeDesktopProxyProfile(options, dependencies = opt
   const service = resolveValidatedDesktopService(options.service);
   const strategyValue = options.strategy ?? defaultDesktopStrategy(service.value);
   const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
   const routes = await discoverVerifiedDesktopRoutes({
     service,
     strategyValue,
@@ -131,7 +132,7 @@ export async function runClaudeDesktopProxy(options, dependencies = options.desk
   }
 
   const service = resolveValidatedDesktopService(config.serviceValue);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt });
+  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
   const routes = await discoverVerifiedDesktopRoutes({
     service,
     strategyValue: config.strategyValue,
@@ -322,12 +323,15 @@ export function planInteractiveClaudeDesktopStart(options, context = {}) {
   };
 }
 
-export function formatDesktopReplacementPrompt(plan) {
+export function formatDesktopReplacementPrompt(plan, language = 'en') {
   const requested = describeProxyConfig(plan.config);
   if (!plan.current) {
-    return `Replace the existing invalid or non-proxy Claude Desktop profile with ${requested}?`;
+    return translate(language, 'replaceInvalidProfile', { requested });
   }
-  return `Replace the current Claude Desktop mapping (${describeProxyConfig(plan.current)}) with ${requested}?`;
+  return translate(language, 'replaceCurrentMapping', {
+    current: describeProxyConfig(plan.current),
+    requested,
+  });
 }
 
 export function mergeExplicitProxyConfig(stored, options) {

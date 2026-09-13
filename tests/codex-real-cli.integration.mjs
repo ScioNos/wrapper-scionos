@@ -126,7 +126,13 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
     await closeServer(server);
     cleanupCodexRuntimeModelCatalog(catalog);
     if (catalogPath) assert.equal(fs.existsSync(catalogPath), false);
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    fs.rmSync(tempDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 100,
+      retryDelay: 100,
+    });
   }
 });
 
@@ -275,7 +281,7 @@ async function runCodex(command, args, env) {
   try {
     const result = await new Promise((resolve, reject) => {
       child.once('error', reject);
-      child.once('exit', (code, signal) => resolve({ code, signal }));
+      child.once('close', (code, signal) => resolve({ code, signal }));
       timer = setTimeout(() => {
         terminateChildTree(child);
         reject(new Error(`Codex validation timed out.\nstdout:\n${stdout}\nstderr:\n${stderr}`));
@@ -386,7 +392,13 @@ async function listCodexModels(command, args, env) {
     if (timer) clearTimeout(timer);
     child.stdin.end();
     terminateChildTree(child);
+    await waitForChildClose(child);
   }
+}
+
+async function waitForChildClose(child) {
+  if (!child || (child.exitCode !== null && child.stdout?.readableEnded && child.stderr?.readableEnded)) return;
+  await new Promise((resolve) => child.once('close', resolve));
 }
 
 function terminateChildTree(child) {

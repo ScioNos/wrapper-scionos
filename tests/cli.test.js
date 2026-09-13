@@ -4,25 +4,31 @@ import { stripVTControlCharacters } from 'node:util';
 import { handleInteractiveDesktopAction, handleInteractiveMenu, main, shouldOpenInteractiveMenu } from '../src/cli/main.js';
 import { getAuthMenuContext } from '../src/cli/commands/auth.js';
 import { parseOptions } from '../src/cli/args.js';
-import { AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, formatServiceHealthAlert, resolveMenuChoice, resolveNavigation } from '../src/cli/menu.js';
+import { getLocalizedMenuRoutes, AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAIN_MENU_ITEMS, MENU_ROUTES, TOOLS_MENU_ITEMS, applyMenuControl, formatBanner, formatBreadcrumb, formatMenu, formatSelectChoice, formatServiceHealthAlert, MenuBackError, MenuExitError, resolveMenuChoice, resolveMenuInput, resolveNavigation } from '../src/cli/menu.js';
 
-test('default menu exposes Claude Code and Claude Desktop', () => {
+test('default menu exposes the supported coding clients', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
-  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
+  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'OpenCode CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '1').value, 'claude-code');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '3').value, 'codex');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'tools');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'auth');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '6').value, 'tools');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop').value, 'claude-desktop');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Code/);
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Codex CLI/);
+  assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /OpenCode CLI/);
   const banner = formatBanner('ScioNos Wrapper', '1.0.0');
   const plainBanner = stripVTControlCharacters(banner);
   assert.match(plainBanner, /ScioNos Wrapper/);
   assert.match(plainBanner, /Compatible Windows, macOS, Linux/);
   assert.match(banner, /https:\/\/github\.com\/aaddrick\/claude-desktop-debian/);
   assert.doesNotMatch(plainBanner, /ScioNos\s+✕\s+Claude Code/);
+  assert.match(
+    stripVTControlCharacters(formatBanner('ScioNos Wrapper', '1.0.0', { language: 'de' })),
+    /Kompatibel mit Windows, macOS und Linux über/,
+  );
   const genericBanner = stripVTControlCharacters(formatBanner('Claude Desktop'));
   assert.match(genericBanner, /Claude Desktop/);
   assert.doesNotMatch(genericBanner, /Compatible Windows, macOS, Linux/);
@@ -36,21 +42,31 @@ test('default menu exposes Claude Code and Claude Desktop', () => {
   );
   assert.match(stripVTControlCharacters(formatBanner('A'.repeat(60))), /A{60}/);
   const llmAlert = stripVTControlCharacters(formatServiceHealthAlert(' LLM '));
-  assert.match(llmAlert, /MODEL AVAILABILITY/);
-  assert.match(llmAlert, /ROUTERLAB LLM — AVAILABLE MODELS MAY VARY/);
+  assert.match(llmAlert, /Active LLM service — available models may vary/);
   assert.match(llmAlert, /╔═+╗/);
+  assert.match(stripVTControlCharacters(formatServiceHealthAlert('llm', 'fr')), /ℹ Service LLM actif — les modèles disponibles peuvent varier/);
+  assert.match(stripVTControlCharacters(formatServiceHealthAlert('llm', 'de')), /LLM-Dienst aktiv — verfügbare Modelle können variieren/);
   assert.equal(formatServiceHealthAlert('routerlab'), '');
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[0]), {
     name: 'Claude Code',
     value: 'claude-code',
     description: 'Start a coding session through RouterLab.',
     short: 'Claude Code',
+    key: '1',
   });
   assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[2]), {
     name: 'Codex CLI',
     value: 'codex',
     description: 'Start a Codex session through RouterLab.',
     short: 'Codex CLI',
+    key: '3',
+  });
+  assert.deepEqual(formatSelectChoice(MAIN_MENU_ITEMS[3]), {
+    name: 'OpenCode CLI',
+    value: 'opencode',
+    description: 'Start an OpenCode session through RouterLab.',
+    short: 'OpenCode CLI',
+    key: '4',
   });
 });
 
@@ -58,13 +74,36 @@ test('wrapper options without a command keep the user in the main menu', () => {
   assert.equal(shouldOpenInteractiveMenu(parseOptions([])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm'])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm', '--strategy', 'claude-gpt'])), true);
-  assert.equal(parseOptions(['codex', 'launch', '--model', 'deepseek-v4-flash-0731']).model, 'deepseek-v4-flash-0731');
+  assert.equal(parseOptions(['codex', 'launch', '--model', 'deepseek-v4.1-flash']).model, 'deepseek-v4.1-flash');
+  assert.equal(parseOptions(['codex', 'launch', '--strategy', 'open-source']).strategy, 'open-source');
+  assert.equal(parseOptions(['--lang', 'fr']).language, 'fr');
+  assert.equal(parseOptions(['--language=de']).language, 'de');
+  assert.throws(() => parseOptions(['--lang', 'it']), /--lang must be one of: en, fr, de/);
   assert.equal(Object.hasOwn(parseOptions(['codex', 'launch']), 'transport'), false);
   assert.throws(() => parseOptions(['codex', 'launch', '--direct']), /--direct has been removed/);
   assert.throws(() => parseOptions(['codex', 'launch', '--transport', 'direct']), /--transport has been removed/);
   assert.throws(() => parseOptions(['codex', 'launch', '--proxy']), /--proxy has been removed/);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--', '-p', 'hello'])), false);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['-p', 'hello'])), false);
+});
+
+test('interactive menu routes are translated without changing their actions', () => {
+  const french = getLocalizedMenuRoutes('fr');
+  const german = getLocalizedMenuRoutes('de');
+  assert.equal(french.home.items.find((item) => item.value === 'codex').key, '3');
+  assert.equal(french.home.items.find((item) => item.value === 'codex').label, 'Codex CLI');
+  assert.equal(french.home.items.find((item) => item.value === 'auth').label, 'Compte et accès');
+  assert.equal(french.account.message, 'Choisissez une action de compte :');
+  assert.equal(french.account.items.at(-1).key, '0');
+  assert.equal(german.tools.items.find((item) => item.value === 'doctor').label, 'Diagnose ausführen');
+  assert.equal(formatBreadcrumb('account', 'fr', french), 'ScioNos Wrapper  ›  Compte et accès');
+});
+
+test('Codex launch validates a direct model-family strategy', async () => {
+  await assert.rejects(
+    () => main(['codex', 'launch', '--strategy', 'missing']),
+    (error) => error.exitCode === 2 && /Unknown strategy/.test(error.message),
+  );
 });
 
 test('Claude Desktop menu keeps only the simple customer actions', () => {
@@ -79,6 +118,7 @@ test('Claude Desktop menu keeps only the simple customer actions', () => {
     value: 'proxy',
     description: 'Configure the selected Desktop mapping and run the local proxy.',
     short: 'Start Local Mapping',
+    key: '1',
   });
 });
 
@@ -107,8 +147,24 @@ test('the interactive navigation model has predictable parents and actions', () 
   assert.deepEqual(resolveNavigation('desktop', 'back'), { kind: 'navigate', routeId: 'home' });
   assert.deepEqual(resolveNavigation('account', 'status'), { kind: 'action', action: 'status' });
   assert.deepEqual(resolveNavigation('home', 'quit'), { kind: 'exit' });
+  assert.deepEqual(resolveNavigation('tools', 'q'), { kind: 'exit' });
+  assert.deepEqual(resolveNavigation('tools', 'quit'), { kind: 'exit' });
+  assert.deepEqual(resolveNavigation('tools', 'back'), { kind: 'navigate', routeId: 'home' });
   assert.equal(formatBreadcrumb('home'), 'ScioNos Wrapper');
   assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop');
+});
+
+test('menu controls use declared keys and support text aliases', () => {
+  assert.equal(resolveMenuInput(MAIN_MENU_ITEMS, '4').choice.value, 'opencode');
+  assert.equal(resolveMenuInput(MAIN_MENU_ITEMS, 'OpenCode CLI').value, 'opencode');
+  assert.equal(resolveMenuInput(CLAUDE_DESKTOP_MENU_ITEMS, '0').choice.value, 'back');
+  assert.equal(resolveMenuInput(CLAUDE_DESKTOP_MENU_ITEMS, 'back').value, 'back');
+  assert.equal(resolveMenuInput(MAIN_MENU_ITEMS, 'q').value, 'quit');
+  assert.equal(resolveMenuInput(MAIN_MENU_ITEMS, 'exit').value, 'quit');
+  assert.equal(resolveMenuInput(MAIN_MENU_ITEMS, 'not-a-choice'), null);
+  assert.equal(applyMenuControl('back'), null);
+  assert.throws(() => applyMenuControl('back', { allowBack: false }), (error) => error instanceof MenuBackError && error.exitCode === 130);
+  assert.throws(() => applyMenuControl('quit'), (error) => error instanceof MenuExitError && error.exitCode === 0);
 });
 
 test('interactive Claude Desktop actions confirm replacements and pass return-to-menu behavior', async () => {
@@ -179,7 +235,7 @@ test('interactive menu routes Claude Desktop actions for the selected service an
   });
   assert.equal(desktopCalls, 1);
   assert.equal(actions.length, 0);
-  assert.equal(seenMessages.every((message) => /Service: RouterLab LLM/.test(message)), true);
+  assert.equal(seenMessages.every((message) => /Active service: RouterLab LLM/.test(message)), true);
 });
 
 test('interactive menu launches Codex directly with the selected service', async (t) => {
@@ -198,13 +254,14 @@ test('interactive menu launches Codex directly with the selected service', async
         launchCodexForService: async (options) => {
           launched += 1;
           assert.equal(options.service, serviceCase.service);
+          assert.equal(options.interactiveMenu, true);
           assert.equal(options.updateProcessExitCode, false);
           return 0;
         },
       });
       assert.equal(launched, 1);
       assert.equal(messages.length, 1);
-      assert.match(messages[0], new RegExp(`Service: ${serviceCase.label}`));
+      assert.match(messages[0], new RegExp(`Active service: ${serviceCase.label}`));
     });
   }
 });
@@ -246,6 +303,22 @@ test('interactive Codex failures report the error and return to the home menu', 
   }
 });
 
+test('interactive menu launches OpenCode with the selected service', async () => {
+  const actions = ['opencode'];
+  let launched = 0;
+  await handleInteractiveMenu(parseOptions(['--service', 'llm']), {
+    askMenu: async () => actions.shift(),
+    launchOpenCodeForService: async (options) => {
+      launched += 1;
+      assert.equal(options.service, 'llm');
+      assert.equal(options.updateProcessExitCode, false);
+      return 0;
+    },
+  });
+  assert.equal(launched, 1);
+  assert.equal(actions.length, 0);
+});
+
 test('auth menu uses the command-selected service', () => {
   const routerlab = getAuthMenuContext(parseOptions([]));
   assert.equal(routerlab.service.value, 'routerlab');
@@ -280,10 +353,10 @@ test('Claude Code rejects command-line tokens without changing other command int
   );
 });
 
-test('Claude Code rejects DeepSeek as a RouterLab subagent before launch', async () => {
+test('Claude Code rejects GLM 5.3 as a RouterLab subagent before launch', async () => {
   await assert.rejects(
-    () => main(['claude-code', '--service', 'routerlab', '--subagent-model', 'deepseek-v4-flash-0731']),
+    () => main(['claude-code', '--service', 'routerlab', '--subagent-model', 'glm-5.3']),
     (error) => error.exitCode === 2
-      && /--subagent-model must be one of: claude-haiku-4-5, aws-claude-haiku-4-5, gpt-5\.6-luna\./.test(error.message),
+      && /--subagent-model must be one of: claude-haiku-4-5, aws-claude-haiku-4-5, gpt-5\.6-luna, deepseek-v4\.1-flash\./.test(error.message),
   );
 });

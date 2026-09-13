@@ -50,11 +50,12 @@ test('Claude Code launch environment is sanitized without changing native tool v
   const env = buildClaudeCodeEnvironment(
     'generated-local-token-with-enough-length',
     service,
-    'minimax-m3',
+    'divers',
     { env: sourceEnv },
   );
 
-  assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, '1');
+  assert.equal(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS, undefined);
+  assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
   assert.equal(env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
   assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5');
   assert.equal(env.ANTHROPIC_BASE_URL, service.baseUrl);
@@ -84,27 +85,28 @@ test('Claude Code uses a selected RouterLab LLM subagent model', () => {
   const env = buildClaudeCodeEnvironment(
     'generated-local-token-with-enough-length',
     service,
-    'minimax-m3',
-    { env: {}, subagentModel: 'deepseek-v4-flash-0731' },
+    'divers',
+    { env: {}, subagentModel: 'deepseek-v4.1-flash' },
   );
 
-  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash-0731');
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4.1-flash');
   const glmEnv = buildClaudeCodeEnvironment(
     'generated-local-token-with-enough-length',
     service,
-    'glm-5.3',
+    'divers',
     { env: {} },
   );
-  assert.equal(glmEnv.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3');
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_FABLE_MODEL, 'deepseek-v4.1-flash');
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_OPUS_MODEL, 'glm-5.3-flash');
   assert.equal(glmEnv.ANTHROPIC_DEFAULT_SONNET_MODEL, 'glm-5.3');
-  assert.equal(glmEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'glm-5.3-flash');
-  assert.equal(glmEnv.CLAUDE_CODE_SUBAGENT_MODEL, 'glm-5.3-flash');
+  assert.equal(glmEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'gemini-3.8-flash');
+  assert.equal(glmEnv.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5');
   for (const removedModel of ['glm-5.2', 'deepseek-v4-pro-0813', 'not-allowed']) {
     assert.throws(
       () => buildClaudeCodeEnvironment(
         'generated-local-token-with-enough-length',
         service,
-        'minimax-m3',
+        'divers',
         { env: {}, subagentModel: removedModel },
       ),
       /not supported/,
@@ -140,8 +142,9 @@ test('Claude Native injects the verified Fable option and official model aliases
     { env: { ANTHROPIC_CUSTOM_MODEL_OPTION: 'hostile-model' } },
   );
 
-  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, 'claude-fable-5');
-  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, 'Claude Fable 5');
+  assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'claude-fable-5.1');
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, undefined);
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, undefined);
   assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'claude-opus-5');
   assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-5');
   assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'claude-haiku-4-5');
@@ -183,9 +186,9 @@ test('Claude Code exposes Back only when launched from the interactive menu', ()
 test('Claude Code accepts the selected subagent model from the CLI', () => {
   const options = parseOptions([
     '--subagent-model',
-    'deepseek-v4-flash-0731',
+    'deepseek-v4.1-flash',
   ]);
-  assert.equal(options.subagentModel, 'deepseek-v4-flash-0731');
+  assert.equal(options.subagentModel, 'deepseek-v4.1-flash');
 });
 
 test('Claude Code reports environment precedence without exposing either token', () => {
@@ -318,7 +321,7 @@ test('interactive Claude strategy selection covers separators, Back, and selecte
     },
   });
   assert.equal(back, null);
-  assert.equal(prompt.message, 'Select Model Strategy:');
+  assert.equal(prompt.message, 'Select Model Strategy on RouterLab:');
   assert.ok(prompt.choices.length > 6);
   assert.ok(prompt.pageSize > 6);
 
@@ -356,7 +359,7 @@ test('Claude Code summaries, indicators, and missing CLI failures are covered', 
   assert.match(stripVTControlCharacters(getStrategyIndicator('default', [], 'routerlab')), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(
     'default',
-    ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    ['claude-fable-5.1', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
     'routerlab',
   )), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(

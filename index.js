@@ -11,7 +11,11 @@ export function handleTopLevelError(error, {
   printErrorFn = printError,
   errorLogger = console.error,
 } = {}) {
-  if (error?.name === 'ExitPromptError' || error?.code === 'ERR_USE_AFTER_CLOSE') {
+  if (error?.name === 'MenuExitError') {
+    processState.exitCode = 0;
+    return;
+  }
+  if (error?.name === 'ExitPromptError' || error?.name === 'MenuBackError' || error?.code === 'ERR_USE_AFTER_CLOSE') {
     processState.exitCode = 130;
     return;
   }

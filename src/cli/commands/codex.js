@@ -1,4 +1,3 @@
-import { select } from '@inquirer/prompts';
 import {
   requireServiceConfig,
   resolveServiceBaseUrlWithSource,
@@ -22,7 +21,11 @@ import {
   restoreCodexConfig,
   writeCodexRuntimeModelCatalog,
 } from '../../apps/codex.js';
+import { applyMenuControl, askSelect } from '../menu.js';
+import { getServiceModelFamilies } from '../../routerlab/strategy-models.js';
+import { findStrategy } from '../../routerlab/strategies.js';
 import { print } from './output.js';
+import { translate } from '../i18n.js';
 
 const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
   assertCodexCliAvailable,
@@ -30,7 +33,8 @@ const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
   fetchModels,
   launchCodex,
   resolveTokenWithSource,
-  selectModel: select,
+  selectFamily: askSelect,
+  selectModel: askSelect,
   writeCodexRuntimeModelCatalog,
 });
 
@@ -81,13 +85,53 @@ export async function launchCodexForService(options, dependencies = {}) {
       service,
     );
   }
-  const model = await resolveCodexLaunchModel({
-    requestedModel: options.model,
-    availableModels,
-    service,
-    noPrompt: options.noPrompt,
-    selectModel: deps.selectModel,
-  });
+  const availableFamilies = availableCodexModelFamilies(service.value, modelResult.models);
+  if (!options.model && !options.noPrompt && !options.strategy && availableFamilies.length === 0) {
+    throw codexModelDiscoveryError(
+      { reason: 'models_unavailable', message: 'No Codex model family is currently available' },
+      service,
+    );
+  }
+  let selectedFamily = options.interactiveMenu
+    ? null
+    : await resolveCodexLaunchFamily({
+        requestedFamily: options.strategy,
+        availableFamilies,
+        service,
+        noPrompt: options.noPrompt || Boolean(options.model),
+        language: options.language,
+        selectFamily: deps.selectFamily,
+      });
+  let selectionModels;
+  let model;
+  while (true) {
+    selectionModels = selectedFamily
+      ? selectedFamily.models.map(({ model: familyModel }) => familyModel)
+      : availableModels;
+    try {
+      model = await resolveCodexLaunchModel({
+        requestedModel: options.model ?? (options.interactiveMenu
+          ? defaultCodexModelForService(service.value)
+          : null),
+        availableModels: selectionModels,
+        service,
+        noPrompt: options.noPrompt || Boolean(options.interactiveMenu),
+        language: options.language,
+        selectModel: deps.selectModel,
+      });
+      break;
+    } catch (error) {
+      if (error?.name !== 'MenuBackError' || options.noPrompt || options.model || options.strategy || options.interactiveMenu || availableFamilies.length < 2) {
+        throw error;
+      }
+      selectedFamily = await resolveCodexLaunchFamily({
+        availableFamilies,
+        service,
+        language: options.language,
+        selectFamily: deps.selectFamily,
+      });
+    }
+  }
   const catalog = deps.writeCodexRuntimeModelCatalog({
     models: availableModels,
     modelMetadata: modelResult.modelMetadata ?? [],
@@ -147,6 +191,60 @@ export function availableCodexModels(serviceValue, discoveredModelIds = []) {
   return codexModelsForService(serviceValue).filter((model) => discovered.has(model));
 }
 
+export function availableCodexModelFamilies(serviceValue, discoveredModelIds = []) {
+  const discovered = new Set(discoveredModelIds);
+  return getServiceModelFamilies(serviceValue, { client: 'codex' })
+    .map((family) => ({
+      ...family,
+      models: family.models.filter(({ model }) => (
+        codexModelsForService(serviceValue).includes(model) && discovered.has(model)
+      )),
+    }))
+    .filter((family) => family.models.length > 0);
+}
+
+export async function resolveCodexLaunchFamily({
+  requestedFamily = null,
+  availableFamilies = [],
+  service,
+  noPrompt = false,
+  language = 'en',
+  selectFamily = askSelect,
+} = {}) {
+  if (requestedFamily !== null && requestedFamily !== undefined) {
+    const familyValue = findStrategy(requestedFamily, service.value)?.value ?? requestedFamily;
+    const family = availableFamilies.find((entry) => entry.value === familyValue);
+    if (!family) {
+      throw new Error(`Codex model family "${requestedFamily}" is not available on ${service.label}.`);
+    }
+    return family;
+  }
+  if (noPrompt) return null;
+  if (availableFamilies.length === 1) return availableFamilies[0];
+  const selected = applyMenuControl(await selectFamily({
+    message: translate(language, 'selectCodexFamily', { service: service.label }),
+    language,
+    helpMode: 'compact',
+    choices: [
+      ...availableFamilies.map((family, index) => ({
+        key: String(index + 1),
+        name: family.name,
+        value: family.value,
+        description: family.description,
+      })),
+      {
+        key: '0',
+        name: '← Back',
+        value: 'back',
+        description: 'Return to the previous menu.',
+      },
+    ],
+  }), { allowBack: false });
+  const family = availableFamilies.find((entry) => entry.value === selected);
+  if (!family) throw new Error(`Unknown Codex model family "${selected}".`);
+  return family;
+}
+
 const BLOCKED_CODEX_FORWARDED_OPTIONS = new Set([
   '-c',
   '--config',
@@ -184,7 +282,8 @@ export async function resolveCodexLaunchModel({
   availableModels,
   service,
   noPrompt = false,
-  selectModel = select,
+  language = 'en',
+  selectModel = askSelect,
 }) {
   if (requestedModel !== null && requestedModel !== undefined) {
     if (!availableModels.includes(requestedModel)) {
@@ -204,14 +303,25 @@ export async function resolveCodexLaunchModel({
   if (availableModels.length === 1) {
     return availableModels[0];
   }
-  return selectModel({
-    message: `Select a Codex model on ${service.label}:`,
-    choices: availableModels.map((model) => ({
-      name: codexModelDisplayName(model),
-      value: model,
-      description: model,
-    })),
-  });
+  return applyMenuControl(await selectModel({
+    message: translate(language, 'selectCodexModel', { service: service.label }),
+    language,
+    helpMode: 'compact',
+    choices: [
+      ...availableModels.map((model, index) => ({
+        key: String(index + 1),
+        name: codexModelDisplayName(model),
+        value: model,
+        description: model,
+      })),
+      {
+        key: '0',
+        name: '← Back',
+        value: 'back',
+        description: 'Return to the previous menu.',
+      },
+    ],
+  }), { allowBack: false });
 }
 
 export function explicitCodexToken(token, envToken) {

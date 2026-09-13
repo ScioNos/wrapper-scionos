@@ -1,6 +1,7 @@
-import { getServiceStrategies, getStrategyEnvironment } from './strategies.js';
+import { getClaudeCodeStrategyEnvironment, getRequiredModels, getServiceStrategies, getStrategyEnvironment } from './strategies.js';
 
 export const STRATEGY_MODEL_KEYS = [
+  ['fable', 'ANTHROPIC_DEFAULT_FABLE_MODEL'],
   ['haiku', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
   ['sonnet', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
   ['opus', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
@@ -12,38 +13,43 @@ export const DESKTOP_MAPPING_STRATEGIES = {
     'default',
     'aws',
     'claude-gpt',
-    'deepseek',
-    'kimi-k3',
-    'minimax-m3',
-    'qwen3.8-max',
-    'glm-5.3-flash',
-    'grok-4.6',
-    'gemini-3.7-flash',
+    'open-source',
   ],
   llm: [
     'claude',
-    'glm-5.3',
     'claude-gpt',
-    'qwen3.8-max',
-    'minimax-m3',
-    'kimi-k3',
+    'divers',
   ],
 };
 
+const MODEL_FAMILY_LABELS = Object.freeze({
+  default: 'Claude',
+  aws: 'AWS Claude',
+  claude: 'Claude',
+  'claude-gpt': 'OpenAI GPT',
+  'open-source': 'Open Source',
+  divers: 'Divers',
+});
+
 const DEFAULT_NATIVE_STRATEGY_MODELS = [
-  { role: 'fable', model: 'claude-fable-5' },
+  { role: 'fable', model: 'claude-fable-5.1' },
   { role: 'opus', model: 'claude-opus-5' },
   { role: 'sonnet', model: 'claude-sonnet-5' },
   { role: 'haiku', model: 'claude-haiku-4-5' },
 ];
 
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
+  fable: 'claude-fable-5',
   haiku: 'claude-haiku-4-5',
   sonnet: 'claude-sonnet-4-6',
   opus: 'claude-opus-4-8',
 };
 
 export const MODEL_ROUTE_METADATA = {
+  'claude-fable-5.1': {
+    desktopRouteId: 'claude-fable-5.1',
+    label: 'claude-fable-5.1',
+  },
   'claude-fable-5': {
     desktopRouteId: 'claude-fable-5',
     label: 'claude-fable-5',
@@ -327,6 +333,7 @@ export const MODEL_ROUTE_METADATA = {
 };
 
 export const DESKTOP_MODEL_ORDER = [
+  'claude-fable-5.1',
   'claude-fable-5',
   'claude-opus-5',
   'claude-sonnet-5',
@@ -397,6 +404,46 @@ export function getStrategyModels(strategyValue, serviceValue) {
   }
 
   return models;
+}
+
+export function getServiceModelFamilies(serviceValue, { client = 'opencode' } = {}) {
+  return getServiceStrategies(serviceValue)
+    .map((strategy) => {
+      const seen = new Set();
+      const models = [];
+      const addModel = (model, role = null) => {
+        const normalized = model?.trim();
+        if (!normalized) return;
+        const clientModel = client === 'codex' ? codexModelFromClaudeCodeModel(normalized) : normalized;
+        if (!clientModel) return;
+        if (seen.has(clientModel)) {
+          const existing = models.find((entry) => entry.model === clientModel);
+          if (existing && !existing.role && role) existing.role = role;
+          return;
+        }
+        seen.add(clientModel);
+        models.push({ model: clientModel, role });
+      };
+
+      // Families describe launchable client models, not Claude Code's implicit
+      // subagent default. Required models are the authoritative family catalog;
+      // the strategy environment only supplies the role mapping when explicit.
+      const environment = strategy.claudeCodeEnvironment ?? strategy.environment ?? {};
+      for (const model of getRequiredModels(strategy)) {
+        addModel(model);
+      }
+      for (const [role, key] of STRATEGY_MODEL_KEYS) {
+        addModel(environment[key], role);
+      }
+
+      return {
+        value: strategy.value,
+        name: MODEL_FAMILY_LABELS[strategy.value] ?? strategy.selectionName ?? strategy.name ?? strategy.value,
+        description: strategy.selectionDescription ?? strategy.description ?? '',
+        models,
+      };
+    })
+    .filter((family) => family.models.length > 0);
 }
 
 export function codexModelsFromClaudeCodeStrategies(serviceValue) {

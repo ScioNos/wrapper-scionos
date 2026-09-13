@@ -86,7 +86,9 @@ export function normalizeAllowedModelRequest(req, bodyText, allowedModels) {
   const isMessageRequest = pathname.endsWith('/v1/messages')
     || pathname.endsWith('/v1/messages/count_tokens');
   const isBatchRequest = pathname.endsWith('/v1/messages/batches');
-  if (!isMessageRequest && !isBatchRequest) return bodyText;
+  const isOpenAiRequest = pathname.endsWith('/v1/chat/completions')
+    || pathname.endsWith('/v1/responses');
+  if (!isMessageRequest && !isBatchRequest && !isOpenAiRequest) return bodyText;
 
   let payload;
   try {
@@ -104,11 +106,12 @@ export function normalizeAllowedModelRequest(req, bodyText, allowedModels) {
     throw proxyError('Claude model request must include a model.', 400, 'missing_model');
   }
 
-  const normalizedModels = models.map((model) => normalizeAllowedModel(model, allowedModels));
+  const normalizedModels = models.map((model) => normalizeAllowedModel(model, allowedModels, isOpenAiRequest));
   const deniedIndex = normalizedModels.findIndex((model) => model === null);
   if (deniedIndex !== -1) {
     const denied = models[deniedIndex];
-    throw proxyError(`Model "${denied}" is not allowed for this RouterLab Claude Code session.`, 403, 'model_not_allowed');
+    const client = isOpenAiRequest ? 'OpenCode' : 'RouterLab Claude Code';
+    throw proxyError(`Model "${denied}" is not allowed for this ${client} session.`, 403, 'model_not_allowed');
   }
 
   if (isBatchRequest) {
@@ -124,8 +127,16 @@ export function normalizeAllowedModelRequest(req, bodyText, allowedModels) {
     : bodyText;
 }
 
-function normalizeAllowedModel(model, allowedModels) {
+function normalizeAllowedModel(model, allowedModels, allowProviderPrefix = false) {
   if (allowedModels.has(model)) return model;
+
+  if (allowProviderPrefix) {
+    const separator = model.lastIndexOf('/');
+    if (separator > 0) {
+      const unprefixedModel = model.slice(separator + 1);
+      if (allowedModels.has(unprefixedModel)) return unprefixedModel;
+    }
+  }
 
   const match = model.match(/^(.*)\[1m\]$/);
   if (!match) return null;

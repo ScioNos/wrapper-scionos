@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   appendCodexApiPath,
+  availableCodexModelFamilies,
   availableCodexModels,
   codexAuthenticationError,
   codexModelDiscoveryError,
   codexModelUnavailableError,
   handleCodex,
+  resolveCodexLaunchFamily,
   resolveCodexLaunchModel,
   validateCodexForwardedArgs,
 } from '../src/cli/commands/codex.js';
@@ -14,21 +16,48 @@ import { requireServiceConfig } from '../src/routerlab/services.js';
 
 test('Codex availability is the allowlist/discovery intersection in allowlist order', () => {
   assert.deepEqual(
-    availableCodexModels('routerlab', ['unknown', 'minimax-m3', 'kimi-k3', 'gpt-5.6-sol']),
-    ['gpt-5.6-sol', 'kimi-k3', 'minimax-m3'],
+    availableCodexModels('routerlab', [
+      'unknown',
+      'deepseek-v4-pro-0813',
+      'deepseek-v4-flash-0731',
+      'gemini-3.7-flash',
+      'gpt-6-astra',
+      'deepseek-v4.1-flash',
+      'gemini-3.8-flash',
+      'minimax-m3',
+      'kimi-k3',
+      'gpt-5.6-sol',
+    ]),
+    ['gpt-5.6-sol', 'gpt-6-astra', 'deepseek-v4.1-flash', 'kimi-k3'],
   );
   assert.deepEqual(
     availableCodexModels('llm', [
-      'deepseek-v4-flash-0731',
-      'deepseek-v4-pro-0813',
-      'glm-5.2',
+      'deepseek-v4.1-flash',
+      'gemini-3.8-flash',
       'glm-5.3-flash',
-      'qwen3.8-max',
       'glm-5.3',
+      'gpt-5.6-sol',
+      'gpt-6-astra',
+      'gpt-5.6-terra',
       'gpt-5.6-luna',
     ]),
-    ['gpt-5.6-luna', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max'],
+    [
+      'gpt-5.6-sol',
+      'gpt-6-astra',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gemini-3.8-flash',
+      'deepseek-v4.1-flash',
+      'glm-5.3',
+      'glm-5.3-flash',
+    ],
   );
+  assert.deepEqual(availableCodexModelFamilies('routerlab', [
+    'gpt-6-astra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max', 'kimi-k3',
+  ]).map((family) => [family.value, family.models.map(({ model }) => model)]), [
+    ['claude-gpt', ['gpt-6-astra', 'gpt-5.6-sol']],
+    ['open-source', ['deepseek-v4.1-flash', 'glm-5.3-flash', 'glm-5.3', 'qwen3.8-max', 'kimi-k3']],
+  ]);
 });
 
 test('Codex forwarded arguments preserve native options but cannot replace RouterLab routing', () => {
@@ -67,15 +96,33 @@ test('Codex forwarded arguments preserve native options but cannot replace Route
 test('Codex exact requested model is preserved and never substituted', async () => {
   const service = requireServiceConfig('llm');
   assert.equal(await resolveCodexLaunchModel({
-    requestedModel: 'qwen3.8-max',
-    availableModels: ['gpt-5.6-sol', 'qwen3.8-max'],
+    requestedModel: 'gemini-3.8-flash',
+    availableModels: ['gpt-5.6-sol', 'gemini-3.8-flash'],
     service,
-  }), 'qwen3.8-max');
+  }), 'gemini-3.8-flash');
   await assert.rejects(resolveCodexLaunchModel({
-    requestedModel: 'qwen3.7-max',
-    availableModels: ['qwen3.8-max'],
+    requestedModel: 'gemini-3.7-flash',
+    availableModels: ['gemini-3.8-flash'],
     service,
   }), /not available/);
+});
+
+test('Codex interactive selection starts with a discovered model family', async () => {
+  const service = requireServiceConfig('routerlab');
+  const families = availableCodexModelFamilies('routerlab', [
+    'gpt-6-astra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3',
+  ]);
+  let choicesSeen;
+  const selected = await resolveCodexLaunchFamily({
+    availableFamilies: families,
+    service,
+    selectFamily: async ({ choices }) => {
+      choicesSeen = choices;
+      return 'open-source';
+    },
+  });
+  assert.deepEqual(choicesSeen.map((choice) => choice.key), ['1', '2', '0']);
+  assert.equal(selected.value, 'open-source');
 });
 
 test('Codex no-prompt requires the default model', async () => {
@@ -110,7 +157,7 @@ test('Codex interactive selection auto-selects one model and prompts for several
     service,
     selectModel: async ({ choices }) => {
       promptCalls += 1;
-      assert.deepEqual(choices.map((choice) => choice.value), ['gpt-5.6-sol', 'glm-5.2']);
+      assert.deepEqual(choices.map((choice) => choice.value), ['gpt-5.6-sol', 'glm-5.2', 'back']);
       return 'glm-5.2';
     },
   }), 'glm-5.2');

@@ -47,6 +47,26 @@ test('entrypoint maps prompt interruptions and runtime failures to stable exit c
   );
   assert.equal(promptState.exitCode, 130);
 
+  const menuBackState = {};
+  entry.handleTopLevelError(
+    Object.assign(new Error('back'), { name: 'MenuBackError' }),
+    {
+      processState: menuBackState,
+      printErrorFn: () => assert.fail('menu back must not print an error'),
+    },
+  );
+  assert.equal(menuBackState.exitCode, 130);
+
+  const menuExitState = {};
+  entry.handleTopLevelError(
+    Object.assign(new Error('exit'), { name: 'MenuExitError' }),
+    {
+      processState: menuExitState,
+      printErrorFn: () => assert.fail('menu exit must not print an error'),
+    },
+  );
+  assert.equal(menuExitState.exitCode, 0);
+
   const closedState = {};
   entry.handleTopLevelError(
     Object.assign(new Error('closed'), { code: 'ERR_USE_AFTER_CLOSE' }),

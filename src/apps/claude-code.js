@@ -1,4 +1,4 @@
-import { password, select, Separator } from '@inquirer/prompts';
+import { password, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { detectClaudeCode, MINIMUM_CLAUDE_CODE_VERSION } from '../platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
@@ -7,10 +7,11 @@ import { getStoredToken } from '../security/token-store.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
 import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
-import { formatBanner } from '../cli/menu.js';
+import { applyMenuControl, askSelect, formatBanner } from '../cli/menu.js';
+import { translate } from '../cli/i18n.js';
 
 export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
-  CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+  CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '0',
   CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
 };
 
@@ -62,6 +63,7 @@ function isClaudeCodeRoutingEnvironmentKey(key) {
     'ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION',
     'ANTHROPIC_WORKSPACE_ID',
     'AWS_BEARER_TOKEN_BEDROCK',
+    'CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY',
     'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
     'CLAUDE_CODE_SUBAGENT_MODEL',
     'CLAUDE_CODE_USE_ANTHROPIC_AWS',
@@ -105,7 +107,7 @@ export function selectTokenCandidate({
 }
 
 export async function resolveTokenWithSource(
-  { serviceValue, noPrompt = false, preferStored = false } = {},
+  { serviceValue, noPrompt = false, preferStored = false, language = 'en' } = {},
   {
     passwordFn = password,
     getStoredTokenFn = getStoredToken,
@@ -140,7 +142,7 @@ export async function resolveTokenWithSource(
     throw new Error(`A ${service.label} token is required in --no-prompt mode. Set ${service.tokenEnvKeys[0]} or run auth login first.`);
   }
 
-  const answer = await passwordFn({ message: `${service.label} token:` });
+  const answer = await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` });
   const format = validateTokenFormat(answer);
   if (!format.valid) {
     throw new Error(format.message);
@@ -214,7 +216,8 @@ export async function chooseStrategy({
   preferredStrategy = null,
   modelIds = [],
   allowBack = false,
-  selectFn = select,
+  language = 'en',
+  selectFn = askSelect,
 } = {}) {
   const service = requireServiceConfig(serviceValue);
   const finalizeChoice = (selected) => {
@@ -251,10 +254,11 @@ export async function chooseStrategy({
   const choices = buildStrategyPromptChoices(modelIds, service.value);
   const promptChoices = allowBack
     ? [...choices, {
-      name: '← Back to home',
+      key: '0',
+      name: translate(language, 'backHome'),
       value: 'back',
-      description: 'Return to the main menu without launching Claude Code.',
-      short: 'Back to home',
+      description: translate(language, 'returnMain'),
+      short: translate(language, 'backHome'),
     }]
     : choices;
 
@@ -263,16 +267,22 @@ export async function chooseStrategy({
   }
 
   return selectFn({
-    message: 'Select Model Strategy:',
+    message: translate(language, 'selectClaudeStrategy', { service: service.label }),
+    language,
+    helpMode: 'compact',
     choices: withSeparators(promptChoices),
     pageSize: promptChoices.length + Math.max(promptChoices.length - 1, 0),
-  }).then((selected) => selected === 'back' ? null : finalizeChoice(selected));
+  }).then((selected) => {
+    const controlled = applyMenuControl(selected, { allowBack });
+    return controlled === null ? null : finalizeChoice(controlled);
+  });
 }
 
 export function buildGuidedStrategyPromptChoices(modelIds, serviceValue, allowBack = false) {
   const choices = buildStrategyPromptChoices(modelIds, serviceValue);
   if (!allowBack) return choices;
   return [...choices, {
+    key: '0',
     name: '← Back to home',
     value: 'back',
     description: 'Return to the main menu without launching Claude Code.',
@@ -280,7 +290,7 @@ export function buildGuidedStrategyPromptChoices(modelIds, serviceValue, allowBa
   }];
 }
 export function buildStrategyPromptChoices(modelIds, serviceValue) {
-  return getStrategyChoices(modelIds, serviceValue).map((choice) => {
+  return getStrategyChoices(modelIds, serviceValue).map((choice, index) => {
     const launchReadiness = assessStrategyLaunch(choice.value, modelIds, serviceValue);
     const disabled = !launchReadiness.ready
       && (choice.availability.level === 'unavailable' || hasVerifiedModelIds(modelIds))
@@ -288,6 +298,7 @@ export function buildStrategyPromptChoices(modelIds, serviceValue) {
       : false;
     return {
       ...choice,
+      key: String(index + 1),
       disabled,
       name: getStrategyIndicator(choice.value, modelIds, serviceValue) + ' ' + choice.name,
       short: choice.name,
@@ -301,7 +312,9 @@ export async function chooseSubagentModel({
   noPrompt = false,
   preferredSubagentModel = null,
   modelIds = [],
-  selectFn = select,
+  allowBack = false,
+  language = 'en',
+  selectFn = askSelect,
 } = {}) {
   const serviceConfig = requireServiceConfig(serviceValue);
   const serviceLabel = serviceConfig.availabilityLabel || serviceConfig.label;
@@ -327,7 +340,8 @@ export async function chooseSubagentModel({
     return defaultModel;
   }
 
-  const choices = subagentModels.map((model) => ({
+  const choices = subagentModels.map((model, index) => ({
+    key: String(index + 1),
     name: model,
     value: model,
     description: model,
@@ -339,15 +353,27 @@ export async function chooseSubagentModel({
   }
   if (availableChoices.length === 1) return availableChoices[0].value;
 
+  const promptChoices = allowBack
+    ? [...availableChoices, {
+      key: '0',
+      name: translate(language, 'backStrategy'),
+      value: 'back',
+      description: translate(language, 'chooseDifferentStrategy'),
+      short: translate(language, 'backStrategy'),
+    }]
+    : availableChoices;
+
   return selectFn({
-    message: 'Select Subagent Model:',
-    choices,
-    pageSize: choices.length,
-  });
+    message: translate(language, 'selectSubagentModel', { service: serviceLabel }),
+    language,
+    helpMode: 'compact',
+    choices: promptChoices,
+    pageSize: promptChoices.length,
+  }).then((selected) => applyMenuControl(selected, { allowBack }));
 }
 
 export async function launchClaudeCode(
-  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, claudeArgs, version = null, allowBack = false },
+  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, language = 'en', claudeArgs, version = null, allowBack = false },
   {
     chooseSubagentModelFn = chooseSubagentModel,
     chooseStrategyFn = chooseStrategy,
@@ -366,7 +392,7 @@ export async function launchClaudeCode(
     baseUrl: validateServiceBaseUrl(baseUrlResolution.baseUrl, serviceConfig.value),
   };
   if (!noPrompt) {
-    console.log(formatClaudeCodeIntro(version));
+    console.log(formatClaudeCodeIntro(version, service.label));
   }
 
   const claude = detectClaudeCodeFn();
@@ -388,7 +414,7 @@ export async function launchClaudeCode(
         envTokenKey: null,
         storedTokenPresent: false,
       }
-    : await resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt });
+    : await resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt, language });
   warnClaudeCodeTokenConflict(service, resolvedToken);
   const token = resolvedToken.token;
   const tokenFormat = validateTokenFormat(token);
@@ -411,21 +437,31 @@ export async function launchClaudeCode(
     }, service);
   }
 
-  const selectedStrategy = await chooseStrategyFn({
-    serviceValue: service.value,
-    noPrompt,
-    preferredStrategy: strategyValue,
-    modelIds,
-    allowBack,
-  });
-  if (selectedStrategy === null) return { kind: 'back' };
-  const selectedSubagentModel = await chooseSubagentModelFn({
-    serviceValue: service.value,
-    strategyValue: selectedStrategy,
-    noPrompt,
-    preferredSubagentModel: subagentModel,
-    modelIds,
-  });
+  let selectedStrategy;
+  let selectedSubagentModel;
+  while (true) {
+    selectedStrategy = await chooseStrategyFn({
+      serviceValue: service.value,
+      noPrompt,
+      preferredStrategy: strategyValue,
+      modelIds,
+      allowBack,
+      language,
+    });
+    if (selectedStrategy === null) return { kind: 'back' };
+    selectedSubagentModel = await chooseSubagentModelFn({
+      serviceValue: service.value,
+      strategyValue: selectedStrategy,
+      noPrompt,
+      preferredSubagentModel: subagentModel,
+      modelIds,
+      allowBack,
+      language,
+    });
+    if (selectedSubagentModel !== null) break;
+    strategyValue = null;
+    subagentModel = null;
+  }
 
   let proxy = null;
   try {
@@ -470,7 +506,7 @@ export async function launchClaudeCode(
   }
 }
 
-export function formatClaudeCodeIntro(version = null) {
+export function formatClaudeCodeIntro(version = null, serviceLabel = null) {
   const commands = [
     ['wrapper-scionos', 'Guided launch'],
     ['wrapper-scionos doctor', 'Diagnose setup and RouterLab access'],
@@ -481,6 +517,7 @@ export function formatClaudeCodeIntro(version = null) {
   const width = Math.max(...commands.map(([command]) => command.length)) + 2;
   const lines = [
     formatBanner('ScioNos Wrapper', version),
+    ...(serviceLabel ? [`Service: ${serviceLabel}`, ''] : []),
     chalk.gray('Quick commands'),
     ...commands.map(([command, description]) => `  ${chalk.cyan(command.padEnd(width, ' '))}${description}`),
     '',

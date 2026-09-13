@@ -54,15 +54,14 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     assert.equal(response.status, 200);
     assert.equal(payload.data.some((model) => model.id === 'claude-opus-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-fable-5'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-fable-5.1'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-haiku-4-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-kim3' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3-flash' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-max-m3'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-deev4-pro-0813'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-deev4-flash-0731'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-wen3.8-max'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-fable-5-open-source'), true);
     assert.equal(payload.data[0].created_at, 'routerlab-created-at');
     assert.equal(payload.data[0].supports1m, true);
     assert.equal(payload.data.slice(1).every((model) => !Object.hasOwn(model, 'created_at')), true);
@@ -610,6 +609,63 @@ test('proxy preserves compressed response headers and upstream errors', async ()
     assert.match(payload.error.message, /compressed denial/);
   } finally {
     await stopLongRunningLlmProxy(proxy);
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('OpenCode OpenAI-compatible requests enforce the model allowlist and strip the provider prefix', async () => {
+  const captured = [];
+  const upstream = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      captured.push({ url: req.url, authorization: req.headers.authorization, body: JSON.parse(body) });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
+    routerlabToken: 'real-routerlab-token',
+    upstreamAuth: 'openai',
+    allowedModels: ['gpt-6-astra', 'gpt-5.6-sol'],
+  });
+  const headers = {
+    authorization: `Bearer ${proxy.gatewayToken}`,
+    'content-type': 'application/json',
+  };
+
+  try {
+    const allowed = await fetch(`${proxy.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'scionos/gpt-6-astra', messages: [], stream: false }),
+    });
+    assert.equal(allowed.status, 200);
+
+    const denied = await fetch(`${proxy.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'other/unknown-model', messages: [] }),
+    });
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).error.code, 'model_not_allowed');
+
+    const responseDenied = await fetch(`${proxy.baseUrl}/v1/responses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'unknown-model', input: 'ping' }),
+    });
+    assert.equal(responseDenied.status, 403);
+    assert.equal((await responseDenied.json()).error.code, 'model_not_allowed');
+
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0].url, '/v1/chat/completions');
+    assert.equal(captured[0].authorization, 'Bearer real-routerlab-token');
+    assert.equal(captured[0].body.model, 'gpt-6-astra');
+  } finally {
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
     await new Promise((resolve) => upstream.close(resolve));
   }
 });

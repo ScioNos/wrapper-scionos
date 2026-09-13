@@ -28,6 +28,9 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
       resolveTokenWithSource: async () => {
         throw new Error('explicit token should avoid token resolution');
       },
+      selectFamily: async () => {
+        throw new Error('family selection should not be needed');
+      },
       selectModel: async () => {
         throw new Error('selection should not be needed');
       },
@@ -38,12 +41,12 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
 test('Codex launch is direct, native, and forwards the original RouterLab token', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['not-allowed', 'qwen3.8-max', 'gpt-5.6-sol'],
+    models: ['not-allowed', 'deepseek-v4.1-flash', 'gpt-5.6-sol'],
     modelMetadata: [],
   });
   await launchCodexForService({
     service: 'llm',
-    model: 'qwen3.8-max',
+    model: 'deepseek-v4.1-flash',
     token: NATIVE_TEST_TOKEN,
     noPrompt: true,
     forwarded: ['--sandbox', 'workspace-write'],
@@ -65,11 +68,29 @@ test('Codex launch is direct, native, and forwards the original RouterLab token'
   assert.equal(launch.updateProcessExitCode, false);
   assert.equal(launch.codexArgs.filter((value) => value === '-c').length, 7);
   assert.deepEqual(launch.codexArgs.slice(-2), ['--sandbox', 'workspace-write']);
-  assert.ok(launch.codexArgs.includes('model="qwen3.8-max"'));
+  assert.ok(launch.codexArgs.includes('model="deepseek-v4.1-flash"'));
   assert.ok(launch.codexArgs.includes('model_providers.custom.base_url="https://llm-api.routerlab.ch/v1"'));
   assert.equal(launch.codexArgs.some((value) => value.includes('model_catalog_json')), true);
   assert.equal(launch.codexArgs.some((value) => /^http:\/\/127\.0\.0\.1/.test(value)), false);
   assert.equal(fs.existsSync(fixture.calls.catalogPath), false);
+});
+
+test('Codex interactive menu launches native model selection without wrapper prompts', async () => {
+  const fixture = launchDependencies({
+    valid: true,
+    models: ['gpt-6-astra', 'gpt-5.6-sol', 'glm-5.3'],
+    modelMetadata: [],
+  });
+
+  await launchCodexForService({
+    service: 'llm',
+    token: NATIVE_TEST_TOKEN,
+    interactiveMenu: true,
+    updateProcessExitCode: false,
+  }, fixture.dependencies);
+
+  assert.equal(fixture.calls.launches.length, 1);
+  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-5.6-sol"'));
 });
 
 test('Codex removes the temporary model catalog when launch fails', async () => {

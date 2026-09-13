@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## 7.0.0 - 2026-09-13
+
+### Breaking Changes
+
+- Rebuilt the interactive wrapper around a single main menu with explicit numeric keys, consistent back/quit controls, and service selection fixed for the whole session.
+- Codex no longer shows a wrapper family/model menu when launched from the home screen; it starts Codex directly with the verified temporary catalog so the native `/model` selector controls model choice.
+- Removed the obsolete Codex routing flags `--direct`, `--proxy`, and `--transport` from the supported interface.
+- Replaced outdated model identifiers and strategies with the current service-scoped catalogues. Existing scripts selecting removed models or old strategy names must be updated.
+
+### Added
+
+- Added OpenCode CLI routing through the RouterLab service selected by `--service`, with verified model discovery, model selection, and loopback proxy isolation.
+- Added wrapper interface localization for English, French, and German through `--lang`/`--language` or `SCIONOS_LANG`/`SCIONOS_LANGUAGE`.
+- Added the current RouterLab and RouterLab LLM model catalogues, including `gpt-6-astra`, `deepseek-v4.1-flash`, `gemini-3.8-flash`, `glm-5.3`, and `glm-5.3-flash` where authorized by the service.
+- Added a neutral LLM availability notice and compact submenu keyboard help.
+
+### Changed
+
+- Claude Code RouterLab Native now uses `claude-fable-5.1`; RouterLab LLM Native keeps `claude-fable-5` and exposes the `claude`, `claude-gpt`, and `divers` strategies.
+- Codex and OpenCode use `gpt-5.6-sol` as their no-prompt default when it is discovered and authorized; no model is silently substituted.
+- Claude Code forces `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=0` for the child process and no longer forces `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`.
+- Updated tests and documentation for the service-scoped model intersections, native client behavior, keyboard controls, and multilingual menus.
+
 ## 6.0.2 - 2026-09-09
 
 ### Fixed

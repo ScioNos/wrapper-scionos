@@ -86,6 +86,7 @@ export function detectCli({
   configPath = null,
   preferWindowsShim = false,
   versionTimeoutMs = 5000,
+  env = process.env,
   spawnSyncFn = spawnSync,
 } = {}) {
   const cliCandidates = findExecutables(command, candidates, { preferWindowsShim });
@@ -97,6 +98,7 @@ export function detectCli({
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: versionTimeoutMs,
+      env,
       ...(invocation.spawnOptions ?? {}),
     });
     if (result.status === 0) {
@@ -228,6 +230,60 @@ export function detectCodexCli({
     };
   }
   return detected;
+}
+
+export function opencodeCliCandidates(
+  platform = process.platform,
+  home = os.homedir(),
+  appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+  { getNpmGlobalBinPathFn = getNpmGlobalBinPath } = {},
+) {
+  const npmGlobalBinPath = getNpmGlobalBinPathFn();
+  return platform === 'win32'
+    ? [
+        ...(npmGlobalBinPath ? [path.join(npmGlobalBinPath, 'opencode.cmd'), path.join(npmGlobalBinPath, 'opencode')] : []),
+        path.join(appData, 'npm', 'opencode'),
+        path.join(home, '.local', 'bin', 'opencode.exe'),
+        path.join(home, 'AppData', 'Local', 'Microsoft', 'WindowsApps', 'opencode.exe'),
+      ]
+    : [
+        ...(npmGlobalBinPath ? [path.join(npmGlobalBinPath, 'opencode')] : []),
+        path.join(home, '.local', 'bin', 'opencode'),
+        '/opt/homebrew/bin/opencode',
+        '/usr/local/bin/opencode',
+      ];
+}
+
+export function detectOpenCodeCli({
+  platform = process.platform,
+  home = os.homedir(),
+  appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+  getNpmGlobalBinPathFn = getNpmGlobalBinPath,
+  detectCliFn = detectCli,
+} = {}) {
+  const detectionRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-opencode-detect-'));
+  const isolatedEnv = {
+    ...process.env,
+    XDG_CONFIG_HOME: path.join(detectionRoot, 'config'),
+    XDG_DATA_HOME: path.join(detectionRoot, 'data'),
+    XDG_CACHE_HOME: path.join(detectionRoot, 'cache'),
+    OPENCODE_DISABLE_AUTOUPDATE: '1',
+  };
+  let detected;
+  try {
+    detected = detectCliFn({
+      command: 'opencode',
+      candidates: opencodeCliCandidates(platform, home, appData, { getNpmGlobalBinPathFn }),
+      preferWindowsShim: true,
+      env: isolatedEnv,
+    });
+  } finally {
+    fs.rmSync(detectionRoot, { recursive: true, force: true });
+  }
+  return {
+    ...detected,
+    versionSupported: detected.installed,
+  };
 }
 
 export function checkGitBashOnWindows({

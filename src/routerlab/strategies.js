@@ -2,20 +2,29 @@ import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './
 
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5';
 export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
+const OPEN_SOURCE_MODEL_MAP = Object.freeze({
+  fable: 'deepseek-v4.1-flash',
+  haiku: 'glm-5.3-flash',
+  sonnet: 'glm-5.3',
+  opus: 'qwen3.8-max',
+  subagent: 'kimi-k3',
+});
+export const OPEN_SOURCE_MODELS = Object.values(OPEN_SOURCE_MODEL_MAP);
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
   'aws-claude-haiku-4-5',
   'gpt-5.6-luna',
+  'deepseek-v4.1-flash',
 ];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
   'glm-5.3-flash',
-  'deepseek-v4-flash-0731',
+  'deepseek-v4.1-flash',
   'gpt-5.6-luna',
 ];
 
 export const DEFAULT_CLAUDE_MODELS = [
-  'claude-fable-5',
+  'claude-fable-5.1',
   'claude-opus-5',
   'claude-sonnet-5',
   'claude-haiku-4-5',
@@ -23,6 +32,7 @@ export const DEFAULT_CLAUDE_MODELS = [
 
 export const LLM_CLAUDE_MODELS = [
   'claude-fable-5',
+  'claude-haiku-4-5',
   'claude-opus-5',
   'claude-sonnet-5',
 ];
@@ -34,11 +44,18 @@ export const AWS_CLAUDE_MODELS = [
 ];
 
 export const OPENAI_GPT_MODELS = [
-  'gpt-5.6-sol',
-  'gpt-5.6-terra',
+  'gpt-6-astra',
   'gpt-5.6-luna',
-  ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL,
+  'gpt-5.6-terra',
+  'gpt-5.6-sol',
 ];
+
+const LLM_DIVERS_MODEL_MAP = Object.freeze({
+  fable: 'deepseek-v4.1-flash',
+  haiku: 'gemini-3.8-flash',
+  sonnet: 'glm-5.3',
+  opus: 'glm-5.3-flash',
+});
 
 export const SUBAGENT_MODEL_CHOICES = {
   default: null,
@@ -61,32 +78,22 @@ function createModelEnvironment({ opus, sonnet, haiku, subagent = null }) {
   return env;
 }
 
-function createSingleModelEnvironment(model) {
-  return createModelEnvironment({
-    opus: model,
-    sonnet: model,
-    haiku: model,
-    subagent: model,
-  });
-}
-
 export const STRATEGIES = [
   {
     value: 'default',
     name: 'Claude Native',
-    description: 'Adds Claude Fable 5 and pins the Opus, Sonnet, and Haiku aliases to their native RouterLab models.',
+    description: 'Adds Claude Fable 5.1 and pins the Opus, Sonnet, and Haiku aliases to their native RouterLab models.',
     selectionName: 'Claude Native',
-    selectionDescription: 'Custom => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
+    selectionDescription: 'Fable => Claude Fable 5.1, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
     requiredModels: DEFAULT_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-opus-5',
       sonnet: 'claude-sonnet-5',
       haiku: 'claude-haiku-4-5',
-      subagent: 'claude-fable-5',
+      subagent: 'claude-fable-5.1',
     }),
     claudeCodeEnvironment: {
-      ANTHROPIC_CUSTOM_MODEL_OPTION: 'claude-fable-5',
-      ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5.1',
       ...createModelEnvironment({
         opus: 'claude-opus-5',
         sonnet: 'claude-sonnet-5',
@@ -123,24 +130,10 @@ export const STRATEGIES = [
     }),
   },
   {
-    value: 'glm-5.3',
-    name: 'GLM 5.3',
-    selectionName: 'GLM 5.3',
-    description: 'Opus and Sonnet => glm-5.3, Haiku and subagent => glm-5.3-flash.',
-    selectionDescription: 'Opus and Sonnet => glm-5.3, Haiku and subagent => glm-5.3-flash.',
-    requiredModels: ['glm-5.3', 'glm-5.3-flash'],
-    environment: createModelEnvironment({
-      opus: 'glm-5.3',
-      sonnet: 'glm-5.3',
-      haiku: 'glm-5.3-flash',
-      subagent: 'glm-5.3-flash',
-    }),
-  },
-  {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
-    description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.',
-    selectionDescription: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna.',
+    description: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol.',
+    selectionDescription: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol.',
     aliases: ['claude-gpt-5.4'],
     requiredModels: OPENAI_GPT_MODELS,
     environment: createModelEnvironment({
@@ -148,146 +141,71 @@ export const STRATEGIES = [
       sonnet: 'gpt-5.6-terra',
       haiku: 'gpt-5.6-luna',
     }),
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
+      ...createModelEnvironment({
+        opus: 'gpt-5.6-sol',
+        sonnet: 'gpt-5.6-terra',
+        haiku: 'gpt-5.6-luna',
+        subagent: 'gpt-5.6-luna',
+      }),
+    },
   },
   {
-    value: 'glm-5.1',
-    name: 'glm-5.1',
-    description: 'Sets all Claude Code model environment variables to claude-glm-5.1.',
-    selectionDescription: 'Uses claude-glm-5.1 for all model aliases.',
-    requiredModels: ['claude-glm-5.1'],
-    environment: createSingleModelEnvironment('claude-glm-5.1'),
+    value: 'open-source',
+    name: 'Open Source',
+    selectionName: 'Open Source',
+    description: 'Fable => DeepSeek V4.1 Flash, Haiku => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Qwen 3.8 Max, subagent => Kimi K3.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Flash, Haiku => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Qwen 3.8 Max, subagent => Kimi K3.',
+    requiredModels: OPEN_SOURCE_MODELS,
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: OPEN_SOURCE_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: OPEN_SOURCE_MODEL_MAP.opus,
+        sonnet: OPEN_SOURCE_MODEL_MAP.sonnet,
+        haiku: OPEN_SOURCE_MODEL_MAP.haiku,
+        subagent: OPEN_SOURCE_MODEL_MAP.subagent,
+      }),
+    },
+    environment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: OPEN_SOURCE_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: OPEN_SOURCE_MODEL_MAP.opus,
+        sonnet: OPEN_SOURCE_MODEL_MAP.sonnet,
+        haiku: OPEN_SOURCE_MODEL_MAP.haiku,
+      }),
+    },
   },
   {
-    value: 'minimax-m3',
-    name: 'minimax-m3',
-    selectionName: 'minimax-m3',
-    description: 'Uses minimax-m3 for all main model aliases.',
-    selectionDescription: 'Uses minimax-m3 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['minimax-m3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'minimax-m3',
-      sonnet: 'minimax-m3',
-      haiku: 'minimax-m3',
-    }),
-  },
-  {
-    value: 'qwen3.8-max',
-    name: 'qwen3.8-max',
-    selectionName: 'qwen3.8-max',
-    description: 'Uses qwen3.8-max for all main model aliases.',
-    selectionDescription: 'Uses qwen3.8-max for Opus, Sonnet, and Haiku.',
-    requiredModels: ['qwen3.8-max', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'qwen3.8-max',
-      sonnet: 'qwen3.8-max',
-      haiku: 'qwen3.8-max',
-    }),
-  },
-  {
-    value: 'glm-5.3-flash',
-    name: 'glm-5.3-flash',
-    selectionName: 'glm-5.3-flash',
-    description: 'Uses glm-5.3-flash for all main model aliases.',
-    selectionDescription: 'Uses glm-5.3-flash for Opus, Sonnet, and Haiku.',
-    requiredModels: ['glm-5.3-flash', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'glm-5.3-flash',
-      sonnet: 'glm-5.3-flash',
-      haiku: 'glm-5.3-flash',
-    }),
-  },
-  {
-    value: 'grok-4.6',
-    name: 'grok-4.6',
-    selectionName: 'grok-4.6',
-    description: 'Uses grok-4.6 for all main model aliases.',
-    selectionDescription: 'Uses grok-4.6 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['grok-4.6', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'grok-4.6',
-      sonnet: 'grok-4.6',
-      haiku: 'grok-4.6',
-    }),
-  },
-  {
-    value: 'gemini-3.7-flash',
-    name: 'gemini-3.7-flash',
-    selectionName: 'gemini-3.7-flash',
-    description: 'Uses gemini-3.7-flash for all main model aliases.',
-    selectionDescription: 'Uses gemini-3.7-flash for Opus, Sonnet, and Haiku.',
-    requiredModels: ['gemini-3.7-flash', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'gemini-3.7-flash',
-      sonnet: 'gemini-3.7-flash',
-      haiku: 'gemini-3.7-flash',
-    }),
-  },
-  {
-    value: 'deepseek',
-    name: 'DeepSeek V4',
-    selectionName: 'DeepSeek V4',
-    description: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731.',
-    selectionDescription: 'Opus and Sonnet => deepseek-v4-pro-0813, Haiku => deepseek-v4-flash-0731.',
-    aliases: ['deepseek-v4', 'claude-deepseek'],
-    requiredModels: ['deepseek-v4-pro-0813', 'deepseek-v4-flash-0731'],
-    environment: createModelEnvironment({
-      opus: 'deepseek-v4-pro-0813',
-      sonnet: 'deepseek-v4-pro-0813',
-      haiku: 'deepseek-v4-flash-0731',
-      subagent: 'deepseek-v4-flash-0731',
-    }),
-  },
-  {
-    value: 'kimi-k3',
-    name: 'kimi-k3',
-    selectionName: 'kimi-k3',
-    description: 'Uses kimi-k3 for all main model aliases.',
-    selectionDescription: 'Uses kimi-k3 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['kimi-k3', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'kimi-k3',
-      sonnet: 'kimi-k3',
-      haiku: 'kimi-k3',
-    }),
-  },
-  {
-    value: 'deepseek-v4-flash-0731',
-    name: 'deepseek-v4-flash-0731',
-    selectionName: 'deepseek-v4-flash-0731',
-    description: 'Uses deepseek-v4-flash-0731 for all main model aliases.',
-    selectionDescription: 'Uses deepseek-v4-flash-0731 for Opus, Sonnet, and Haiku.',
-    requiredModels: ['deepseek-v4-flash-0731', ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL],
-    environment: createModelEnvironment({
-      opus: 'deepseek-v4-flash-0731',
-      sonnet: 'deepseek-v4-flash-0731',
-      haiku: 'deepseek-v4-flash-0731',
-    }),
+    value: 'divers',
+    name: 'Divers',
+    selectionName: 'Divers',
+    description: 'Fable => DeepSeek V4.1 Flash, Haiku => Gemini 3.8 Flash, Sonnet => GLM 5.3, Opus => GLM 5.3 Flash.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Flash, Haiku => Gemini 3.8 Flash, Sonnet => GLM 5.3, Opus => GLM 5.3 Flash.',
+    requiredModels: Object.values(LLM_DIVERS_MODEL_MAP),
+    environment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: LLM_DIVERS_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: LLM_DIVERS_MODEL_MAP.opus,
+        sonnet: LLM_DIVERS_MODEL_MAP.sonnet,
+        haiku: LLM_DIVERS_MODEL_MAP.haiku,
+      }),
+    },
   },
 ];
 
-function llmSingleModelStrategy(model) {
-  return {
-    description: `Uses ${model} for all main model aliases. Select a subagent model at launch.`,
-    selectionDescription: `Uses ${model} for all main model aliases. Select a subagent model at launch.`,
-    requiredModels: [model],
-    allowSubagentOverride: false,
-    environment: createModelEnvironment({ opus: model, sonnet: model, haiku: model }),
-  };
-}
-
 const LLM_STRATEGY_OVERRIDES = {
   claude: {
-    description: 'Custom and Haiku => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
-    selectionDescription: 'Custom and Haiku => Claude Fable 5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
+    description: 'Fable => Claude Fable 5, Haiku => Claude Haiku 4.5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
+    selectionDescription: 'Fable => Claude Fable 5, Haiku => Claude Haiku 4.5, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5. Select a subagent model at launch.',
     requiredModels: LLM_CLAUDE_MODELS,
     allowSubagentOverride: false,
     claudeCodeEnvironment: {
-      ANTHROPIC_CUSTOM_MODEL_OPTION: 'claude-fable-5',
-      ANTHROPIC_CUSTOM_MODEL_OPTION_NAME: 'Claude Fable 5',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5',
       ...createModelEnvironment({
         opus: 'claude-opus-5',
         sonnet: 'claude-sonnet-5',
-        haiku: 'claude-fable-5',
+        haiku: 'claude-haiku-4-5',
       }),
     },
     environment: createModelEnvironment({
@@ -297,21 +215,46 @@ const LLM_STRATEGY_OVERRIDES = {
     }),
   },
   'claude-gpt': {
-    description: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna. Select a subagent model at launch.',
-    selectionDescription: 'Opus => GPT 5.6 Sol, Sonnet => GPT 5.6 Terra, Haiku => GPT 5.6 Luna. Select a subagent model at launch.',
-    requiredModels: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+    description: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol. Select a subagent model at launch.',
+    selectionDescription: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol. Select a subagent model at launch.',
+    requiredModels: ['gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'],
     allowSubagentOverride: false,
     environment: createModelEnvironment({
       opus: 'gpt-5.6-sol',
       sonnet: 'gpt-5.6-terra',
       haiku: 'gpt-5.6-luna',
     }),
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
+      ...createModelEnvironment({
+        opus: 'gpt-5.6-sol',
+        sonnet: 'gpt-5.6-terra',
+        haiku: 'gpt-5.6-luna',
+      }),
+    },
   },
-
-  'qwen3.8-max': llmSingleModelStrategy('qwen3.8-max'),
-  'minimax-m3': llmSingleModelStrategy('minimax-m3'),
-  'kimi-k3': llmSingleModelStrategy('kimi-k3'),
-
+  divers: {
+    description: 'Fable => DeepSeek V4.1 Flash, Haiku => Gemini 3.8 Flash, Sonnet => GLM 5.3, Opus => GLM 5.3 Flash. Select a subagent model at launch.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Flash, Haiku => Gemini 3.8 Flash, Sonnet => GLM 5.3, Opus => GLM 5.3 Flash. Select a subagent model at launch.',
+    requiredModels: Object.values(LLM_DIVERS_MODEL_MAP),
+    allowSubagentOverride: false,
+    environment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: LLM_DIVERS_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: LLM_DIVERS_MODEL_MAP.opus,
+        sonnet: LLM_DIVERS_MODEL_MAP.sonnet,
+        haiku: LLM_DIVERS_MODEL_MAP.haiku,
+      }),
+    },
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: LLM_DIVERS_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: LLM_DIVERS_MODEL_MAP.opus,
+        sonnet: LLM_DIVERS_MODEL_MAP.sonnet,
+        haiku: LLM_DIVERS_MODEL_MAP.haiku,
+      }),
+    },
+  },
 };
 
 export function normalizeStrategyValue(strategyValue) {
@@ -399,6 +342,7 @@ export function getClaudeCodeSubagentModels(serviceValue = DEFAULT_SERVICE) {
 export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
   const modelKeys = [
     'ANTHROPIC_CUSTOM_MODEL_OPTION',
+    'ANTHROPIC_DEFAULT_FABLE_MODEL',
     'ANTHROPIC_DEFAULT_HAIKU_MODEL',
     'ANTHROPIC_DEFAULT_SONNET_MODEL',
     'ANTHROPIC_DEFAULT_OPUS_MODEL',
@@ -447,7 +391,7 @@ export function hasVerifiedModelIds(modelIds) {
   return Array.isArray(modelIds) && modelIds.length > 0;
 }
 
-function getRequiredModels(strategy) {
+export function getRequiredModels(strategy) {
   return strategy?.requiredModels ?? strategy?.verificationModels ?? strategy?.mappedModels ?? [];
 }
 

@@ -13,11 +13,13 @@ import {
   detectClaudeCode,
   detectCli,
   detectCodexCli,
+  detectOpenCodeCli,
   detectOS,
   findExecutable,
   findWindowsExecutable,
   isClaudeCodeVersionSupported,
   isCodexVersionSupported,
+  opencodeCliCandidates,
 } from '../src/platform/detect.js';
 
 test('Windows command shims preserve TOML quotes without caret leakage', () => {
@@ -213,6 +215,18 @@ test('platform metadata and client candidates cover Windows, macOS, Linux, and o
   assert.ok(darwinCodex.includes(path.join('/Users/tester', '.local', 'bin', 'codex')));
   assert.ok(darwinCodex.includes('/opt/homebrew/bin/codex'));
   assert.ok(darwinCodex.includes('/usr/local/bin/codex'));
+
+  const windowsOpenCode = opencodeCliCandidates('win32', 'C:\\Users\\tester', 'C:\\AppData', {
+    getNpmGlobalBinPathFn: () => null,
+  });
+  assert.ok(windowsOpenCode.length >= 3);
+  assert.match(windowsOpenCode[0], /opencode$/);
+  const darwinOpenCode = opencodeCliCandidates('darwin', '/Users/tester', '/unused', {
+    getNpmGlobalBinPathFn: () => null,
+  });
+  assert.ok(darwinOpenCode.includes(path.join('/Users/tester', '.local', 'bin', 'opencode')));
+  assert.ok(darwinOpenCode.includes('/opt/homebrew/bin/opencode'));
+  assert.ok(darwinOpenCode.includes('/usr/local/bin/opencode'));
 });
 
 test('Claude and Codex detection factories preserve platform-specific results', () => {
@@ -274,6 +288,22 @@ test('Claude and Codex detection factories preserve platform-specific results', 
     detectCliFn: () => ({ installed: false, cliPath: null, version: null }),
   });
   assert.equal(missingCodex.versionSupported, false);
+
+  let openCodeOptions = null;
+  const openCode = detectOpenCodeCli({
+    platform: 'win32',
+    home: 'C:\\Users\\tester',
+    appData: 'C:\\AppData',
+    getNpmGlobalBinPathFn: () => null,
+    detectCliFn: (options) => {
+      openCodeOptions = options;
+      return { installed: true, cliPath: 'C:\\AppData\\npm\\opencode.cmd', version: '1.18.30' };
+    },
+  });
+  assert.equal(openCode.versionSupported, true);
+  assert.equal(openCodeOptions.command, 'opencode');
+  assert.equal(openCodeOptions.preferWindowsShim, true);
+  assert.match(openCodeOptions.env.XDG_CONFIG_HOME, /wrapper-scionos-opencode-detect-/);
 });
 
 test('Git Bash detection covers non-Windows, configured, and missing paths', () => {

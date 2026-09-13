@@ -2,6 +2,8 @@
 
 This guide covers breaking changes in the Codex integration for wrapper-scionos 5.0.
 
+> Historical note: this guide documents the 5.0 migration. Version 7.0.0 keeps the direct Codex transport and temporary verified catalog, and additionally launches Codex directly from the wrapper home menu so the native `/model` selector owns interactive model choice. The current wrapper also supports `--lang fr|en|de` for its own menus.
+
 ## Overview
 
 Version 5.0 fundamentally changes how wrapper-scionos interacts with Codex:

@@ -11,6 +11,7 @@ export async function handleClaudeCode(options, version = null, claudeArgs = opt
     subagentModel: options.subagentModel,
     token: options.token,
     noPrompt: options.noPrompt,
+    language: options.language,
     claudeArgs,
     version,
     allowBack: options.allowBack ?? false,

@@ -49,21 +49,25 @@ try {
       label: 'wrapper-scionos',
       command: installedWrapper,
       args: [],
+      selection: 'numeric',
     },
     {
       label: 'wrapper-scionos --service llm',
       command: installedWrapper,
       args: ['--service', 'llm'],
+      selection: 'arrows',
     },
     {
       label: 'npx wrapper-scionos',
       command: npxCommand,
       args: ['--yes', '--package', tarballPath, 'wrapper-scionos'],
+      selection: 'arrows',
     },
     {
       label: 'npx wrapper-scionos --service llm',
       command: npxCommand,
       args: ['--yes', '--package', tarballPath, 'wrapper-scionos', '--service', 'llm'],
+      selection: 'arrows',
     },
   ];
 
@@ -72,6 +76,8 @@ try {
       ENTRY_SMOKE,
       '--label',
       smokeCase.label,
+      '--selection',
+      smokeCase.selection,
       smokeCase.command,
       ...smokeCase.args,
     ], {

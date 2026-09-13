@@ -12,26 +12,24 @@ export { codexModelDisplayName };
 export const CODEX_ALLOWED_MODELS = {
   routerlab: [
     'gpt-5.6-sol',
+    'gpt-6-astra',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
-    'deepseek-v4-pro-0813',
-    'deepseek-v4-flash-0731',
+    'deepseek-v4.1-flash',
     'kimi-k3',
-    'minimax-m3',
     'qwen3.8-max',
+    'glm-5.3',
     'glm-5.3-flash',
-    'grok-4.6',
-    'gemini-3.7-flash',
   ],
   llm: [
     'gpt-5.6-sol',
+    'gpt-6-astra',
     'gpt-5.6-terra',
     'gpt-5.6-luna',
+    'gemini-3.8-flash',
+    'deepseek-v4.1-flash',
     'glm-5.3',
     'glm-5.3-flash',
-    'qwen3.8-max',
-    'minimax-m3',
-    'kimi-k3',
   ],
 };
 
@@ -57,6 +55,14 @@ const FALLBACK_REASONING_LEVELS = [
 ];
 
 const CODEX_MODEL_METADATA = {
+  'gpt-6-astra': {
+    displayName: 'GPT 6 Astra',
+    description: 'GPT 6 Astra',
+  },
+  'deepseek-v4.1-flash': {
+    displayName: 'DeepSeek V4.1 Flash',
+    description: 'DeepSeek V4.1 Flash',
+  },
   'glm-5.3': {
     displayName: 'GLM 5.3',
     description: 'GLM 5.3',
@@ -69,13 +75,9 @@ const CODEX_MODEL_METADATA = {
     displayName: 'Qwen 3.8 Max',
     description: 'Qwen 3.8 Max',
   },
-  'grok-4.6': {
-    displayName: 'Grok 4.6',
-    description: 'Grok 4.6',
-  },
-  'gemini-3.7-flash': {
-    displayName: 'Gemini 3.7 Flash',
-    description: 'Gemini 3.7 Flash',
+  'gemini-3.8-flash': {
+    displayName: 'Gemini 3.8 Flash',
+    description: 'Gemini 3.8 Flash',
   },
 };
 export function assertCodexCliAvailable() {

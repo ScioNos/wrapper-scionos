@@ -1,200 +1,223 @@
 # wrapper-scionos
 
-ScioNos command-line wrapper for RouterLab-backed Claude Code, Claude Desktop, Codex CLI, and OpenCode.
+[![npm version](https://img.shields.io/npm/v/wrapper-scionos?logo=npm&label=npm)](https://www.npmjs.com/package/wrapper-scionos)
+[![GitHub release](https://img.shields.io/github/v/release/ScioNos/wrapper-scionos?display_name=tag&sort=semver&label=release)](https://github.com/ScioNos/wrapper-scionos/releases)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Current release: `7.0.0`
+One launcher for Claude Code, Claude Desktop, Codex CLI and OpenCode — routed through the selected RouterLab service.
 
-[Lire en français](./README.fr.md) · [Deutsch](./README.de.md)
+**Current release: `7.0.0`**
+
+[Français](./README.fr.md) · [Deutsch](./README.de.md) · [Changelog](./CHANGELOG.md)
+
+## At a glance
+
+| Client | Integration | Model selection |
+| --- | --- | --- |
+| Claude Code | Authenticated loopback proxy | Strategy and verified sub-agent |
+| Claude Desktop | Local mapping proxy and managed profile | Desktop routes |
+| Codex CLI | Direct Responses endpoint | Native `/model` catalogue |
+| OpenCode CLI | Authenticated OpenAI-compatible loopback proxy | Family, then exact model |
+
+The service is selected once, before the menu opens, and remains fixed for the session. The wrapper validates the service token, discovers the current catalogue, and fails closed when no authorized model is available.
 
 ## Requirements
 
-- Node.js ^22.13.0 or >=23.5.0.
-- A service-scoped RouterLab token.
-- Claude Code >=2.1.220 for Claude Code launches.
-- Codex CLI >=0.144.1 for Codex launches.
-- OpenCode 1.18.30 or newer for OpenCode launches.
-- Windows, macOS, or claude-desktop-debian on Linux for Claude Desktop profiles.
+- Node.js `^22.13.0` or `>=23.5.0`.
+- A token for the selected RouterLab service.
+- Claude Code `>=2.1.220` for Claude Code launches.
+- Codex CLI `>=0.144.1` for Codex launches.
+- OpenCode `>=1.18.30` for OpenCode launches.
+- Windows, macOS, or `claude-desktop-debian` on Linux for Claude Desktop profiles.
 
-For `--service llm`, the wrapper displays a neutral informational notice because the available models can vary. The notice is not shown for `routerlab`.
+## Quick start
 
-## Install and entry modes
+Run without a global installation:
 
-Without a global install:
+```bash
+npx wrapper-scionos
+npx wrapper-scionos --service llm
+```
 
-    npx wrapper-scionos
-    npx wrapper-scionos --service llm
+Or install globally:
 
-With a global install:
+```bash
+npm install -g wrapper-scionos
+wrapper-scionos --service routerlab
+```
 
-    npm install -g wrapper-scionos
-    wrapper-scionos
-    wrapper-scionos --service llm
+The installed package exposes both `wrapper-scionos` and `scionos` as equivalent commands.
 
-All four entry modes open the same interactive menu. The selected service is shown in every screen and remains fixed for the session. The home menu contains Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Account & access, Tools & diagnostics, and Exit. Arrow keys loop through choices, Enter confirms, numeric keys use the displayed shortcut, `0` goes back or exits at home, `b`/`back` goes back, and `q`/`quit`/`exit` quits. The installed package also exposes scionos as an exact binary alias for wrapper-scionos.
+For `--service llm`, the wrapper displays this neutral notice because the free service catalogue may vary:
 
-The wrapper interface defaults to English. Use `--lang fr`, `--lang en`, or `--lang de` (the `--language` alias is also accepted), or set `SCIONOS_LANG`/`SCIONOS_LANGUAGE`. The full keyboard help is shown on the home menu; submenus use a shorter version. The language applies to the wrapper prompts and menus; output produced by the native client remains owned by that client.
+```text
+ℹ LLM service active — available models may vary
+```
 
-On Windows, PowerShell may resolve the generated `wrapper-scionos.ps1` or `npx.ps1` shim while Command Prompt resolves the corresponding `.cmd` shim; both are created by npm and are supported. On Linux and macOS, npm creates executable shell shims. The release smoke test exercises the four commands above on all three operating systems.
+The notice is not displayed for `routerlab`.
+
+## Interactive menu
+
+The home menu provides the same entry points on every platform:
+
+```text
+1. Claude Code
+2. Claude Desktop
+3. Codex CLI
+4. OpenCode CLI
+5. Account & access
+6. Tools & diagnostics
+0. Exit
+```
+
+| Input | Action |
+| --- | --- |
+| `↑` / `↓` | Move through the choices, with wraparound |
+| `Enter` | Confirm the highlighted choice |
+| A number | Select the displayed shortcut |
+| Label, value or model ID | Select a matching choice |
+| `0`, `b`, `back` | Go back; `0` exits from the home menu |
+| `q`, `quit`, `exit` | Quit the wrapper from any menu |
+| `Esc` | Go back, or quit from the home menu |
+| `Ctrl+C` | Interrupt with exit code `130` |
+
+The full keyboard help is shown on the home menu and a compact version is used in submenus. Once a native client starts, its keyboard input and output remain entirely native to that client.
+
+### Interface language
+
+The wrapper defaults to English. Use one of the following languages:
+
+```bash
+wrapper-scionos --lang en
+wrapper-scionos --lang fr
+wrapper-scionos --lang de
+```
+
+`--language` is an alias for `--lang`. The same setting can be provided through `SCIONOS_LANG` or `SCIONOS_LANGUAGE`. This localizes wrapper menus and prompts; it does not translate native client output.
 
 ## Main commands
 
-    wrapper-scionos claude-code --service routerlab --strategy aws
-    wrapper-scionos claude-code --service llm --strategy divers
-    wrapper-scionos auth login --service routerlab
-    wrapper-scionos auth logout --service routerlab
-    wrapper-scionos auth status --service llm
-    wrapper-scionos doctor --service llm
-    wrapper-scionos strategies --service routerlab
-    wrapper-scionos claude-desktop apply-proxy --service llm --yes
-    wrapper-scionos claude-desktop proxy --service llm
-    wrapper-scionos codex launch --service llm
-    wrapper-scionos codex template --service llm
-    wrapper-scionos codex status
-    wrapper-scionos codex restore --yes
-    wrapper-scionos opencode --service llm --model gpt-6-astra -- run "Summarize this repository"
+```bash
+# Clients
+wrapper-scionos claude-code --service routerlab --strategy aws
+wrapper-scionos claude-code --service llm --strategy divers
+wrapper-scionos claude-desktop apply-proxy --service llm --yes
+wrapper-scionos claude-desktop proxy --service llm
+wrapper-scionos codex launch --service llm
+wrapper-scionos opencode --service llm --model gpt-6-astra -- run "Summarize this repository"
 
-Run wrapper-scionos --help for the authoritative command and option list. The displayed version is read from package.json.
+# Authentication and diagnostics
+wrapper-scionos auth login --service routerlab
+wrapper-scionos auth status --service llm
+wrapper-scionos auth logout --service routerlab
+wrapper-scionos doctor --service llm
+wrapper-scionos strategies --service routerlab
+```
 
-Global options are accepted before or after the command: `wrapper-scionos --service llm doctor` and `wrapper-scionos doctor --service llm` are equivalent. Parsing stops at the first unknown argument and never examines arguments after `--`, preserving Claude Code passthrough.
+Run `wrapper-scionos --help` for the authoritative command and option reference. Global options work before or after a command:
 
-Options are validated per command and action; unknown actions, irrelevant options, and extra positional arguments exit with code 2. --no-prompt and --json require an explicit command. Human-readable output is the default. Non-interactive commands accept --json and emit exactly one stable document: {"ok":true,"command":"...","data":{...}} on success or {"ok":false,"error":{"code":"...","message":"..."}} on failure. JSON is rejected for the menu, Claude Code, codex launch, and claude-desktop proxy.
+```bash
+wrapper-scionos --service llm doctor
+wrapper-scionos doctor --service llm
+```
 
-Exit codes are 0 for success and previews, 1 for runtime/upstream failures, 2 for invalid usage, and 130 for an interrupted prompt. Auth login and logout honor --dry-run without prompting or changing secure storage; explicit login/logout remain mutating without requiring --yes.
+Arguments after `--` are passed to the native client. The wrapper stops parsing at that boundary, preserving native passthrough. Invalid commands or options return code `2`; runtime failures return `1`; interrupted prompts return `130`.
 
-## Authentication and services
+## Services and authentication
 
-Service endpoints:
+| Service | Production endpoint | Recommended token variables |
+| --- | --- | --- |
+| `routerlab` | `https://api.routerlab.ch` | `ROUTERLAB_API_KEY`, `WRAPPER_SCIONOS_ROUTERLAB_TOKEN` |
+| `llm` | `https://llm-api.routerlab.ch` | `ROUTERLAB_LLM_API_KEY`, `WRAPPER_SCIONOS_LLM_TOKEN` |
 
-- routerlab: https://api.routerlab.ch
-- llm: https://llm-api.routerlab.ch
+`ANTHROPIC_AUTH_TOKEN` remains accepted as a deprecated fallback. Tokens are read from service-specific secure storage or a masked prompt. The wrapper never exposes a token in menus or diagnostic output.
 
-Preferred environment variables:
+Production destinations are fixed. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL` and `ANTHROPIC_BASE_URL` values are ignored with a warning; they cannot redirect production traffic.
 
-    ROUTERLAB_API_KEY
-    ROUTERLAB_LLM_API_KEY
-    WRAPPER_SCIONOS_ROUTERLAB_TOKEN
-    WRAPPER_SCIONOS_LLM_TOKEN
+On Linux, persistent secure storage requires `secret-tool` and an available Secret Service. The legacy `claude-scionos` secure-storage namespace is read during migration, and logout removes both namespaces.
 
-`ANTHROPIC_AUTH_TOKEN` remains a deprecated token fallback. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL`, and `ANTHROPIC_BASE_URL` values are ignored with a warning; they never change the production destination.
+## Model routing
 
-Secure storage reads both wrapper-scionos and the legacy claude-scionos namespace; logout deletes both. Linux persistence requires `secret-tool` and an available Secret Service. Legacy plaintext token files are reported as requiring migration but are never read; a successful, verified `auth login` migrates them to Secret Service before deleting them.
+The wrapper uses the intersection of the service allowlist and the verified `GET /v1/models` response. Models that are not discovered or authorized are hidden or rejected. There is no silent fallback, and an empty intersection blocks the launch.
 
-auth login uses a masked prompt. The --token option remains available to supported commands such as auth test, strategies, Codex, and Claude Desktop, but Claude Code launches reject it because command lines are visible in shell history and process inspection. Claude Code token order is the service environment variable followed by secure storage or the masked prompt. Codex intentionally keeps its special order of --token, secure storage, then environment.
+### Claude Code strategies — `llm`
 
-## Claude Code
+| Strategy | Fable | Haiku | Sonnet | Opus |
+| --- | --- | --- | --- | --- |
+| `claude` | `claude-fable-5` | `claude-haiku-4-5` | `claude-sonnet-5` | `claude-opus-5` |
+| `claude-gpt` | `gpt-6-astra` | `gpt-5.6-luna` | `gpt-5.6-terra` | `gpt-5.6-sol` |
+| `divers` | `deepseek-v4.1-flash` | `gemini-3.8-flash` | `glm-5.3` | `glm-5.3-flash` |
 
-Claude Code 2.1.220 or newer is launched through a loopback proxy. Wrapper-owned credentials and model mappings are injected only into the child process; unknown arguments after -- are forwarded to Claude Code. CLI detection gives each `claude --version` candidate five seconds before trying the next executable, and an unsupported or unparseable version fails before token resolution or network access.
+The `llm` sub-agent picker also supports `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `gpt-5.6-luna`, `deepseek-v4.1-flash` and `glm-5.3-flash` when discovered and authorized.
 
-    wrapper-scionos claude-code --service routerlab --strategy aws -- -p "Summarize this repository"
+For `routerlab`, the main strategy families are Claude, AWS Claude, OpenAI GPT and Open Source. Claude Native uses `claude-fable-5.1`; the GPT mapping is Fable `gpt-6-astra`, Haiku `gpt-5.6-luna`, Sonnet `gpt-5.6-terra` and Opus `gpt-5.6-sol`.
 
-Claude Code allows selecting a verified subagent model at launch or via `--subagent-model <id>`. RouterLab supports `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `gpt-5.6-luna`, and `deepseek-v4.1-flash`; RouterLab LLM supports `claude-haiku-4-5`, `glm-5.3-flash`, `deepseek-v4.1-flash`, and `gpt-5.6-luna`. The RouterLab main-strategy catalogue is Claude, AWS Claude, OpenAI GPT, and Open Source. For `--service routerlab`, the `claude-gpt` strategy maps Fable to `gpt-6-astra`, Haiku and the default subagent to `gpt-5.6-luna`, Sonnet to `gpt-5.6-terra`, and Opus to `gpt-5.6-sol`. The `open-source` strategy maps Fable to `deepseek-v4.1-flash`, Haiku to `glm-5.3-flash`, Sonnet to `glm-5.3`, Opus to `qwen3.8-max`, and the subagent to `kimi-k3`. For `--service llm`, the `claude` strategy maps Fable to `claude-fable-5`, Haiku to `claude-haiku-4-5`, Opus to `claude-opus-5`, and Sonnet to `claude-sonnet-5`. The `claude-gpt` strategy maps Fable to `gpt-6-astra`, Haiku to `gpt-5.6-luna`, Sonnet to `gpt-5.6-terra`, and Opus to `gpt-5.6-sol`. The `divers` strategy maps Fable to `deepseek-v4.1-flash`, Haiku to `gemini-3.8-flash`, Sonnet to `glm-5.3`, and Opus to `glm-5.3-flash`. The LLM main-strategy catalogue is `claude`, `claude-gpt`, and `divers`; `glm-5.3-flash` and `deepseek-v4.1-flash` are also available in the subagent picker.
+### Codex CLI
 
-Claude Code always targets the official service through its dedicated loopback proxy. The wrapper generates the child-only `ANTHROPIC_BASE_URL`; a user-provided value is ignored. Legacy `ANTHROPIC_AUTH_TOKEN` remains accepted as an input token source with its deprecation warning, but the raw token and every RouterLab token variable are removed from the child environment. Claude receives only a random, process-local proxy credential. Provider, endpoint, authentication, header, and model-routing variables are sanitized; unrelated native tool, MCP, certificate, and network variables remain inherited. Loopback is merged into `NO_PROXY`/`no_proxy`.
+Codex is launched directly against the selected RouterLab Responses endpoint:
 
-The child receives `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=0`. The wrapper performs its own verified model discovery and allowlist enforcement before starting the proxy, so Claude Code does not replace that controlled catalogue with the upstream gateway catalogue. The wrapper no longer forces `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`; Claude Code keeps its normal protocol features.
+```bash
+wrapper-scionos codex launch --service routerlab
+wrapper-scionos codex launch --service llm
+```
 
-Every model-discovery failure stops the launch before the local proxy or Claude child starts, including authentication, redirect, network, timeout, invalid-response, server, empty-catalog, and empty-authorized-intersection failures. Discovery uses a direct transport to the fixed service endpoint. The proxy accepts only the intersection of the service's authorized Claude Code models and the verified RouterLab catalog. Native `/model`, resume, and subagent choices remain usable inside that intersection; any other model is rejected locally with HTTP 403 and is never forwarded.
+The default model is **`gpt-5.6-sol`**. It must be both discovered and authorized; the wrapper never substitutes another model. From the home menu, Codex opens directly and its native `/model` selector displays the temporary verified catalogue.
 
-The proxy has no total generation timeout and closes its upstream request if the client disconnects. Cleanup starts as soon as the proxy is created, waits up to two seconds for normal shutdown, then force-closes lingering local connections.
+| Service | Allowlist |
+| --- | --- |
+| `routerlab` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4.1-flash`, `kimi-k3`, `qwen3.8-max`, `glm-5.3`, `glm-5.3-flash` |
+| `llm` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash` |
 
-## Claude Desktop
+The catalogue is written to a temporary startup file, contains no credentials, and is deleted after the child process exits. The removed `--direct`, `--proxy` and `--transport` options are no longer supported because direct access is now the only Codex transport.
 
-Claude Desktop is supported only through the authenticated local mapping proxy. The former direct profile command has been removed because it persisted the RouterLab token in the Desktop profile:
+### OpenCode CLI
 
-    wrapper-scionos claude-desktop apply-proxy --service llm --yes
-    wrapper-scionos claude-desktop proxy --service llm
+```bash
+wrapper-scionos opencode --service llm
+wrapper-scionos opencode --service llm --strategy divers --model glm-5.3
+wrapper-scionos opencode --service llm --model gpt-6-astra -- run "Summarize this repository"
+```
 
-`apply-proxy` stores only a random 32-byte local credential in the profile; the RouterLab token remains in its secure source. Before applying a profile and before every proxy start, the wrapper discovers `/v1/models` directly on the fixed RouterLab endpoint and exposes only the intersection with the configured Desktop routes. Discovery, authentication, redirect, timeout, invalid JSON, empty catalogue, and empty-intersection failures are fail-closed and cause no profile mutation. For `--service routerlab`, the Desktop catalogue mirrors the RouterLab Claude Code strategies. Claude Native exposes `claude-fable-5.1`, `claude-opus-5`, `claude-sonnet-5`, and `claude-haiku-4-5`; the remaining routes cover AWS Claude, GPT 5.6, and the Open Source routes `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, and `qwen3.8-max`. Only models returned by RouterLab discovery are displayed.
+Interactive launch selects a family and then an exact model. The no-prompt default is `gpt-5.6-sol`, provided that discovery authorizes it. The wrapper creates an authenticated loopback proxy and injects `OPENCODE_CONFIG_CONTENT` only into the child process; it never writes an `opencode.json` file or stores the RouterLab token in OpenCode configuration.
 
-Profiles use `wrapperScionos` metadata schema v2 with the fixed service, strategies, loopback origin, and verified routes, but never a RouterLab token. A valid v1 proxy profile is migrated after redetection while retaining its random local credential. A direct, unmanaged, or metadata-less profile requires explicit replacement with `apply-proxy --yes` or restoration of the official profile; an old direct token is never reused.
+Update an npm installation with OpenCode's native updater:
 
-From the interactive menu, Start Local Mapping uses the service displayed in the banner. A missing profile is created directly, a healthy equivalent profile is reused without rotating its local credential, and replacement of a differing, direct, legacy, or invalid profile asks for confirmation. The stored host and port are preserved unless explicitly overridden; the service-specific catalog is fixed when the session starts.
+```bash
+opencode upgrade --method npm
+```
 
-The selected service base URL is validated before token resolution, listener binding, or profile mutation. Generated profiles authorize Cowork egress only to their gateway exact hostname. `claude-desktop status` preserves existing fields and adds `profileExists`, `applied`, `healthy`, and stable `issues` codes without exposing credentials.
+## Client security model
 
-The proxy listens on exact loopback hosts only (`localhost`, `::1`, or a valid `127.0.0.0/8` IPv4) and an explicit port between 1 and 65535. It permits Messages API operations only: model listing, message creation, token counting, and batch create/list/retrieve/cancel/results/delete. Unsupported paths, methods, and unmapped models fail locally; a mixed invalid batch is rejected entirely before any upstream call. Browser origins are rejected by default.
+- Claude Code and OpenCode use authenticated loopback proxies with process-local credentials.
+- Claude Desktop stores only a random local credential in its managed profile; the RouterLab token remains in secure storage.
+- Codex receives the service token through its native `OPENAI_API_KEY` environment variable and uses a temporary verified model catalogue.
+- Model discovery runs before proxy creation or client launch and fails closed on authentication, network, invalid-response, server, empty-catalogue or empty-intersection errors.
+- User-controlled provider and base-URL overrides cannot change the production RouterLab destination.
+- Native tools, MCP, sessions, updates and other client features remain native to the selected client unless explicitly restricted by that client.
 
-Requests are limited to 64 MiB before and after decompression. Identity, gzip, deflate, and Brotli bodies are accepted; zstd is accepted when supported by the active Node runtime, otherwise returning HTTP 415 unsupported_content_encoding. Invalid JSON returns HTTP 400. Header reception is limited to 30 seconds and body transmission to 120 seconds. Long generations have no overall timeout.
-
-When the proxy is started from the interactive menu, Ctrl+C stops it and returns to the Claude Desktop submenu without preserving an exit code. For the direct `claude-desktop proxy` command, Ctrl+C exits with 130; SIGTERM exits with 143 in both modes.
-
-## OpenCode
-
-OpenCode 1.18.30 or newer is launched with the official `@ai-sdk/openai-compatible` provider and the wrapper's local endpoint:
-
-    wrapper-scionos opencode --service llm
-    wrapper-scionos opencode --service llm --strategy divers --model glm-5.3
-    wrapper-scionos opencode --service llm --model gpt-6-astra -- run "Summarize this repository"
-
-The wrapper verifies the OpenCode executable, resolves the service token, directly discovers `/v1/models`, then intersects the discovered catalogue with the models authorized by RouterLab. Interactive launch selects a model family before the exact model; `--strategy` selects a family and `--model` selects an exact identifier. Without a prompt, the default is `gpt-5.6-sol` when available. Authentication, network, discovery, or empty-intersection failures block the launch.
-
-During the session, the wrapper starts an authenticated loopback proxy and injects `OPENCODE_CONFIG_CONTENT` only into the OpenCode child. The active configuration enables only the `scionos` provider, targets the local `/v1` API, and contains a random local identifier; the raw RouterLab token and persistent configuration files are never written by the wrapper. The proxy accepts OpenAI-compatible chat requests and locally rejects models outside the verified list.
-
-Native OpenCode arguments are forwarded. Options that could replace the managed provider, model, or configuration (`-m`/`--model`, `--config`, `--config-dir`, `--config-content`) must be replaced with the wrapper options. To update an npm-installed OpenCode:
-
-    opencode upgrade --method npm
-
-OpenCode's own configuration and sessions remain native to OpenCode. The wrapper does not write an `opencode.json` file; `OPENCODE_CONFIG_CONTENT` exists only for the child process lifetime.
-
-## Codex CLI
-
-Codex connects directly to the selected RouterLab Responses endpoint:
-
-    wrapper-scionos codex launch --service routerlab
-    wrapper-scionos codex launch --service llm
-
-The wrapper allowlists these initial models:
-
-- `routerlab`: `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4.1-flash`, `kimi-k3`, `qwen3.8-max`, `glm-5.3`, `glm-5.3-flash`.
-- `llm`: `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`.
-
-Before launch, `GET /v1/models` is used only to intersect this allowlist with the identifiers currently available on RouterLab. An explicit `--model` must match an available identifier exactly; there is no substitution. From the interactive home menu, selecting Codex CLI launches Codex directly; Codex's native `/model` selector then uses the temporary verified catalog. `--strategy` remains available for direct family-constrained launches. Without `--model`, the wrapper starts Codex on `gpt-5.6-sol`, which must be available; `--no-prompt` enforces the same requirement.
-
-Every discovery failure is fail-closed: network errors, timeouts, invalid JSON, HTTP 401/403, server errors, and an empty intersection all prevent Codex from starting. The `--direct`, `--proxy`, and `--transport` options have been removed because direct access is now the only Codex transport.
-
-At launch, the session receives seven Codex configuration overrides: `model_provider`, `model`, `model_catalog_json`, provider `name`, provider `base_url`, `wire_api="responses"`, and `env_key="OPENAI_API_KEY"`. The RouterLab token is passed unchanged to the Codex child through `OPENAI_API_KEY`. Native arguments after `--` are forwarded unchanged except for options that can replace wrapper-validated routing or model selection: `-c`/`--config`, `-m`/`--model`, `--oss`, `--local-provider`, `-p`/`--profile`, `--remote`, and `--remote-auth-token-env`. Use the wrapper `--model` option before `--` to select an allowed RouterLab model.
-
-After successful discovery, the wrapper writes a temporary startup catalog containing only the intersection of the discovered models and the models allowed for the selected service, in their configured order. RouterLab metadata is normalized for Codex; conservative values are used when optional fields are missing. Discovery failure has no fallback: the launch stops instead of exposing a stale catalog. The resulting list is what Codex displays in `/model`.
-
-The catalog contains no credential, remains available only while the Codex child process is running, and is deleted after both successful and failed launches. The wrapper never writes `config.toml`, `auth.json`, sandbox or approval settings, MCP settings, profiles, or other Codex preferences.
-
-Production destinations are fixed: `routerlab` uses `https://api.routerlab.ch/v1` and `llm` uses `https://llm-api.routerlab.ch/v1`. User-provided `ROUTERLAB_BASE_URL`, `ROUTERLAB_LLM_BASE_URL`, `WRAPPER_SCIONOS_*_BASE_URL`, and `ANTHROPIC_BASE_URL` values are ignored with a warning. Token variables remain supported.
-
-### Scope of the RouterLab-only guarantee
-
-The RouterLab-only guarantee applies exclusively to model discovery and inference traffic configured by the wrapper: model listing and Responses requests for the selected provider. It does not restrict independent network features of the official Codex binary, including update checks, MCP, tools, search, or other native integrations configured by the user. The wrapper does not disable, replace, or enrich those native features.
-
-When Codex is selected from the interactive menu, a startup failure or non-zero Codex exit reports the error and returns to the main menu. A normal Codex exit closes the wrapper. Direct `codex launch` commands preserve the Codex process exit code.
-
-`codex template` previews the six provider and model routing settings. The ephemeral `model_catalog_json` path is created only by `codex launch`, after model discovery. `codex status` and `codex restore` remain available only to inspect and remove configuration or catalog files created by older wrapper releases. A legacy backup is restored automatically; without one, `config.toml` is always preserved and manual cleanup is reported. Current runtime state is cleaned automatically.
-
-## 4.x compatibility
-
-The following legacy items still warn once per process on stderr:
-
-- ANTHROPIC_AUTH_TOKEN
-- --list-strategies (use strategies)
-- auth change (use auth login)
-
-`claude-desktop apply` is no longer a compatibility alias and fails with migration guidance to `apply-proxy`.
-
-All user-provided base URL variables, including `ANTHROPIC_BASE_URL`, are ignored. See [Codex migration for 5.0](./docs/migration-5.0-codex.md).
+Detailed implementation notes are available in [docs/architecture-notes.md](./docs/architecture-notes.md). The Codex migration history is documented in [docs/migration-5.0-codex.md](./docs/migration-5.0-codex.md).
 
 ## Development and release checks
 
-    npm test
-    npm run test:coverage
-    npm run test:entry-modes
-    npm run test:claude-real
-    npm run test:codex-real
-    npm run test:opencode-real
-    npm audit
-    npm pack --dry-run
+```bash
+npm test
+npm run test:coverage
+npm run test:entry-modes
+npm run test:claude-real
+npm run test:codex-real
+npm run test:opencode-real
+npm audit
+npm pack --dry-run
+```
 
-`npm run test:entry-modes` packs the current working tree into a temporary tarball, installs it in an isolated prefix, then opens and exits the interactive menu through `wrapper-scionos`, `wrapper-scionos --service llm`, `npx wrapper-scionos`, and `npx wrapper-scionos --service llm`. It does not require a global installation or a previously published npm version.
+The real-client smoke tests use loopback-only fake services and do not contact RouterLab. Coverage thresholds are 85% for lines/functions and 80% for branches. For a local unpublished package:
 
-`npm test` uses internal dependency injection for local fixtures; production URL variables cannot redirect the wrapper. `npm run test:claude-real` validates the installed Claude Code CLI against hostile local settings. `npm run test:codex-real` validates a real non-interactive Codex request against a local Responses endpoint and checks through `app-server` that `model/list` exposes the temporary catalog in the expected order with the selected model active. `npm run test:opencode-real` validates a real `opencode run` command against a local OpenAI-compatible endpoint and checks the proxy, authentication, model, and configuration isolation. These smoke tests use loopback-only fake services and never contact RouterLab. Coverage gates remain 85% for lines/functions and 80% for branches.
+```bash
+npm pack
+npx --yes --package ./wrapper-scionos-7.0.0.tgz wrapper-scionos
+```
 
-For an unpublished build, create a local tarball with `npm pack` and test it with `npx --yes --package ./wrapper-scionos-7.0.0.tgz wrapper-scionos`. Published-user instructions remain `npm install -g wrapper-scionos` or `npx wrapper-scionos`.
+## License
 
-Architecture details are in [docs/architecture-notes.md](./docs/architecture-notes.md).
+MIT © ScioNos

@@ -120,8 +120,8 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'open-source',
   ]);
   assert.deepEqual(routes.map((route) => route.routeId), [
-    'claude-fable-5.1',
-    'claude-opus-5',
+    'claude-fable-5-1',
+    'claude-opus-5-5',
     'claude-sonnet-5',
     'claude-haiku-4-5',
     'aws-claude-opus-5',
@@ -135,9 +135,9 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-wen3.8-max',
     'claude-fable-5-open-source',
   ]);
-  assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-opus-5' && route.labelOverride === 'claude-opus-5'), true);
+  assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-opus-5-5' && route.labelOverride === 'claude-opus-5-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-sonnet-5' && route.labelOverride === 'claude-sonnet-5'), true);
-  assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-fable-5.1' && route.labelOverride === 'claude-fable-5.1'), true);
+  assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-fable-5-1' && route.labelOverride === 'claude-fable-5-1'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-haiku-4-5' && route.upstreamModel === 'claude-haiku-4-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-opus-5' && route.labelOverride === 'aws-claude-opus-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-5' && route.labelOverride === 'aws-claude-sonnet-5'), true);

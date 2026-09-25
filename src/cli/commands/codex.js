@@ -12,6 +12,7 @@ import {
   buildCodexConfigPreview,
   buildCodexRuntimeArgs,
   cleanupCodexRuntimeModelCatalog,
+  CODEX_ROUTERLAB_MODEL_GROUPS,
   codexModelDisplayName,
   codexModelsForService,
   defaultCodexModelForService,
@@ -92,48 +93,76 @@ export async function launchCodexForService(options, dependencies = {}) {
       service,
     );
   }
-  let selectedFamily = options.interactiveMenu
-    ? null
-    : await resolveCodexLaunchFamily({
+  let selectedFamily = service.value === 'routerlab' || !options.interactiveMenu
+    ? await resolveCodexLaunchFamily({
         requestedFamily: options.strategy,
         availableFamilies,
         service,
         noPrompt: options.noPrompt || Boolean(options.model),
         language: options.language,
         selectFamily: deps.selectFamily,
-      });
+      })
+    : null;
   let selectionModels;
   let model;
-  while (true) {
+  if (service.value === 'routerlab') {
     selectionModels = selectedFamily
       ? selectedFamily.models.map(({ model: familyModel }) => familyModel)
       : availableModels;
-    try {
-      model = await resolveCodexLaunchModel({
-        requestedModel: options.model ?? (options.interactiveMenu
-          ? defaultCodexModelForService(service.value)
-          : null),
-        availableModels: selectionModels,
-        service,
-        noPrompt: options.noPrompt || Boolean(options.interactiveMenu),
-        language: options.language,
-        selectModel: deps.selectModel,
-      });
-      break;
-    } catch (error) {
-      if (error?.name !== 'MenuBackError' || options.noPrompt || options.model || options.strategy || options.interactiveMenu || availableFamilies.length < 2) {
-        throw error;
+    const requestedModel = options.model
+      ?? (selectedFamily
+        ? (selectionModels.includes(selectedFamily.defaultModel)
+          ? selectedFamily.defaultModel
+          : selectionModels[0])
+        : defaultCodexModelForService(service.value));
+    model = await resolveCodexLaunchModel({
+      requestedModel,
+      availableModels: selectionModels,
+      service,
+      noPrompt: true,
+      language: options.language,
+      selectModel: deps.selectModel,
+    });
+    if (!selectedFamily) {
+      selectedFamily = availableFamilies.find((family) => (
+        family.models.some(({ model: familyModel }) => familyModel === model)
+      )) ?? null;
+      if (selectedFamily) {
+        selectionModels = selectedFamily.models.map(({ model: familyModel }) => familyModel);
       }
-      selectedFamily = await resolveCodexLaunchFamily({
-        availableFamilies,
-        service,
-        language: options.language,
-        selectFamily: deps.selectFamily,
-      });
+    }
+  } else {
+    while (true) {
+      selectionModels = selectedFamily
+        ? selectedFamily.models.map(({ model: familyModel }) => familyModel)
+        : availableModels;
+      try {
+        model = await resolveCodexLaunchModel({
+          requestedModel: options.model ?? (options.interactiveMenu
+            ? defaultCodexModelForService(service.value)
+            : null),
+          availableModels: selectionModels,
+          service,
+          noPrompt: options.noPrompt || Boolean(options.interactiveMenu),
+          language: options.language,
+          selectModel: deps.selectModel,
+        });
+        break;
+      } catch (error) {
+        if (error?.name !== 'MenuBackError' || options.noPrompt || options.model || options.strategy || options.interactiveMenu || availableFamilies.length < 2) {
+          throw error;
+        }
+        selectedFamily = await resolveCodexLaunchFamily({
+          availableFamilies,
+          service,
+          language: options.language,
+          selectFamily: deps.selectFamily,
+        });
+      }
     }
   }
   const catalog = deps.writeCodexRuntimeModelCatalog({
-    models: availableModels,
+    models: service.value === 'routerlab' && selectedFamily ? selectionModels : availableModels,
     modelMetadata: modelResult.modelMetadata ?? [],
   });
   try {
@@ -193,12 +222,15 @@ export function availableCodexModels(serviceValue, discoveredModelIds = []) {
 
 export function availableCodexModelFamilies(serviceValue, discoveredModelIds = []) {
   const discovered = new Set(discoveredModelIds);
-  return getServiceModelFamilies(serviceValue, { client: 'codex' })
+  const families = serviceValue === 'routerlab'
+    ? CODEX_ROUTERLAB_MODEL_GROUPS
+    : getServiceModelFamilies(serviceValue, { client: 'codex' });
+  return families
     .map((family) => ({
       ...family,
-      models: family.models.filter(({ model }) => (
-        codexModelsForService(serviceValue).includes(model) && discovered.has(model)
-      )),
+      models: family.models
+        .map((entry) => (typeof entry === 'string' ? { model: entry } : entry))
+        .filter(({ model }) => codexModelsForService(serviceValue).includes(model) && discovered.has(model)),
     }))
     .filter((family) => family.models.length > 0);
 }

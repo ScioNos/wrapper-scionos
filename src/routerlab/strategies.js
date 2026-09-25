@@ -9,11 +9,34 @@ const OPEN_SOURCE_MODEL_MAP = Object.freeze({
   opus: 'qwen3.8-max',
   subagent: 'kimi-k3',
 });
-export const OPEN_SOURCE_MODELS = Object.values(OPEN_SOURCE_MODEL_MAP);
+const TRIAL_MODEL_MAP = Object.freeze({
+  fable: 'deepseek-v4.1-trial',
+  haiku: 'gemini-3.8-flash-trial',
+  sonnet: 'glm-5.3-flash-trial',
+  opus: 'qwen3.8-max-trial',
+  subagent: 'deepseek-v4.1-flash',
+});
+export const OPEN_SOURCE_MODELS = [
+  'deepseek-v4.1-flash',
+  'glm-5.3',
+  'glm-5.3-flash',
+  'hy4-preview',
+  'kimi-k3',
+  'minimax-m3',
+  'qwen3.8-max',
+];
+export const TRIAL_MODELS = [
+  'deepseek-v4.1-trial',
+  'gemini-3.8-flash-trial',
+  'glm-5.3-flash-trial',
+  'MiniMax-M3-trial',
+  'qwen3.8-max-trial',
+  TRIAL_MODEL_MAP.subagent,
+];
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
   'aws-claude-haiku-4-5',
-  'gpt-5.6-luna',
+  'gpt-6-luna',
   'deepseek-v4.1-flash',
 ];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
@@ -24,8 +47,8 @@ export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
 ];
 
 export const DEFAULT_CLAUDE_MODELS = [
-  'claude-fable-5.1',
-  'claude-opus-5',
+  'claude-fable-5-1',
+  'claude-opus-5-5',
   'claude-sonnet-5',
   'claude-haiku-4-5',
 ];
@@ -82,20 +105,20 @@ export const STRATEGIES = [
   {
     value: 'default',
     name: 'Claude Native',
-    description: 'Adds Claude Fable 5.1 and pins the Opus, Sonnet, and Haiku aliases to their native RouterLab models.',
+    description: 'Adds Claude Fable 5.1 and pins the Opus 5.5, Sonnet, and Haiku aliases to their native RouterLab models.',
     selectionName: 'Claude Native',
-    selectionDescription: 'Fable => Claude Fable 5.1, Opus => Claude Opus 5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
+    selectionDescription: 'Fable => Claude Fable 5.1, Opus => Claude Opus 5.5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
     requiredModels: DEFAULT_CLAUDE_MODELS,
     environment: createModelEnvironment({
-      opus: 'claude-opus-5',
+      opus: 'claude-opus-5-5',
       sonnet: 'claude-sonnet-5',
       haiku: 'claude-haiku-4-5',
-      subagent: 'claude-fable-5.1',
+      subagent: 'claude-fable-5-1',
     }),
     claudeCodeEnvironment: {
-      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5.1',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
       ...createModelEnvironment({
-        opus: 'claude-opus-5',
+        opus: 'claude-opus-5-5',
         sonnet: 'claude-sonnet-5',
         haiku: 'claude-haiku-4-5',
         subagent: 'claude-haiku-4-5',
@@ -173,6 +196,33 @@ export const STRATEGIES = [
         opus: OPEN_SOURCE_MODEL_MAP.opus,
         sonnet: OPEN_SOURCE_MODEL_MAP.sonnet,
         haiku: OPEN_SOURCE_MODEL_MAP.haiku,
+      }),
+    },
+  },
+  {
+    value: 'trial',
+    name: 'Trial',
+    selectionName: 'Trial',
+    description: 'Fable => DeepSeek V4.1 Trial, Haiku => Gemini 3.8 Flash Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Max Trial; fixed subagent => DeepSeek V4.1 Flash.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Trial, Haiku => Gemini 3.8 Flash Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Max Trial; fixed subagent => DeepSeek V4.1 Flash.',
+    requiredModels: TRIAL_MODELS,
+    fixedSubagentModel: TRIAL_MODEL_MAP.subagent,
+    environment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: TRIAL_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: TRIAL_MODEL_MAP.opus,
+        sonnet: TRIAL_MODEL_MAP.sonnet,
+        haiku: TRIAL_MODEL_MAP.haiku,
+        subagent: TRIAL_MODEL_MAP.subagent,
+      }),
+    },
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: TRIAL_MODEL_MAP.fable,
+      ...createModelEnvironment({
+        opus: TRIAL_MODEL_MAP.opus,
+        sonnet: TRIAL_MODEL_MAP.sonnet,
+        haiku: TRIAL_MODEL_MAP.haiku,
+        subagent: TRIAL_MODEL_MAP.subagent,
       }),
     },
   },
@@ -354,6 +404,9 @@ export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
     for (const key of modelKeys) {
       const model = environment[key]?.trim();
       if (model) models.add(model);
+    }
+    for (const model of getRequiredModels(strategy)) {
+      models.add(model);
     }
   }
   for (const model of getClaudeCodeSubagentModels(serviceValue)) {

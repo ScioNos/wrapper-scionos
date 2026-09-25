@@ -7,7 +7,7 @@
 
 Ein gemeinsamer Launcher für Claude Code, Claude Desktop, Codex CLI und OpenCode — geroutet über den ausgewählten RouterLab-Dienst.
 
-**Aktuelle Version: `7.0.0`**
+**Aktuelle Version: `7.1.0`**
 
 [English](./README.md) · [Français](./README.fr.md) · [Changelog](./CHANGELOG.md)
 
@@ -139,7 +139,7 @@ Der Wrapper verwendet die Schnittmenge aus Dienst-Allowlist und der geprüften A
 | `claude-gpt` | `gpt-6-astra` | `gpt-5.6-luna` | `gpt-5.6-terra` | `gpt-5.6-sol` |
 | `divers` | `deepseek-v4.1-flash` | `gemini-3.8-flash` | `glm-5.3` | `glm-5.3-flash` |
 
-Für `routerlab` gibt es die Familien Claude, AWS Claude, OpenAI GPT und Open Source. Claude Native verwendet `claude-fable-5.1`; das GPT-Mapping lautet Fable `gpt-6-astra`, Haiku `gpt-5.6-luna`, Sonnet `gpt-5.6-terra` und Opus `gpt-5.6-sol`.
+Für `routerlab` gibt es die Familien Claude, AWS Claude, OpenAI GPT, Open Source und Trial. Claude Native verwendet `claude-fable-5-1` und `claude-opus-5-5`. OpenAI GPT ordnet Fable `gpt-6-astra`, Haiku `gpt-5.6-luna`, Sonnet `gpt-5.6-terra` und Opus `gpt-5.6-sol` zu. Open Source umfasst `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` und `qwen3.8-max`. Trial umfasst `deepseek-v4.1-trial`, `gemini-3.8-flash-trial`, `glm-5.3-flash-trial`, `MiniMax-M3-trial` und `qwen3.8-max-trial`; sein Claude-Code-Subagent ist fest auf `deepseek-v4.1-flash` eingestellt.
 
 ### Codex CLI
 
@@ -148,11 +148,11 @@ wrapper-scionos codex launch --service routerlab
 wrapper-scionos codex launch --service llm
 ```
 
-Das Standardmodell ist **`gpt-5.6-sol`**. Es muss entdeckt und autorisiert sein; der Wrapper ersetzt es niemals stillschweigend. Über das Hauptmenü startet Codex direkt, danach zeigt der native `/model`-Selektor den temporären geprüften Katalog.
+Das Standardmodell ist **`gpt-6-sol`** für `routerlab` und **`gpt-5.6-sol`** für `llm`. Es muss entdeckt und autorisiert sein; der Wrapper ersetzt es niemals stillschweigend. Über das Hauptmenü startet Codex direkt, danach zeigt der native `/model`-Selektor den temporären geprüften Katalog.
 
 | Dienst | Allowlist |
 | --- | --- |
-| `routerlab` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4.1-flash`, `kimi-k3`, `qwen3.8-max`, `glm-5.3`, `glm-5.3-flash` |
+| `routerlab` | `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `deepseek-v4.1-trial`, `gemini-3.8-flash-trial`, `glm-5.3-flash-trial`, `MiniMax-M3-trial`, `qwen3.8-max-trial` |
 | `llm` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash` |
 
 Der Katalog ist temporär, enthält keine Zugangsdaten und wird nach dem Kindprozess gelöscht. Die veralteten Optionen `--direct`, `--proxy` und `--transport` wurden entfernt, da direkter Zugriff jetzt der einzige Codex-Transport ist.
@@ -162,9 +162,10 @@ Der Katalog ist temporär, enthält keine Zugangsdaten und wird nach dem Kindpro
 ```bash
 wrapper-scionos opencode --service llm
 wrapper-scionos opencode --service llm --strategy divers --model glm-5.3
+wrapper-scionos opencode --service routerlab --strategy trial --model deepseek-v4.1-trial
 ```
 
-Interaktiv wird zuerst eine Familie und danach das genaue Modell gewählt. Ohne Eingabeaufforderung ist `gpt-5.6-sol` der Standard, sofern es entdeckt und autorisiert wird. Der Wrapper verwendet einen authentifizierten Loopback-Proxy und injiziert `OPENCODE_CONFIG_CONTENT` nur in den Kindprozess; keine `opencode.json`-Datei und kein RouterLab-Token werden geschrieben.
+Interaktiv wird zuerst eine Familie und danach das genaue Modell gewählt. OpenCode RouterLab verwendet die Familien Claude Native, AWS Claude, OpenAI GPT, Open Source und Trial; das Standardmodell ist `gpt-5.6-sol`, ebenso wie beim Dienst `llm`. Die Trial-Familie enthält auch `deepseek-v4.1-flash` als festes Claude-Code-Subagent-Modell; OpenCode behandelt es als normales auswählbares Modell. Der Wrapper verwendet einen authentifizierten Loopback-Proxy und injiziert `OPENCODE_CONFIG_CONTENT` nur in den Kindprozess; keine `opencode.json`-Datei und kein RouterLab-Token werden geschrieben.
 
 OpenCode aktualisieren:
 

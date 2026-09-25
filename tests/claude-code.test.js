@@ -142,10 +142,10 @@ test('Claude Native injects the verified Fable option and official model aliases
     { env: { ANTHROPIC_CUSTOM_MODEL_OPTION: 'hostile-model' } },
   );
 
-  assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'claude-fable-5.1');
+  assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'claude-fable-5-1');
   assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, undefined);
   assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, undefined);
-  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'claude-opus-5');
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'claude-opus-5-5');
   assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-5');
   assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'claude-haiku-4-5');
   assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5');
@@ -359,7 +359,7 @@ test('Claude Code summaries, indicators, and missing CLI failures are covered', 
   assert.match(stripVTControlCharacters(getStrategyIndicator('default', [], 'routerlab')), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(
     'default',
-    ['claude-fable-5.1', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
     'routerlab',
   )), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(

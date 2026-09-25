@@ -5,7 +5,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/l
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, findStrategy, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { applyMenuControl, askSelect, formatBanner } from '../cli/menu.js';
 import { translate } from '../cli/i18n.js';
@@ -18,11 +18,15 @@ export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
   const { env: sourceEnv = process.env, subagentModel = null, ...strategyOptions } = options;
   const requestedSubagentModel = subagentModel?.trim() || null;
+  const fixedSubagentModel = findStrategy(strategyValue, service.value)?.fixedSubagentModel ?? null;
   if (
     requestedSubagentModel
     && !isSupportedClaudeCodeSubagentModel(requestedSubagentModel, service.value)
   ) {
     throw new Error(`Subagent model "${requestedSubagentModel}" is not supported for ${service.label}.`);
+  }
+  if (requestedSubagentModel && fixedSubagentModel && requestedSubagentModel !== fixedSubagentModel) {
+    throw new Error(`Strategy "${strategyValue}" fixes the subagent model to "${fixedSubagentModel}".`);
   }
   const environment = {};
   for (const [key, value] of Object.entries(sourceEnv)) {
@@ -40,7 +44,9 @@ export function buildClaudeCodeEnvironment(token, service, strategyValue, option
     ANTHROPIC_AUTH_TOKEN: token,
     ANTHROPIC_API_KEY: '',
     ...getClaudeCodeStrategyEnvironment(strategyValue, service.value, strategyOptions),
-    ...(requestedSubagentModel ? { CLAUDE_CODE_SUBAGENT_MODEL: requestedSubagentModel } : {}),
+    ...((fixedSubagentModel ?? requestedSubagentModel)
+      ? { CLAUDE_CODE_SUBAGENT_MODEL: fixedSubagentModel ?? requestedSubagentModel }
+      : {}),
   };
 }
 
@@ -323,6 +329,17 @@ export async function chooseSubagentModel({
   const subagentModels = getClaudeCodeSubagentModels(serviceValue);
 
   const requestedModel = preferredSubagentModel?.trim() || null;
+  const fixedSubagentModel = findStrategy(strategyValue, serviceValue)?.fixedSubagentModel ?? null;
+  if (fixedSubagentModel) {
+    if (requestedModel && requestedModel !== fixedSubagentModel) {
+      throw new Error(`Strategy "${strategyValue}" fixes the subagent model to "${fixedSubagentModel}".`);
+    }
+    if (hasVerifiedModelIds(modelIds) && !modelIds.includes(fixedSubagentModel)) {
+      throw new Error(`Fixed subagent model "${fixedSubagentModel}" is not available on ${serviceLabel}.`);
+    }
+    return fixedSubagentModel;
+  }
+
   if (requestedModel) {
     if (!isSupportedClaudeCodeSubagentModel(requestedModel, serviceValue)) {
       throw new Error(`Subagent model "${requestedModel}" is not supported for ${serviceLabel}.`);

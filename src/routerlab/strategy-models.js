@@ -32,8 +32,8 @@ const MODEL_FAMILY_LABELS = Object.freeze({
 });
 
 const DEFAULT_NATIVE_STRATEGY_MODELS = [
-  { role: 'fable', model: 'claude-fable-5.1' },
-  { role: 'opus', model: 'claude-opus-5' },
+  { role: 'fable', model: 'claude-fable-5-1' },
+  { role: 'opus', model: 'claude-opus-5-5' },
   { role: 'sonnet', model: 'claude-sonnet-5' },
   { role: 'haiku', model: 'claude-haiku-4-5' },
 ];
@@ -46,9 +46,9 @@ const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
 };
 
 export const MODEL_ROUTE_METADATA = {
-  'claude-fable-5.1': {
-    desktopRouteId: 'claude-fable-5.1',
-    label: 'claude-fable-5.1',
+  'claude-fable-5-1': {
+    desktopRouteId: 'claude-fable-5-1',
+    label: 'claude-fable-5-1',
   },
   'claude-fable-5': {
     desktopRouteId: 'claude-fable-5',
@@ -57,6 +57,10 @@ export const MODEL_ROUTE_METADATA = {
   'claude-opus-5': {
     desktopRouteId: 'claude-opus-5',
     label: 'claude-opus-5',
+  },
+  'claude-opus-5-5': {
+    desktopRouteId: 'claude-opus-5-5',
+    label: 'claude-opus-5-5',
   },
   'claude-sonnet-5': {
     desktopRouteId: 'claude-sonnet-5',
@@ -333,9 +337,10 @@ export const MODEL_ROUTE_METADATA = {
 };
 
 export const DESKTOP_MODEL_ORDER = [
-  'claude-fable-5.1',
+  'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5',
+  'claude-opus-5-5',
   'claude-sonnet-5',
   'claude-haiku-4-5',
   'claude-opus-4-8',
@@ -379,11 +384,24 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['gpt-5.6-luna', 'GPT 5.6 Luna'],
   ['gpt-5.6-terra-pro', 'GPT 5.6 Terra Pro'],
   ['gpt-5.6-sol-pro', 'GPT 5.6 Sol Pro'],
+  ['gpt-6-astra', 'GPT 6 Astra'],
+  ['gpt-6-sol', 'GPT 6 Sol'],
+  ['gpt-6-luna', 'GPT 6 Luna'],
   ['kimi-k3', 'Kimi K3'],
   ['grok-4.6', 'Grok 4.6'],
   ['gemini-3.7-flash', 'Gemini 3.7 Flash'],
+  ['deepseek-v4.1-flash', 'DeepSeek V4.1 Flash'],
+  ['glm-5.3', 'GLM 5.3'],
+  ['glm-5.3-flash', 'GLM 5.3 Flash'],
+  ['hy4-preview', 'HY4 Preview'],
   ['deepseek-v4-pro-0813', 'DeepSeek V4 Pro 0813'],
   ['minimax-m3', 'MiniMax M3'],
+  ['deepseek-v4.1-trial', 'DeepSeek V4.1 Trial'],
+  ['gemini-3.8-flash-trial', 'Gemini 3.8 Flash Trial'],
+  ['glm-5.3-flash-trial', 'GLM 5.3 Flash Trial'],
+  ['MiniMax-M3-trial', 'MiniMax M3 Trial'],
+  ['qwen3.8-max', 'Qwen 3.8 Max'],
+  ['qwen3.8-max-trial', 'Qwen 3.8 Max Trial'],
 ]);
 
 export function getStrategyModels(strategyValue, serviceValue) {

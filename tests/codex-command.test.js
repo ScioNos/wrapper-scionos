@@ -22,13 +22,15 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
       'deepseek-v4-flash-0731',
       'gemini-3.7-flash',
       'gpt-6-astra',
+      'gpt-6-sol',
+      'gpt-6-luna',
       'deepseek-v4.1-flash',
       'gemini-3.8-flash',
       'minimax-m3',
       'kimi-k3',
-      'gpt-5.6-sol',
+      'qwen3.8-max',
     ]),
-    ['gpt-5.6-sol', 'gpt-6-astra', 'deepseek-v4.1-flash', 'kimi-k3'],
+    ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'deepseek-v4.1-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
   );
   assert.deepEqual(
     availableCodexModels('llm', [
@@ -55,8 +57,8 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
   assert.deepEqual(availableCodexModelFamilies('routerlab', [
     'gpt-6-astra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max', 'kimi-k3',
   ]).map((family) => [family.value, family.models.map(({ model }) => model)]), [
-    ['claude-gpt', ['gpt-6-astra', 'gpt-5.6-sol']],
-    ['open-source', ['deepseek-v4.1-flash', 'glm-5.3-flash', 'glm-5.3', 'qwen3.8-max', 'kimi-k3']],
+    ['claude-gpt', ['gpt-6-astra']],
+    ['open-source', ['deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'kimi-k3', 'qwen3.8-max']],
   ]);
 });
 

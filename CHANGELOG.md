@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 7.1.0 - 2026-09-25
+
+### Added
+
+- Added grouped RouterLab Codex model catalogues: OpenAI GPT (`gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`), Open Source (`deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`), and Trial (`deepseek-v4.1-trial`, `gemini-3.8-flash-trial`, `glm-5.3-flash-trial`, `MiniMax-M3-trial`, `qwen3.8-max-trial`).
+- Added the RouterLab Trial strategy to Claude Code and OpenCode. Claude Code maps Trial models to Fable, Haiku, Sonnet, and Opus and fixes the subagent to `deepseek-v4.1-flash`.
+
+### Changed
+
+- Updated Claude Code RouterLab Native to `claude-fable-5-1` and `claude-opus-5-5`; aligned its OpenAI GPT and Open Source strategies with the new RouterLab model catalogues.
+- Set the RouterLab Codex no-prompt default to `gpt-6-sol`; OpenCode and RouterLab LLM keep `gpt-5.6-sol`.
+
 ## 7.0.0 - 2026-09-13
 
 ### Breaking Changes

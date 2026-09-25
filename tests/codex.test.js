@@ -22,15 +22,21 @@ function nativeTempDir(t, label) {
 
 test('Codex allowlists stay service-scoped', () => {
   assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, [
-    'gpt-5.6-sol',
     'gpt-6-astra',
-    'gpt-5.6-terra',
-    'gpt-5.6-luna',
+    'gpt-6-sol',
+    'gpt-6-luna',
     'deepseek-v4.1-flash',
-    'kimi-k3',
-    'qwen3.8-max',
     'glm-5.3',
     'glm-5.3-flash',
+    'hy4-preview',
+    'kimi-k3',
+    'minimax-m3',
+    'qwen3.8-max',
+    'deepseek-v4.1-trial',
+    'gemini-3.8-flash-trial',
+    'glm-5.3-flash-trial',
+    'MiniMax-M3-trial',
+    'qwen3.8-max-trial',
   ]);
   assert.deepEqual(CODEX_ALLOWED_MODELS.llm, [
     'gpt-5.6-sol',

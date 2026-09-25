@@ -7,7 +7,7 @@
 
 One launcher for Claude Code, Claude Desktop, Codex CLI and OpenCode — routed through the selected RouterLab service.
 
-**Current release: `7.0.0`**
+**Current release: `7.1.0`**
 
 [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Changelog](./CHANGELOG.md)
 
@@ -151,7 +151,7 @@ The wrapper uses the intersection of the service allowlist and the verified `GET
 
 The `llm` sub-agent picker also supports `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `gpt-5.6-luna`, `deepseek-v4.1-flash` and `glm-5.3-flash` when discovered and authorized.
 
-For `routerlab`, the main strategy families are Claude, AWS Claude, OpenAI GPT and Open Source. Claude Native uses `claude-fable-5.1`; the GPT mapping is Fable `gpt-6-astra`, Haiku `gpt-5.6-luna`, Sonnet `gpt-5.6-terra` and Opus `gpt-5.6-sol`.
+For `routerlab`, Claude Code offers Claude Native, AWS Claude, OpenAI GPT, Open Source and Trial strategies. Claude Native uses `claude-fable-5-1` and `claude-opus-5-5`. OpenAI GPT maps Fable to `gpt-6-astra`, Haiku to `gpt-5.6-luna`, Sonnet to `gpt-5.6-terra` and Opus to `gpt-5.6-sol`. Open Source includes `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` and `qwen3.8-max`; its default role mapping uses DeepSeek for Fable, GLM Flash for Haiku, GLM for Sonnet, Qwen for Opus and Kimi for subagents. Trial includes `deepseek-v4.1-trial`, `gemini-3.8-flash-trial`, `glm-5.3-flash-trial`, `MiniMax-M3-trial` and `qwen3.8-max-trial`; Claude Code fixes its subagent to `deepseek-v4.1-flash`.
 
 ### Codex CLI
 
@@ -162,11 +162,11 @@ wrapper-scionos codex launch --service routerlab
 wrapper-scionos codex launch --service llm
 ```
 
-The default model is **`gpt-5.6-sol`**. It must be both discovered and authorized; the wrapper never substitutes another model. From the home menu, Codex opens directly and its native `/model` selector displays the temporary verified catalogue.
+The RouterLab default model is **`gpt-6-sol`**; the RouterLab LLM default remains **`gpt-5.6-sol`**. Each must be discovered and authorized; the wrapper never substitutes another model. From the home menu, Codex opens directly and its native `/model` selector displays the temporary verified catalogue.
 
 | Service | Allowlist |
 | --- | --- |
-| `routerlab` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `deepseek-v4.1-flash`, `kimi-k3`, `qwen3.8-max`, `glm-5.3`, `glm-5.3-flash` |
+| `routerlab` | `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `deepseek-v4.1-trial`, `gemini-3.8-flash-trial`, `glm-5.3-flash-trial`, `MiniMax-M3-trial`, `qwen3.8-max-trial` |
 | `llm` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash` |
 
 The catalogue is written to a temporary startup file, contains no credentials, and is deleted after the child process exits. The removed `--direct`, `--proxy` and `--transport` options are no longer supported because direct access is now the only Codex transport.
@@ -177,9 +177,10 @@ The catalogue is written to a temporary startup file, contains no credentials, a
 wrapper-scionos opencode --service llm
 wrapper-scionos opencode --service llm --strategy divers --model glm-5.3
 wrapper-scionos opencode --service llm --model gpt-6-astra -- run "Summarize this repository"
+wrapper-scionos opencode --service routerlab --strategy trial --model deepseek-v4.1-trial
 ```
 
-Interactive launch selects a family and then an exact model. The no-prompt default is `gpt-5.6-sol`, provided that discovery authorizes it. The wrapper creates an authenticated loopback proxy and injects `OPENCODE_CONFIG_CONTENT` only into the child process; it never writes an `opencode.json` file or stores the RouterLab token in OpenCode configuration.
+Interactive launch selects a family and then an exact discovered model. RouterLab OpenCode shares the Claude Native, AWS Claude, OpenAI GPT, Open Source and Trial model families; its no-prompt default is `gpt-5.6-sol`. RouterLab LLM also defaults to `gpt-5.6-sol`. The Trial family also contains `deepseek-v4.1-flash` for Claude Code's fixed subagent; OpenCode treats it as an ordinary selectable model. The wrapper creates an authenticated loopback proxy and injects `OPENCODE_CONFIG_CONTENT` only into the child process; it never writes an `opencode.json` file or stores the RouterLab token in OpenCode configuration.
 
 Update an npm installation with OpenCode's native updater:
 
@@ -215,7 +216,7 @@ The real-client smoke tests use loopback-only fake services and do not contact R
 
 ```bash
 npm pack
-npx --yes --package ./wrapper-scionos-7.0.0.tgz wrapper-scionos
+npx --yes --package ./wrapper-scionos-7.1.0.tgz wrapper-scionos
 ```
 
 ## License

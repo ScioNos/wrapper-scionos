@@ -8,19 +8,48 @@ import { codexModelDisplayName } from '../routerlab/strategy-models.js';
 
 export { codexModelDisplayName };
 
+// Model groups exposed by the RouterLab Codex launcher.
+export const CODEX_ROUTERLAB_MODEL_GROUPS = [
+  {
+    value: 'claude-gpt',
+    name: 'OpenAI GPT-6',
+    description: '',
+    defaultModel: 'gpt-6-sol',
+    models: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
+  },
+  {
+    value: 'open-source',
+    name: 'Open Source',
+    description: '',
+    defaultModel: 'deepseek-v4.1-flash',
+    models: [
+      'deepseek-v4.1-flash',
+      'glm-5.3',
+      'glm-5.3-flash',
+      'hy4-preview',
+      'kimi-k3',
+      'minimax-m3',
+      'qwen3.8-max',
+    ],
+  },
+  {
+    value: 'trial',
+    name: 'Trial',
+    description: '',
+    defaultModel: 'deepseek-v4.1-trial',
+    models: [
+      'deepseek-v4.1-trial',
+      'gemini-3.8-flash-trial',
+      'glm-5.3-flash-trial',
+      'MiniMax-M3-trial',
+      'qwen3.8-max-trial',
+    ],
+  },
+];
+
 // Model whitelist by service
 export const CODEX_ALLOWED_MODELS = {
-  routerlab: [
-    'gpt-5.6-sol',
-    'gpt-6-astra',
-    'gpt-5.6-terra',
-    'gpt-5.6-luna',
-    'deepseek-v4.1-flash',
-    'kimi-k3',
-    'qwen3.8-max',
-    'glm-5.3',
-    'glm-5.3-flash',
-  ],
+  routerlab: CODEX_ROUTERLAB_MODEL_GROUPS.flatMap(({ models }) => models),
   llm: [
     'gpt-5.6-sol',
     'gpt-6-astra',
@@ -35,7 +64,7 @@ export const CODEX_ALLOWED_MODELS = {
 
 // Default model by service
 export const DEFAULT_CODEX_MODEL = {
-  routerlab: 'gpt-5.6-sol',
+  routerlab: 'gpt-6-sol',
   llm: 'gpt-5.6-sol',
 };
 

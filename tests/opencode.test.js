@@ -11,8 +11,8 @@ import {
 test('OpenCode authorized models follow the service strategy catalog', () => {
   const routerlab = getOpenCodeAuthorizedModels('routerlab');
   assert.deepEqual(routerlab, [
-    'claude-fable-5.1',
-    'claude-opus-5',
+    'claude-fable-5-1',
+    'claude-opus-5-5',
     'claude-sonnet-5',
     'claude-haiku-4-5',
     'aws-claude-haiku-4-5',
@@ -23,10 +23,17 @@ test('OpenCode authorized models follow the service strategy catalog', () => {
     'gpt-5.6-terra',
     'gpt-5.6-sol',
     'deepseek-v4.1-flash',
-    'glm-5.3-flash',
     'glm-5.3',
-    'qwen3.8-max',
+    'glm-5.3-flash',
+    'hy4-preview',
     'kimi-k3',
+    'minimax-m3',
+    'qwen3.8-max',
+    'deepseek-v4.1-trial',
+    'gemini-3.8-flash-trial',
+    'glm-5.3-flash-trial',
+    'MiniMax-M3-trial',
+    'qwen3.8-max-trial',
   ]);
   assert.deepEqual(getOpenCodeAuthorizedModels('llm'), [
     'claude-fable-5',
@@ -57,7 +64,7 @@ test('OpenCode authorized models follow the service strategy catalog', () => {
     },
   ]);
   assert.deepEqual(getOpenCodeModelFamilies('routerlab').map((family) => family.name), [
-    'Claude', 'AWS Claude', 'OpenAI GPT', 'Open Source',
+    'Claude', 'AWS Claude', 'OpenAI GPT', 'Open Source', 'Trial',
   ]);
   assert.deepEqual(getOpenCodeModelFamilies('llm').map((family) => family.name), [
     'Claude', 'OpenAI GPT', 'Divers',

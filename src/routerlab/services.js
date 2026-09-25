@@ -22,6 +22,7 @@ export const SERVICES = {
       'aws',
       'claude-gpt',
       'open-source',
+      'trial',
     ],
   },
   llm: {

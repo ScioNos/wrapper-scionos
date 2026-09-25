@@ -118,14 +118,14 @@ test('user URL variables emit warnings while remaining ignored', () => {
 
 test('Claude Code strategy mapping is service-aware', () => {
   assert.deepEqual(getStrategyEnvironment('default', 'routerlab'), {
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5.1',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'claude-fable-5-1',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('default', 'routerlab'), {
-    ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5.1',
-    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5',
+    ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
+    ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
     CLAUDE_CODE_SUBAGENT_MODEL: 'claude-haiku-4-5',
@@ -387,8 +387,8 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
     'aws-claude-sonnet-5',
   ], 'routerlab').ready, false);
   assert.equal(assessStrategyLaunch('default', [
-    'claude-fable-5.1',
-    'claude-opus-5',
+    'claude-fable-5-1',
+    'claude-opus-5-5',
     'claude-sonnet-5',
     'claude-haiku-4-5',
   ], 'routerlab').ready, true);
@@ -470,7 +470,7 @@ test('strategy model normalization covers native, mapped, fallback, labels, and 
 });
 
 test('Claude strategy selection covers verified choices, aliases, invalid preferences, and disabled prompts', async () => {
-  const completeDefault = ['claude-fable-5.1', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
+  const completeDefault = ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5', 'claude-haiku-4-5'];
   assert.equal(await chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: completeDefault }), 'default');
   await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'missing', modelIds: [] }), /Unknown strategy/);
   await assert.rejects(chooseStrategy({ serviceValue: 'routerlab', preferredStrategy: 'default', modelIds: ['claude-opus-5'] }), /requires all/);

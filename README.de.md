@@ -6,6 +6,14 @@
 [![Lizenz](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Ein gemeinsamer Launcher für Claude Code, Claude Desktop, Codex CLI und OpenCode — geroutet über den ausgewählten RouterLab-Dienst.
+## Warum wrapper-scionos ?
+
+Claude Code-Abos stoßen an Limits und API-Rechnungen explodieren. wrapper-scionos behält deinen bevorzugten Client und routet jede Aufgabe an das richtige Modell — günstig und schnell für die Exploration, Frontier für die schwierigen Teile. Ein Launcher, keine Config-Dateien, kein Token-Jonglieren.
+
+```bash
+# Günstig explorieren, stark finishen (AWS Claude-Routen, ~40 % unter Listenpreis)
+npx wrapper-scionos claude-code --service routerlab --strategy aws
+```
 
 **Aktuelle Version: `7.1.0`**
 

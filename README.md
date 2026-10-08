@@ -1,13 +1,21 @@
 # wrapper-scionos
-
 [![npm version](https://img.shields.io/npm/v/wrapper-scionos?logo=npm&label=npm)](https://www.npmjs.com/package/wrapper-scionos)
 [![GitHub release](https://img.shields.io/github/v/release/ScioNos/wrapper-scionos?display_name=tag&sort=semver&label=release)](https://github.com/ScioNos/wrapper-scionos/releases)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.13-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 One launcher for Claude Code, Claude Desktop, Codex CLI and OpenCode — routed through the selected RouterLab service.
+## Why wrapper-scionos? 
+Claude Code subscriptions cap out and API bills spike. wrapper-scionos keeps your favorite client and routes each task to the right model — cheap and fast for exploration, frontier for the hard parts. One launcher, no config files, no token juggling.
+
+ ```bash
+# Explore cheap, finish strong (AWS Claude routes, ~40% below list)
+npx wrapper-scionos claude-code --service routerlab --strategy aws
+```
+
 
 **Current release: `7.1.0`**
+V
 
 [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Changelog](./CHANGELOG.md)
 
@@ -16,6 +24,7 @@ One launcher for Claude Code, Claude Desktop, Codex CLI and OpenCode — routed 
 | Client | Integration | Model selection |
 | --- | --- | --- |
 | Claude Code | Authenticated loopback proxy | Strategy and verified sub-agent |
+```
 | Claude Desktop | Local mapping proxy and managed profile | Desktop routes |
 | Codex CLI | Direct Responses endpoint | Native `/model` catalogue |
 | OpenCode CLI | Authenticated OpenAI-compatible loopback proxy | Family, then exact model |

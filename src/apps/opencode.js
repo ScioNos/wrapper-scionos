@@ -6,12 +6,13 @@ import {
   findStrategy,
 } from '../routerlab/strategies.js';
 import { codexModelDisplayName, getServiceModelFamilies } from '../routerlab/strategy-models.js';
+import { mergeNoProxyValues } from '../platform/no-proxy.js';
 
 export const OPENCODE_PROVIDER_ID = 'scionos';
 export const OPENCODE_CONFIG_CONTENT_ENV = 'OPENCODE_CONFIG_CONTENT';
 export const OPENCODE_GATEWAY_TOKEN_ENV = 'WRAPPER_SCIONOS_OPENCODE_GATEWAY_TOKEN';
 export const DEFAULT_OPENCODE_MODEL = Object.freeze({
-  routerlab: 'gpt-5.6-sol',
+  routerlab: 'gpt-6.1-sol',
   llm: 'gpt-5.6-sol',
 });
 
@@ -162,14 +163,4 @@ function isOpenCodeRoutingEnvironmentKey(key) {
   if (normalized === LEGACY_TOKEN_ENV_KEY) return true;
   if (normalized === 'NO_PROXY') return true;
   return Object.values(SERVICES).some((service) => service.tokenEnvKeys?.includes(normalized));
-}
-
-function mergeNoProxyValues(environment, loopbackHost) {
-  const values = Object.entries(environment)
-    .filter(([key]) => key.toUpperCase() === 'NO_PROXY')
-    .flatMap(([, value]) => String(value ?? '').split(','))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  values.push('127.0.0.1', 'localhost', '::1', loopbackHost);
-  return [...new Set(values.map((value) => value.toLowerCase()))].join(',');
 }

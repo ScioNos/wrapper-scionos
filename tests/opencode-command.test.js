@@ -67,7 +67,7 @@ test('OpenCode launches through a local OpenAI-compatible proxy and passes the s
 test('OpenCode strategy selection narrows the child catalog', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'glm-5.3'],
+    models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna', 'glm-5.3'],
     modelMetadata: [],
   });
   await launchOpenCodeForService({
@@ -82,7 +82,7 @@ test('OpenCode strategy selection narrows the child catalog', async () => {
   assert.equal(fixture.calls.proxies[0].allowedModels.includes('gpt-6-astra'), true);
   assert.equal(fixture.calls.proxies[0].allowedModels.includes('glm-5.3'), false);
   const childConfig = JSON.parse(fixture.calls.launches[0].env.OPENCODE_CONFIG_CONTENT);
-  assert.equal(childConfig.model, 'scionos/gpt-5.6-sol');
+  assert.equal(childConfig.model, 'scionos/gpt-6.1-sol');
 });
 
 test('OpenCode rejects provider and model overrides before discovery', () => {

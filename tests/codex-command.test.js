@@ -15,6 +15,9 @@ import {
 import { requireServiceConfig } from '../src/routerlab/services.js';
 
 test('Codex availability is the allowlist/discovery intersection in allowlist order', () => {
+  assert.deepEqual(availableCodexModels('routerlab', [
+    'gpt-6-sol', 'deepseek-v4.1-trial', 'gemini-3.8-flash-trial', 'qwen3.8-max-trial',
+  ]), []);
   assert.deepEqual(
     availableCodexModels('routerlab', [
       'unknown',
@@ -22,7 +25,7 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
       'deepseek-v4-flash-0731',
       'gemini-3.7-flash',
       'gpt-6-astra',
-      'gpt-6-sol',
+      'gpt-6.1-sol',
       'gpt-6-luna',
       'deepseek-v4.1-flash',
       'gemini-3.8-flash',
@@ -30,7 +33,7 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
       'kimi-k3',
       'qwen3.8-max',
     ]),
-    ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'deepseek-v4.1-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
+    ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna', 'deepseek-v4.1-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
   );
   assert.deepEqual(
     availableCodexModels('llm', [
@@ -130,15 +133,15 @@ test('Codex interactive selection starts with a discovered model family', async 
 test('Codex no-prompt requires the default model', async () => {
   const service = requireServiceConfig('routerlab');
   assert.equal(await resolveCodexLaunchModel({
-    availableModels: ['gpt-5.6-sol', 'glm-5.2'],
+    availableModels: ['gpt-6.1-sol', 'glm-5.2'],
     service,
     noPrompt: true,
-  }), 'gpt-5.6-sol');
+  }), 'gpt-6.1-sol');
   await assert.rejects(resolveCodexLaunchModel({
     availableModels: ['glm-5.2'],
     service,
     noPrompt: true,
-  }), /gpt-5\.6-sol.*not available/);
+  }), /gpt-6\.1-sol.*not available/);
 });
 
 test('Codex interactive selection auto-selects one model and prompts for several', async () => {

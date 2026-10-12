@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { detectCodexCli, MINIMUM_CODEX_VERSION } from '../platform/detect.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { codexModelDisplayName } from '../routerlab/strategy-models.js';
+import { OPENAI_GPT_MODELS, TRIAL_MODELS } from '../routerlab/strategies.js';
 
 export { codexModelDisplayName };
 
@@ -14,8 +15,8 @@ export const CODEX_ROUTERLAB_MODEL_GROUPS = [
     value: 'claude-gpt',
     name: 'OpenAI GPT-6',
     description: '',
-    defaultModel: 'gpt-6-sol',
-    models: ['gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna'],
+    defaultModel: 'gpt-6.1-sol',
+    models: [...OPENAI_GPT_MODELS],
   },
   {
     value: 'open-source',
@@ -36,14 +37,8 @@ export const CODEX_ROUTERLAB_MODEL_GROUPS = [
     value: 'trial',
     name: 'Trial',
     description: '',
-    defaultModel: 'deepseek-v4.1-trial',
-    models: [
-      'deepseek-v4.1-trial',
-      'gemini-3.8-flash-trial',
-      'glm-5.3-flash-trial',
-      'MiniMax-M3-trial',
-      'qwen3.8-max-trial',
-    ],
+    defaultModel: 'deepseek-v4.1-flash-trial',
+    models: [...TRIAL_MODELS],
   },
 ];
 
@@ -64,7 +59,7 @@ export const CODEX_ALLOWED_MODELS = {
 
 // Default model by service
 export const DEFAULT_CODEX_MODEL = {
-  routerlab: 'gpt-6-sol',
+  routerlab: CODEX_ROUTERLAB_MODEL_GROUPS[0].defaultModel,
   llm: 'gpt-5.6-sol',
 };
 
@@ -257,11 +252,20 @@ export function writeCodexRuntimeModelCatalog({
 } = {}) {
   const catalogDir = fs.mkdtempSync(path.join(tmpDir, 'wrapper-scionos-codex-'));
   const catalogPath = path.join(catalogDir, CODEX_MODEL_CATALOG_FILENAME);
-  fs.writeFileSync(
-    catalogPath,
-    `${JSON.stringify(buildCodexModelCatalog({ models, modelMetadata }), null, 2)}\n`,
-    { encoding: 'utf8', mode: 0o600 },
-  );
+  try {
+    fs.writeFileSync(
+      catalogPath,
+      `${JSON.stringify(buildCodexModelCatalog({ models, modelMetadata }), null, 2)}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+  } catch (error) {
+    try {
+      fs.rmSync(catalogDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      error.cleanupError = cleanupError;
+    }
+    throw error;
+  }
   return { path: catalogPath, directory: catalogDir };
 }
 
@@ -381,7 +385,7 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
     dryRun: false,
     paths: resolvedPaths,
     restoredFromBackup: backupExists,
-    removedWrapperConfig: false,
+    removedWrapperConfig: Boolean(wrapperConfig && backupExists),
     removedModelCatalog: catalogExists,
     preservedConfig: Boolean(currentConfig && !backupExists),
     manualCleanupRequired,

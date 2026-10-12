@@ -4,7 +4,7 @@ import {
   resolveServiceEnvToken,
   validateServiceBaseUrl,
 } from '../../routerlab/services.js';
-import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
+import { fetchModels } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import { CliUsageError } from '../args.js';
 import {
@@ -27,6 +27,8 @@ import { getServiceModelFamilies } from '../../routerlab/strategy-models.js';
 import { findStrategy } from '../../routerlab/strategies.js';
 import { print } from './output.js';
 import { translate } from '../i18n.js';
+import { resolveCliToken } from '../token-option.js';
+import { cliAuthenticationError, describeCliTokenSource, explicitCliToken } from '../token-auth.js';
 
 const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
   assertCodexCliAvailable,
@@ -50,8 +52,9 @@ export async function launchCodexForService(options, dependencies = {}) {
     baseUrl: validateServiceBaseUrl(baseResolution.baseUrl, serviceConfig.value),
   };
   const envToken = resolveServiceEnvToken(service.value, process.env);
-  const resolvedToken = options.token
-    ? explicitCodexToken(options.token, envToken)
+  const cliToken = resolveCliToken(options);
+  const resolvedToken = cliToken
+    ? explicitCodexToken(cliToken, envToken)
     : await deps.resolveTokenWithSource({
         serviceValue: service.value,
         noPrompt: options.noPrompt,
@@ -357,15 +360,7 @@ export async function resolveCodexLaunchModel({
 }
 
 export function explicitCodexToken(token, envToken) {
-  const format = validateTokenFormat(token);
-  if (!format.valid) throw new Error(format.message);
-  return {
-    token: token.trim(),
-    source: 'option',
-    envTokenPresent: Boolean(envToken.token),
-    envTokenKey: envToken.envKey,
-    storedTokenPresent: false,
-  };
+  return explicitCliToken(token, envToken);
 }
 
 export function warnStoredCodexTokenPrecedence(options, resolvedToken, service) {
@@ -375,27 +370,14 @@ export function warnStoredCodexTokenPrecedence(options, resolvedToken, service) 
   console.error('WARN Using stored ' + service.label + ' token for Codex; ' + resolvedToken.envTokenKey + ' is set but ignored. Pass --token to override.');
 }
 
-export function describeCodexTokenSource(resolvedToken) {
-  if (resolvedToken.source === 'option') return '--token';
-  if (resolvedToken.source === 'secure-storage') return 'secure storage';
-  if (resolvedToken.source === 'prompt') return 'the interactive prompt';
-  if (resolvedToken.source === 'env' || resolvedToken.source === 'legacy-env') {
-    return resolvedToken.envTokenKey ? `environment variable ${resolvedToken.envTokenKey}` : 'the environment';
-  }
-  return 'the configured token source';
-}
+export const describeCodexTokenSource = describeCliTokenSource;
 
 export function codexAuthenticationError(validation, service, resolvedToken) {
-  const status = validation.status ?? 401;
   const serviceFlag = `--service ${service.value}`;
-  const error = new Error([
-    `${service.label} rejected the Codex token from ${describeCodexTokenSource(resolvedToken)} with HTTP ${status}.`,
+  return cliAuthenticationError('Codex', validation, service, resolvedToken, [
     `Check it with "wrapper-scionos auth status ${serviceFlag}" and "wrapper-scionos auth test ${serviceFlag}",`,
     `then replace it with "wrapper-scionos auth login ${serviceFlag}" or pass --token.`,
   ].join(' '));
-  error.code = 'auth_failed';
-  error.statusCode = status;
-  return error;
 }
 
 export function codexModelUnavailableError(model, service, availableModels) {

@@ -13,7 +13,22 @@ import { requireServiceConfig } from '../src/routerlab/services.js';
 const LOCAL_GATEWAY_TOKEN = 'local-claude-gateway-token-with-enough-length';
 const RAW_ROUTERLAB_SENTINEL = 'raw-routerlab-token-must-not-reach-claude';
 
-test('real Claude Code honors wrapper-managed routing against hostile local settings', async (t) => {
+for (const scenario of [
+  { service: 'llm', strategy: 'divers', model: 'glm-5.3', expectedModel: 'glm-5.3', allowedModels: ['gemini-3.8-flash', 'glm-5.3', 'glm-5.3-flash'] },
+  { service: 'routerlab', strategy: 'default', model: 'sonnet', expectedModel: 'claude-sonnet-5-5', allowedModels: ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'] },
+  { service: 'routerlab', strategy: 'default', model: 'haiku', expectedModel: 'claude-haiku-5-5', allowedModels: ['claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-opus-5-5'] },
+  { service: 'routerlab', strategy: 'aws', model: 'sonnet', expectedModel: 'aws-claude-sonnet-5-5', allowedModels: ['aws-claude-sonnet-5-5', 'aws-claude-haiku-4-5', 'aws-claude-opus-5-5'] },
+  { service: 'routerlab', strategy: 'aws', model: 'opus', expectedModel: 'aws-claude-opus-5-5', allowedModels: ['aws-claude-sonnet-5-5', 'aws-claude-haiku-4-5', 'aws-claude-opus-5-5'] },
+  { service: 'routerlab', strategy: 'claude-gpt', model: 'fable', expectedModel: 'gpt-6-astra', allowedModels: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+  { service: 'routerlab', strategy: 'claude-gpt', model: 'opus', expectedModel: 'gpt-6.1-sol', allowedModels: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+  { service: 'routerlab', strategy: 'claude-gpt', model: 'sonnet', expectedModel: 'gpt-6.1-sol', allowedModels: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+  { service: 'routerlab', strategy: 'claude-gpt', model: 'haiku', expectedModel: 'gpt-6-luna', allowedModels: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'] },
+  { service: 'routerlab', strategy: 'trial', model: 'fable', expectedModel: 'deepseek-v4.1-flash-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
+  { service: 'routerlab', strategy: 'trial', model: 'haiku', expectedModel: 'gpt-6-luna-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
+  { service: 'routerlab', strategy: 'trial', model: 'sonnet', expectedModel: 'glm-5.3-flash-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
+  { service: 'routerlab', strategy: 'trial', model: 'opus', expectedModel: 'qwen3.8-flash-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
+]) {
+test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.strategy}/${scenario.model} routing against hostile local settings`, async (t) => {
   const claude = detectClaudeCode();
   assert.equal(claude.installed, true, 'Claude Code must be installed for the real integration check');
   assert.equal(
@@ -88,10 +103,10 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
   }));
 
   const service = {
-    ...requireServiceConfig('llm'),
+    ...requireServiceConfig(scenario.service),
     baseUrl: `http://127.0.0.1:${gateway.address().port}`,
   };
-  const env = buildClaudeCodeEnvironment(LOCAL_GATEWAY_TOKEN, service, 'divers', {
+  const env = buildClaudeCodeEnvironment(LOCAL_GATEWAY_TOKEN, service, scenario.strategy, {
     env: {
       ...process.env,
       CLAUDE_CONFIG_DIR: configDir,
@@ -107,7 +122,7 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
     '--print',
     'Reply with exactly claude-smoke-ok.',
     '--model',
-    'glm-5.3',
+    scenario.model,
     '--output-format',
     'json',
     '--max-turns',
@@ -122,16 +137,18 @@ test('real Claude Code honors wrapper-managed routing against hostile local sett
     new URL(entry.url, 'http://127.0.0.1').pathname.endsWith('/v1/messages')
   ));
   assert.ok(modelRequests.length > 0, result.diagnostic);
+  assert.ok(modelRequests.some((entry) => JSON.parse(entry.body).model === scenario.expectedModel), result.diagnostic);
   for (const entry of modelRequests) {
     assert.equal(entry.apiKey, undefined);
     assert.equal(entry.authorization, `Bearer ${LOCAL_GATEWAY_TOKEN}`);
     assert.doesNotMatch(entry.body, new RegExp(RAW_ROUTERLAB_SENTINEL));
   }
   assert.ok(
-    modelRequests.every((entry) => ['gemini-3.8-flash', 'glm-5.3', 'glm-5.3-flash'].includes(JSON.parse(entry.body).model)),
+    modelRequests.every((entry) => scenario.allowedModels.includes(JSON.parse(entry.body).model)),
     JSON.stringify(modelRequests.map((entry) => JSON.parse(entry.body).model), null, 2),
   );
 });
+}
 
 function writeClaudeMessageStream(res, model, text) {
   res.writeHead(200, {

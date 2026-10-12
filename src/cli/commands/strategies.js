@@ -3,6 +3,7 @@ import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import { getStrategyChoices } from '../../routerlab/strategies.js';
 import { print } from './output.js';
+import { resolveCliToken } from '../token-option.js';
 
 export async function handleStrategies(options, {
   fetchModelsFn = fetchModels,
@@ -10,10 +11,11 @@ export async function handleStrategies(options, {
 } = {}) {
   const service = requireServiceConfig(options.service);
   let resolved = null;
-  if (options.token) {
-    const format = validateTokenFormat(options.token);
+  const cliToken = resolveCliToken(options);
+  if (cliToken) {
+    const format = validateTokenFormat(cliToken);
     if (!format.valid) throw new Error(format.message);
-    resolved = { token: options.token.trim(), source: 'option' };
+    resolved = { token: cliToken.trim(), source: 'option' };
   } else {
     try {
       resolved = await resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt: true });

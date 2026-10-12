@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export async function runInteractiveCli(command, args = [], {
   env = process.env,
@@ -78,8 +80,18 @@ function terminateChildTree(child, signal) {
 export function buildInteractiveCliInvocation(command, args = [], {
   platform = process.platform,
   comSpec = process.env.ComSpec,
+  nodePath = process.execPath,
+  resolveNpmShimFn = resolveNpmShimNodeScript,
 } = {}) {
   if (isWindowsExecutableShim(command, platform)) {
+    const nodeScript = resolveNpmShimFn(command);
+    if (nodeScript) {
+      return {
+        command: nodePath,
+        args: [nodeScript, ...args],
+        spawnOptions: {},
+      };
+    }
     return {
       command: comSpec || 'cmd.exe',
       args: ['/d', '/s', '/c', buildWindowsCommandLine(command, args)],
@@ -89,12 +101,55 @@ export function buildInteractiveCliInvocation(command, args = [], {
   return { command, args, spawnOptions: {} };
 }
 
+export function resolveNpmShimNodeScript(command, {
+  readFileSync = fs.readFileSync,
+  existsSync = fs.existsSync,
+} = {}) {
+  if (!/\.cmd$/i.test(String(command))) return null;
+  let contents;
+  try {
+    contents = readFileSync(command, 'utf8');
+  } catch {
+    return null;
+  }
+  // npm's newer cmd-shim format prefixes the Node invocation with an
+  // endLocal/goto/title sequence. Recognize that exact generated form as well
+  // as the legacy form so quoted arguments can still bypass cmd.exe safely.
+  const match = String(contents).match(/^[ \t]*(?:endLocal[ \t]+&[ \t]+goto[ \t]+#_undefined_#[ \t]+2>NUL[ \t]+\|\|[ \t]+title[ \t]+%COMSPEC%[ \t]+&[ \t]+)?"%_prog%"[ \t]+"([^"\r\n]+\.js)"[ \t]+%\*[ \t]*$/im);
+  if (!match) return null;
+
+  const target = match[1].replace(/\//g, '\\');
+  let scriptPath;
+  if (/^%dp0%\\/i.test(target)) {
+    const relativePath = target.slice('%dp0%'.length + 1);
+    if (relativePath.split('\\').includes('..') || !/\\node_modules\\/i.test('\\' + relativePath)) {
+      return null;
+    }
+    scriptPath = path.win32.resolve(path.win32.dirname(command), relativePath);
+  } else if (path.win32.isAbsolute(target) && /\\node_modules\\/i.test(target)) {
+    scriptPath = path.win32.resolve(target);
+  } else {
+    return null;
+  }
+  return existsSync(scriptPath) ? scriptPath : null;
+}
+
 export function buildWindowsCommandLine(command, args = []) {
   return `"${[command, ...args].map(quoteWindowsCmdArg).join(' ')}"`;
 }
 
 export function quoteWindowsCmdArg(value) {
   const text = String(value);
+  // cmd.exe parses the command line before the CRT: a double quote always
+  // toggles quoting (backslashes are NOT escapes for cmd.exe) and %NAME%
+  // is expanded even inside quotes. MSVC-style quoting alone cannot make
+  // these safe, so refuse them loudly instead of building an injectable line.
+  if (/["%\r\n]/.test(text)) {
+    throw new Error(
+      `Refusing to pass argument through cmd.exe: it contains characters that cmd.exe interprets even inside quotes: ${JSON.stringify(text.slice(0, 64))}. ` +
+      'Avoid `"`, `%`, and line breaks in arguments forwarded to Windows .cmd/.bat shims.',
+    );
+  }
   if (text.length === 0) return '""';
   const escaped = text
     .replace(/(\\*)"/g, (_match, backslashes) => `${backslashes}${backslashes}\\"`)

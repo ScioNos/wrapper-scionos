@@ -5,6 +5,7 @@ import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import { AUTH_MENU_ITEMS, askMenu } from '../menu.js';
 import { translate } from '../i18n.js';
+import { resolveCliToken } from '../token-option.js';
 import { print } from './output.js';
 
 export function getAuthMenuContext(options) {
@@ -24,18 +25,19 @@ export async function handleAuth(action, options, {
   const service = requireServiceConfig(options.service);
   if (action === 'login' || action === 'change') {
     if (options.dryRun) {
+      // Preview without consuming stdin.
       const format = options.token ? validateTokenFormat(options.token) : null;
       if (format && !format.valid) throw new Error(format.message);
       const status = getStoredTokenStatusFn(service.value);
       print({
         dryRun: true, service: service.value, backend: status.backend,
-        storageSupported: status.supported, tokenProvided: Boolean(options.token),
+        storageSupported: status.supported, tokenProvided: Boolean(options.token ?? options.tokenFromStdin),
         wouldReplace: status.stored,
       }, options);
       return;
     }
     const language = options.language ?? 'en';
-    const token = options.token ?? await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` });
+    const token = resolveCliToken(options) ?? await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` });
     const format = validateTokenFormat(token);
     if (!format.valid) throw new Error(format.message);
     const storage = storeTokenFn(token.trim(), service.value);
@@ -78,10 +80,11 @@ export async function resolveOptionFirstToken(
   options,
   resolveTokenWithSourceFn = resolveTokenWithSource,
 ) {
-  if (options.token) {
-    const format = validateTokenFormat(options.token);
+  const cliToken = resolveCliToken(options);
+  if (cliToken) {
+    const format = validateTokenFormat(cliToken);
     if (!format.valid) throw new Error(format.message);
-    return { token: options.token.trim(), source: 'option' };
+    return { token: cliToken.trim(), source: 'option' };
   }
   return resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt: options.noPrompt });
 }

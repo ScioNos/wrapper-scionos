@@ -48,8 +48,8 @@ export const MAIN_MENU_ITEMS = [
   {
     key: '2',
     value: 'claude-desktop',
-    label: 'Claude Desktop',
-    description: 'Configure and run the local Desktop mapping.',
+    label: 'Claude Desktop / Cowork',
+    description: 'Configure and run the local Desktop / Cowork mapping.',
   },
   {
     key: '3',
@@ -158,7 +158,7 @@ export const TOOLS_MENU_ITEMS = [
 
 export const MENU_ROUTES = Object.freeze({
   [HOME_ROUTE_ID]: Object.freeze({ id: HOME_ROUTE_ID, parent: null, title: 'ScioNos Wrapper', message: 'Choose where you want to go:', items: MAIN_MENU_ITEMS }),
-  desktop: Object.freeze({ id: 'desktop', parent: HOME_ROUTE_ID, title: 'Claude Desktop', message: 'Choose a Claude Desktop action:', items: CLAUDE_DESKTOP_MENU_ITEMS }),
+  desktop: Object.freeze({ id: 'desktop', parent: HOME_ROUTE_ID, title: 'Claude Desktop / Cowork', message: 'Choose a Claude Desktop / Cowork action:', items: CLAUDE_DESKTOP_MENU_ITEMS }),
   account: Object.freeze({ id: 'account', parent: HOME_ROUTE_ID, title: 'Account & access', message: 'Choose an account action:', items: AUTH_MENU_ITEMS }),
   tools: Object.freeze({ id: 'tools', parent: HOME_ROUTE_ID, title: 'Tools & diagnostics', message: 'Choose a tool:', items: TOOLS_MENU_ITEMS }),
 });
@@ -255,6 +255,10 @@ export function formatBanner(title, version = null, options = {}) {
 }
 
 export function formatMenu(title, items, options = {}) {
+  if (!items.length) {
+    const heading = options.banner ? formatBanner(title, options.version) : `\n${title}`;
+    return `${heading}\n\n  No options available.\n`;
+  }
   const width = Math.max(...items.map((item) => item.label.length));
   const lines = [
     ...(options.banner ? [formatBanner(title, options.version)] : [`\n${title}`]),

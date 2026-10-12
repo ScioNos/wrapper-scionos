@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 const args = ['--test'];
 args.push(
   '--experimental-test-coverage',
+  '--test-coverage-exclude=tests/**',
   '--test-coverage-lines=85',
   '--test-coverage-functions=85',
   '--test-coverage-branches=80',

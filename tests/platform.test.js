@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { buildInteractiveCliInvocation, isWindowsExecutableShim, quoteWindowsCmdArg, runInteractiveCli } from '../src/platform/process.js';
+import { buildInteractiveCliInvocation, isWindowsExecutableShim, quoteWindowsCmdArg, resolveNpmShimNodeScript, runInteractiveCli } from '../src/platform/process.js';
+import { mergeNoProxyValues } from '../src/platform/no-proxy.js';
 import {
   checkGitBashOnWindows,
   claudeCodeCandidates,
@@ -22,12 +23,39 @@ import {
   opencodeCliCandidates,
 } from '../src/platform/detect.js';
 
-test('Windows command shims preserve TOML quotes without caret leakage', () => {
+test('Windows command shims resolve npm entry points without a shell and reject unknown unsafe shims', () => {
+  const nodeScript = 'C:\\tools\\node_modules\\@openai\\codex\\bin\\codex.js';
+  const argumentsWithTomlQuotes = ['-c', 'model_provider="custom"', '-c', 'model_providers.custom.base_url="https://api.routerlab.ch/v1"'];
+  const resolved = buildInteractiveCliInvocation('C:\\tools\\codex.cmd', argumentsWithTomlQuotes, {
+    platform: 'win32',
+    nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+    resolveNpmShimFn: () => nodeScript,
+  });
+  assert.equal(resolved.command, 'C:\\Program Files\\nodejs\\node.exe');
+  assert.deepEqual(resolved.args, [nodeScript, ...argumentsWithTomlQuotes]);
+  assert.deepEqual(resolved.spawnOptions, {});
+
+  assert.throws(
+    () => buildInteractiveCliInvocation('C:\\tools\\codex.cmd', ['-c', 'model_provider="custom"'], {
+      platform: 'win32',
+      comSpec: 'C:\\Windows\\System32\\cmd.exe',
+    }),
+    /Refusing to pass argument through cmd\.exe/,
+  );
+  const shimContents = [
+    '@ECHO off',
+    '\"%_prog%\" \"%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js\" %*',
+  ].join('\n');
+  assert.equal(
+    resolveNpmShimNodeScript('C:\\tools\\codex.cmd', {
+      readFileSync: () => shimContents,
+      existsSync: () => true,
+    }),
+    'C:\\tools\\node_modules\\@openai\\codex\\bin\\codex.js',
+  );
   const invocation = buildInteractiveCliInvocation('C:\\tools\\codex.cmd', [
     '-c',
-    'model_provider="custom"',
-    '-c',
-    'model_providers.custom={name="routerlab",base_url="https://api.routerlab.ch/v1",wire_api="responses",env_key="OPENAI_API_KEY"}',
+    'model_provider=custom',
   ], {
     platform: 'win32',
     comSpec: 'C:\\Windows\\System32\\cmd.exe',
@@ -36,13 +64,67 @@ test('Windows command shims preserve TOML quotes without caret leakage', () => {
   assert.equal(invocation.command, 'C:\\Windows\\System32\\cmd.exe');
   assert.deepEqual(invocation.args.slice(0, 3), ['/d', '/s', '/c']);
   assert.match(invocation.args[3], /^""C:\\tools\\codex\.cmd"/);
-  assert.match(invocation.args[3], /model_provider=\\"custom\\"/);
-  assert.match(invocation.args[3], /wire_api=\\"responses\\"/);
-  assert.doesNotMatch(invocation.args[3], /\^custom|\^responses/);
+  assert.match(invocation.args[3], /model_provider=custom/);
   assert.deepEqual(invocation.spawnOptions, { windowsVerbatimArguments: true });
 });
 
-test('a real npm-style Windows cmd shim forwards Codex overrides exactly', (t) => {
+test('npm shim resolution accepts generated formats and refuses ambiguous targets', () => {
+  const resolve = (invocation, exists = true) => resolveNpmShimNodeScript('C:\\tools\\codex.cmd', {
+    readFileSync: () => '@ECHO off\r\n' + invocation + '\r\n',
+    existsSync: () => exists,
+  });
+  const target = '"%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*';
+  const scriptPath = 'C:\\tools\\node_modules\\@openai\\codex\\bin\\codex.js';
+  assert.equal(resolve(target), scriptPath);
+  assert.equal(resolve('endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & ' + target), scriptPath);
+  assert.equal(resolve(target, false), null);
+  assert.equal(resolve(target.replace('node_modules\\', '..\\node_modules\\')), null);
+  assert.equal(resolve(target + ' & exit 99'), null);
+  assert.equal(resolve('echo arbitrary-prefix & ' + target), null);
+});
+
+test('a modern npm Windows shim forwards quoted Codex overrides without shell expansion', (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Windows-only integration test');
+    return;
+  }
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-npm-cmd-'));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const scriptDir = path.join(tempDir, 'node_modules', 'capture', 'bin');
+  fs.mkdirSync(scriptDir, { recursive: true });
+  const scriptPath = path.join(scriptDir, 'capture.js');
+  const capturePath = path.join(tempDir, 'capture.json');
+  const shimPath = path.join(tempDir, 'capture.cmd');
+  fs.writeFileSync(scriptPath, [
+    "const fs = require('node:fs');",
+    "fs.writeFileSync(process.env.SCIONOS_TEST_CAPTURE, JSON.stringify(process.argv.slice(2)));",
+  ].join('\n'));
+  fs.writeFileSync(shimPath, [
+    '@ECHO off',
+    'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\capture\\bin\\capture.js" %*',
+  ].join('\r\n'));
+  const expectedArgs = [
+    '-c', 'model_provider="custom"',
+    '-c', 'model_providers.custom.base_url="https://api.routerlab.ch/v1"',
+    'literal=%SCIONOS_TEST_CAPTURE%',
+    'literal=" & exit 99 & rem "',
+    'multi\nline',
+    '',
+  ];
+  const invocation = buildInteractiveCliInvocation(shimPath, expectedArgs);
+  assert.equal(invocation.command, process.execPath);
+  assert.deepEqual(invocation.args, [scriptPath, ...expectedArgs]);
+  const result = spawnSync(invocation.command, invocation.args, {
+    encoding: 'utf8',
+    env: { ...process.env, SCIONOS_TEST_CAPTURE: capturePath },
+    ...invocation.spawnOptions,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, 'utf8')), expectedArgs);
+});
+
+test('unrecognized Windows cmd shims forward plain arguments and reject unsafe overrides', (t) => {
   if (process.platform !== 'win32') {
     t.skip('Windows-only integration test');
     return;
@@ -64,13 +146,15 @@ test('a real npm-style Windows cmd shim forwards Codex overrides exactly', (t) =
 
   const expectedArgs = [
     '-c',
-    'model_provider="custom"',
+    'model_provider=custom',
     '-c',
-    'model="gpt-5.5"',
+    'model=gpt-5.5',
     '-c',
-    'model_providers.custom.base_url="https://api.routerlab.ch/v1"',
-    'literal=100%',
+    'model_providers.custom.base_url=https://api.routerlab.ch/v1',
+    'literal=plain',
   ];
+  assert.throws(() => buildInteractiveCliInvocation(shimPath, ['-c', 'model_provider="custom"']), /Refusing to pass argument through cmd\.exe/);
+  assert.throws(() => buildInteractiveCliInvocation(shimPath, ['literal=100%']), /Refusing to pass argument through cmd\.exe/);
   const invocation = buildInteractiveCliInvocation(shimPath, expectedArgs);
   const result = spawnSync(invocation.command, invocation.args, {
     encoding: 'utf8',
@@ -92,10 +176,14 @@ test('a real npm-style Windows cmd shim forwards Codex overrides exactly', (t) =
   assert.deepEqual(JSON.parse(fs.readFileSync(capturePath, 'utf8')), expectedArgs);
 });
 
-test('Windows command quoting handles empty and percent-containing arguments', () => {
+test('Windows command quoting refuses cmd.exe metacharacters', () => {
   assert.equal(quoteWindowsCmdArg(''), '""');
-  assert.equal(quoteWindowsCmdArg('100%'), '"100%"');
-  assert.equal(quoteWindowsCmdArg('model="custom"'), '"model=\\"custom\\""');
+  assert.equal(quoteWindowsCmdArg('plain'), '"plain"');
+  assert.equal(quoteWindowsCmdArg('C:\\tools\\claude.cmd'), '"C:\\tools\\claude.cmd"');
+  assert.throws(() => quoteWindowsCmdArg('100%'), /Refusing to pass argument through cmd\.exe/);
+  assert.throws(() => quoteWindowsCmdArg('model="custom"'), /Refusing to pass argument through cmd\.exe/);
+  assert.throws(() => quoteWindowsCmdArg('evil" & calc.exe & rem "'), /Refusing to pass argument through cmd\.exe/);
+  assert.throws(() => quoteWindowsCmdArg('line1\r\nline2'), /Refusing to pass argument through cmd\.exe/);
   assert.equal(isWindowsExecutableShim('codex.cmd', 'win32'), true);
   assert.equal(isWindowsExecutableShim('codex.exe', 'win32'), false);
   assert.equal(isWindowsExecutableShim('codex.cmd', 'linux'), false);
@@ -124,6 +212,13 @@ test('Non-Windows executables keep direct argv spawning', () => {
     spawnOptions: {},
     args: ['-c', 'model="gpt-5.5"'],
   });
+});
+
+test('NO_PROXY merging preserves existing hosts and adds all loopback forms once', () => {
+  assert.equal(
+    mergeNoProxyValues({ no_proxy: 'example.test,localhost', NO_PROXY: 'router.test' }, '127.0.0.1'),
+    'example.test,localhost,router.test,127.0.0.1,::1',
+  );
 });
 
 test('platform detection covers explicit candidates, version parsing, and config reporting', () => {
@@ -269,7 +364,7 @@ test('Claude and Codex detection factories preserve platform-specific results', 
   });
   assert.equal(codexOptions.preferWindowsShim, true);
   assert.equal(windowsCodex.versionSupported, true);
-  assert.equal(windowsCodex.resolvedCliPath, windowsCodex.cliPath);
+  assert.equal('resolvedCliPath' in windowsCodex, false);
 
   const linuxCodex = detectCodexCli({
     platform: 'linux',

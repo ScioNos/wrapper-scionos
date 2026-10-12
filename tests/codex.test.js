@@ -12,6 +12,7 @@ import {
   getCodexPaths,
   readCodexStatus,
   restoreCodexConfig,
+  writeCodexRuntimeModelCatalog,
 } from '../src/apps/codex.js';
 
 function nativeTempDir(t, label) {
@@ -23,7 +24,7 @@ function nativeTempDir(t, label) {
 test('Codex allowlists stay service-scoped', () => {
   assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, [
     'gpt-6-astra',
-    'gpt-6-sol',
+    'gpt-6.1-sol',
     'gpt-6-luna',
     'deepseek-v4.1-flash',
     'glm-5.3',
@@ -32,11 +33,11 @@ test('Codex allowlists stay service-scoped', () => {
     'kimi-k3',
     'minimax-m3',
     'qwen3.8-max',
-    'deepseek-v4.1-trial',
-    'gemini-3.8-flash-trial',
+    'deepseek-v4.1-flash-trial',
     'glm-5.3-flash-trial',
+    'qwen3.8-flash-trial',
+    'gpt-6-luna-trial',
     'MiniMax-M3-trial',
-    'qwen3.8-max-trial',
   ]);
   assert.deepEqual(CODEX_ALLOWED_MODELS.llm, [
     'gpt-5.6-sol',
@@ -213,12 +214,31 @@ test('Codex restore brings back a backup and drops the wrapper catalog', (t) => 
 
   const result = restoreCodexConfig({ paths, dryRun: false });
   assert.equal(result.restoredFromBackup, true);
+  assert.equal(result.removedWrapperConfig, true);
   assert.equal(result.removedModelCatalog, true);
   assert.equal(result.authPreserved, true);
   assert.equal(fs.readFileSync(paths.configPath, 'utf8'), original);
   assert.equal(fs.existsSync(paths.backupPath), false);
   assert.equal(fs.existsSync(paths.modelCatalogPath), false);
   assert.equal(fs.existsSync(paths.authPath), true);
+});
+
+test('Codex catalog directory is removed when writing the catalog fails', (t) => {
+  const dir = nativeTempDir(t, 'catalog-write-failure');
+  const originalWrite = fs.writeFileSync;
+  fs.writeFileSync = function mockedWrite(filePath, ...args) {
+    if (String(filePath).startsWith(dir)) throw new Error('synthetic catalog write failure');
+    return originalWrite.call(this, filePath, ...args);
+  };
+  try {
+    assert.throws(
+      () => writeCodexRuntimeModelCatalog({ models: ['gpt-6.1-sol'], tmpDir: dir + path.sep }),
+      /synthetic catalog write failure/,
+    );
+  } finally {
+    fs.writeFileSync = originalWrite;
+  }
+  assert.deepEqual(fs.readdirSync(dir), []);
 });
 
 test('Codex restore preserves a wrapper config when no backup exists', (t) => {

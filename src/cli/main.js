@@ -96,7 +96,7 @@ export async function main(argv) {
     console.error(serviceAlert);
   }
   if (!command && options.listStrategies) {
-    validateOptions('strategies', null, options, new Set(['service', 'token', 'noPrompt', 'json', 'listStrategies']));
+    validateOptions('strategies', null, options, new Set(['service', 'token', 'tokenFromStdin', 'noPrompt', 'json', 'listStrategies']));
     rejectPositionals(options, 0, 'strategies');
     options.command = 'strategies';
     await handleStrategies(options);
@@ -117,6 +117,13 @@ export async function main(argv) {
     return;
   }
   if (options.json) throw usageError('--json cannot be used while launching Claude Code.');
+  // A typo must never silently start Claude Code. Passthrough arguments must
+  // be supplied after `--`, so reject all implicit positionals and options.
+  const unknownOptions = options.positionals.filter((arg) => String(arg).startsWith('-') && arg !== '--');
+  if (unknownOptions.length > 0) {
+    throw usageError('Unknown option(s): ' + unknownOptions.join(', '));
+  }
+  rejectPositionals(options, 0, 'claude-code');
   validateOptions('claude-code', null, options, new Set(['service', 'strategy', 'noPrompt']));
   validateClaudeOptions(options);
   options.command = 'claude-code';
@@ -129,6 +136,7 @@ export function shouldOpenInteractiveMenu(options) {
 
 const OPTION_LABELS = {
   service: '--service', language: '--lang', strategy: '--strategy', subagentModel: '--subagent-model', model: '--model', token: '--token',
+  tokenFromStdin: '--token-stdin',
   host: '--host', port: '--port', allowOrigins: '--allow-origin',
   noPrompt: '--no-prompt', yes: '--yes', dryRun: '--dry-run', json: '--json',
   listStrategies: '--list-strategies',
@@ -136,28 +144,28 @@ const OPTION_LABELS = {
 
 const COMMAND_OPTIONS = {
   auth: {
-    login: ['service', 'token', 'dryRun', 'json'],
-    change: ['service', 'token', 'dryRun', 'json'],
+    login: ['service', 'token', 'tokenFromStdin', 'dryRun', 'json'],
+    change: ['service', 'token', 'tokenFromStdin', 'dryRun', 'json'],
     logout: ['service', 'dryRun', 'json'],
     status: ['service', 'json'],
-    test: ['service', 'token', 'noPrompt', 'json'],
+    test: ['service', 'token', 'tokenFromStdin', 'noPrompt', 'json'],
   },
   doctor: { '': ['service', 'json'] },
-  strategies: { '': ['service', 'token', 'noPrompt', 'json'] },
+  strategies: { '': ['service', 'token', 'tokenFromStdin', 'noPrompt', 'json', 'listStrategies'] },
   'claude-desktop': {
     status: ['json'],
     'restore-official': ['yes', 'dryRun', 'json'],
-    'apply-proxy': ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'yes', 'dryRun', 'json'],
-    proxy: ['service', 'strategy', 'token', 'noPrompt', 'host', 'port', 'allowOrigins', 'yes'],
+    'apply-proxy': ['service', 'strategy', 'token', 'tokenFromStdin', 'noPrompt', 'host', 'port', 'yes', 'dryRun', 'json'],
+    proxy: ['service', 'strategy', 'token', 'tokenFromStdin', 'noPrompt', 'host', 'port', 'allowOrigins', 'yes'],
   },
   codex: {
-    launch: ['service', 'strategy', 'model', 'token', 'noPrompt'],
+    launch: ['service', 'strategy', 'model', 'token', 'tokenFromStdin', 'noPrompt'],
     template: ['service', 'model', 'json'],
     restore: ['yes', 'dryRun', 'json'],
     status: ['json'],
   },
   opencode: {
-    '': ['service', 'strategy', 'model', 'token', 'noPrompt'],
+    '': ['service', 'strategy', 'model', 'token', 'tokenFromStdin', 'noPrompt'],
   },
 };
 
@@ -170,7 +178,7 @@ function validateCommand(name, action, options) {
   }
   if (name === 'opencode') {
     if (options.json) throw usageError('--json cannot be used while launching OpenCode.');
-    validateOptions(name, null, options, new Set(['service', 'strategy', 'model', 'token', 'noPrompt']));
+    validateOptions(name, null, options, new Set(['service', 'strategy', 'model', 'token', 'tokenFromStdin', 'noPrompt']));
     let service;
     try {
       service = requireServiceConfig(options.service);
@@ -194,7 +202,7 @@ function validateCommand(name, action, options) {
     throw usageError('Unknown ' + name + (action ? ' action "' + action + '".' : ' action.'));
   }
   if (name === 'auth' && action === 'change') {
-    warnDeprecationOnce('action:auth-change', '`auth change` is deprecated in 4.x; use `auth login`.');
+    warnDeprecationOnce('action:auth-change', '`auth change` is deprecated; use `auth login`.');
   }
   const allowedOptions = new Set(allowed);
   validateOptions(name, action, options, allowedOptions);
@@ -224,7 +232,7 @@ function validateClaudeOptions(options) {
   if (options.strategy && !findStrategy(options.strategy, service.value)) {
     throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
   }
-  if (options.subagentModel && !isSupportedClaudeCodeSubagentModel(options.subagentModel, service.value)) {
+  if (options.subagentModel && !isSupportedClaudeCodeSubagentModel(options.subagentModel, service.value, options.strategy)) {
     const supported = getClaudeCodeSubagentModels(service.value).join(', ');
     throw usageError(`--subagent-model must be one of: ${supported}.`);
   }
@@ -261,7 +269,7 @@ function showHelp(options = {}) {
     'Options:',
     formatOptionHelp(),
     '',
-    'Global options may appear before or after a command. Supported arguments after -- are passed through unchanged; Codex and OpenCode routing overrides are rejected.',
+    'Global options may appear before or after a command. Arguments after -- are passed through for Claude Code, Codex launch, and OpenCode; other commands reject them.',
     'Claude Desktop: use apply-proxy; direct profiles are refused because they expose the RouterLab token.',
     '',
   ].join('\n');
@@ -345,7 +353,8 @@ export async function handleInteractiveMenu(options, overrides = {}) {
 
 async function runInteractiveClaudeCode(runtime, options) {
   try {
-    const result = await runtime.handleClaudeCode({ ...options, passthrough: [], allowBack: true }, pkg.version, []);
+    const passthrough = options.passthrough ?? [];
+    const result = await runtime.handleClaudeCode({ ...options, passthrough, allowBack: true }, pkg.version, passthrough);
     return result?.kind === 'back' ? { kind: 'back' } : { kind: 'terminate' };
   } catch (error) {
     if (error?.name === 'MenuBackError') return { kind: 'back' };

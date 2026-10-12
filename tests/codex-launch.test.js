@@ -22,6 +22,7 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
         );
         calls.catalogPath = JSON.parse(catalogOverride.slice('model_catalog_json='.length));
         assert.equal(fs.existsSync(calls.catalogPath), true);
+        calls.catalog = JSON.parse(fs.readFileSync(calls.catalogPath, 'utf8'));
         if (launchError) throw launchError;
         return 0;
       },
@@ -37,6 +38,17 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
     },
   };
 }
+
+test('Codex Trial selects the new default and exposes only its five verified models', async () => {
+  const models = ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
+  const fixture = launchDependencies({ valid: true, models: ['gpt-6.1-sol', 'glm-5.3', ...models], modelMetadata: [] });
+  await launchCodexForService({
+    service: 'routerlab', strategy: 'trial', token: NATIVE_TEST_TOKEN, noPrompt: true,
+  }, fixture.dependencies);
+  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="deepseek-v4.1-flash-trial"'));
+  assert.deepEqual(fixture.calls.catalog.models.map(({ slug }) => slug), models);
+  assert.equal(fs.existsSync(fixture.calls.catalogPath), false);
+});
 
 test('Codex launch is direct, native, and forwards the original RouterLab token', async () => {
   const fixture = launchDependencies({
@@ -96,7 +108,7 @@ test('Codex interactive menu launches native model selection without wrapper pro
 test('Codex removes the temporary model catalog when launch fails', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['gpt-5.6-sol'],
+    models: ['gpt-6.1-sol'],
     modelMetadata: [],
   }, {
     launchError: new Error('simulated Codex startup failure'),
@@ -145,7 +157,7 @@ test('Codex rejects routing overrides before CLI detection, token use, or model 
 test('Codex no-prompt launches the default only when discovered', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['kimi-k3', 'gpt-5.6-sol'],
+    models: ['kimi-k3', 'gpt-6.1-sol'],
     modelMetadata: [],
   });
   await launchCodexForService({
@@ -153,7 +165,7 @@ test('Codex no-prompt launches the default only when discovered', async () => {
     token: NATIVE_TEST_TOKEN,
     noPrompt: true,
   }, fixture.dependencies);
-  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-5.6-sol"'));
+  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-6.1-sol"'));
 
   const missingDefault = launchDependencies({
     valid: true,
@@ -166,7 +178,7 @@ test('Codex no-prompt launches the default only when discovered', async () => {
       token: NATIVE_TEST_TOKEN,
       noPrompt: true,
     }, missingDefault.dependencies),
-    /gpt-5\.6-sol.*not available/,
+    /gpt-6\.1-sol.*not available/,
   );
   assert.equal(missingDefault.calls.launches.length, 0);
 });

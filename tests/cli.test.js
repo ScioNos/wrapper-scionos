@@ -8,12 +8,12 @@ import { getLocalizedMenuRoutes, AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAI
 
 test('default menu exposes the supported coding clients', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
-  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'OpenCode CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
+  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop / Cowork', 'Codex CLI', 'OpenCode CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '1').value, 'claude-code');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '3').value, 'codex');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'auth');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '6').value, 'tools');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop').value, 'claude-desktop');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop / Cowork').value, 'claude-desktop');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Code/);
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
@@ -70,6 +70,24 @@ test('default menu exposes the supported coding clients', () => {
   });
 });
 
+test('empty menus render safely', () => {
+  assert.match(formatMenu('Empty menu', []), /No options available/);
+});
+
+test('interactive Claude Code menu route preserves explicit passthrough arguments', async () => {
+  const forwarded = ['--print', 'hello'];
+  let received = null;
+  await handleInteractiveMenu({ ...parseOptions(['--', ...forwarded]), passthrough: forwarded }, {
+    askMenu: async () => 'claude-code',
+    handleClaudeCode: async (options, _version, args) => {
+      received = { options, args };
+      return { kind: 'launched' };
+    },
+  });
+  assert.deepEqual(received.args, forwarded);
+  assert.deepEqual(received.options.passthrough, forwarded);
+});
+
 test('wrapper options without a command keep the user in the main menu', () => {
   assert.equal(shouldOpenInteractiveMenu(parseOptions([])), true);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--service', 'llm'])), true);
@@ -83,6 +101,7 @@ test('wrapper options without a command keep the user in the main menu', () => {
   assert.throws(() => parseOptions(['codex', 'launch', '--direct']), /--direct has been removed/);
   assert.throws(() => parseOptions(['codex', 'launch', '--transport', 'direct']), /--transport has been removed/);
   assert.throws(() => parseOptions(['codex', 'launch', '--proxy']), /--proxy has been removed/);
+  assert.throws(() => parseOptions(['--direct']), /removed from Wrapper-ScioNos/);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['--', '-p', 'hello'])), false);
   assert.equal(shouldOpenInteractiveMenu(parseOptions(['-p', 'hello'])), false);
 });
@@ -151,7 +170,7 @@ test('the interactive navigation model has predictable parents and actions', () 
   assert.deepEqual(resolveNavigation('tools', 'quit'), { kind: 'exit' });
   assert.deepEqual(resolveNavigation('tools', 'back'), { kind: 'navigate', routeId: 'home' });
   assert.equal(formatBreadcrumb('home'), 'ScioNos Wrapper');
-  assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop');
+  assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop / Cowork');
 });
 
 test('menu controls use declared keys and support text aliases', () => {
@@ -357,6 +376,18 @@ test('Claude Code rejects GLM 5.3 as a RouterLab subagent before launch', async 
   await assert.rejects(
     () => main(['claude-code', '--service', 'routerlab', '--subagent-model', 'glm-5.3']),
     (error) => error.exitCode === 2
-      && /--subagent-model must be one of: claude-haiku-4-5, aws-claude-haiku-4-5, gpt-5\.6-luna, deepseek-v4\.1-flash\./.test(error.message),
+      && /--subagent-model must be one of: claude-haiku-5-5, aws-claude-haiku-4-5, gpt-6-luna, deepseek-v4\.1-flash\./.test(error.message),
   );
+});
+
+test('boolean options reject inline values instead of passing them to a child', () => {
+  assert.throws(() => parseOptions(['--no-prompt=true']), /--no-prompt does not take a value/);
+  assert.throws(() => parseOptions(['--json=true']), /--json does not take a value/);
+  assert.throws(() => parseOptions(['--dry-run=yes']), /--dry-run does not take a value/);
+  assert.equal(parseOptions(['--service=llm']).service, 'llm');
+});
+
+test('implicit launch rejects command and option typos', async () => {
+  await assert.rejects(() => main(['doctro']), /Unexpected argument for claude-code: doctro/);
+  await assert.rejects(() => main(['--servcie', 'llm']), /Unknown option\(s\): --servcie/);
 });

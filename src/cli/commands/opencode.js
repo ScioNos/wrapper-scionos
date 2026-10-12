@@ -4,7 +4,7 @@ import {
   resolveServiceEnvToken,
   validateServiceBaseUrl,
 } from '../../routerlab/services.js';
-import { fetchModels, validateTokenFormat } from '../../routerlab/models.js';
+import { fetchModels } from '../../routerlab/models.js';
 import { resolveTokenWithSource } from '../../apps/claude-code.js';
 import {
   appendOpenCodeApiPath,
@@ -21,6 +21,8 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../../platfor
 import { findStrategy } from '../../routerlab/strategies.js';
 import { CliUsageError } from '../args.js';
 import { translate } from '../i18n.js';
+import { resolveCliToken } from '../token-option.js';
+import { cliAuthenticationError, explicitCliToken } from '../token-auth.js';
 
 const DEFAULT_OPEN_CODE_DEPENDENCIES = Object.freeze({
   assertOpenCodeCliAvailable,
@@ -47,8 +49,9 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
   };
 
   const envToken = resolveServiceEnvToken(service.value, process.env);
-  const resolvedToken = options.token
-    ? explicitOpenCodeToken(options.token, envToken)
+  const cliToken = resolveCliToken(options);
+  const resolvedToken = cliToken
+    ? explicitOpenCodeToken(cliToken, envToken)
     : await deps.resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt });
 
   let modelResult;
@@ -277,28 +280,17 @@ export function validateOpenCodeForwardedArgs(forwarded = []) {
 }
 
 export function explicitOpenCodeToken(token, envToken) {
-  const format = validateTokenFormat(token);
-  if (!format.valid) throw new Error(format.message);
-  return {
-    token: token.trim(),
-    source: 'option',
-    envTokenPresent: Boolean(envToken.token),
-    envTokenKey: envToken.envKey,
-    storedTokenPresent: false,
-  };
+  return explicitCliToken(token, envToken);
 }
 
 export function openCodeAuthenticationError(validation, service, resolvedToken) {
-  const status = validation.status ?? 401;
-  const source = resolvedToken.source === 'option'
-    ? '--token'
-    : resolvedToken.envTokenKey ?? resolvedToken.source ?? 'the configured token source';
-  const error = new Error(
-    `${service.label} rejected the OpenCode token from ${source} with HTTP ${status}. Check the service token with "wrapper-scionos auth test --service ${service.value}".`,
+  return cliAuthenticationError(
+    'OpenCode',
+    validation,
+    service,
+    resolvedToken,
+    `Check the service token with "wrapper-scionos auth test --service ${service.value}".`,
   );
-  error.code = 'auth_failed';
-  error.statusCode = status;
-  return error;
 }
 
 export function openCodeModelDiscoveryError(validation, service) {

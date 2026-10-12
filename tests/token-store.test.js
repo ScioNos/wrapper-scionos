@@ -11,6 +11,7 @@ import {
   getStoredToken,
   getStoredTokenStatus,
   getTokenBackend,
+  resolveWindowsPowerShellPath,
   SECURE_STORAGE_SERVICE,
   storeToken,
 } from '../src/security/token-store.js';
@@ -82,7 +83,7 @@ test('token backends expose unsupported behavior and never fall back after Secre
     /service unavailable/,
   );
   assert.equal(fs.readFileSync(legacyPath, 'utf8'), 'preserved-legacy-token');
-  assert.equal(failing.get(service), null);
+  assert.throws(() => failing.get(service), /service unavailable/);
 });
 
 test('public token storage APIs handle supported, unsupported, and failing backends', () => {
@@ -141,8 +142,21 @@ test('public token storage APIs handle supported, unsupported, and failing backe
       throw new Error('vault unavailable');
     },
   };
-  assert.equal(getStoredToken('routerlab', { backend: failingRead }), null);
-  assert.equal(getStoredTokenStatus('routerlab', { backend: failingRead }).stored, false);
+  assert.throws(() => getStoredToken('routerlab', { backend: failingRead }), /vault unavailable/);
+  assert.throws(() => getStoredTokenStatus('routerlab', { backend: failingRead }), /vault unavailable/);
+
+  const emptyRead = {
+    status: () => ({ supported: true, backend: 'Empty vault' }),
+    get: () => null,
+  };
+  assert.equal(getStoredToken('routerlab', { backend: emptyRead }), null);
+  assert.equal(getStoredTokenStatus('routerlab', { backend: emptyRead }).stored, false);
+  const spawnFailure = {
+    status: () => ({ supported: true, backend: 'Vault with missing executable' }),
+    get: () => { throw Object.assign(new Error('spawn security ENOENT'), { code: 'ENOENT' }); },
+  };
+  assert.throws(() => getStoredToken('routerlab', { backend: spawnFailure }), /spawn security ENOENT/);
+  assert.throws(() => getStoredTokenStatus('routerlab', { backend: spawnFailure }), /spawn security ENOENT/);
 });
 
 test('Windows token backend covers encrypted storage, legacy fallback, and cleanup', (t) => {
@@ -164,6 +178,10 @@ test('Windows token backend covers encrypted storage, legacy fallback, and clean
   assert.equal(backend.get(service), 'windows-token');
 
   const currentPath = tokenFileForService(service.value);
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(currentPath).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(path.dirname(currentPath)).mode & 0o777, 0o700);
+  }
   const legacyPath = tokenFileForService(service.value, 'claude-scionos');
   fs.mkdirSync(path.dirname(legacyPath), { recursive: true });
   fs.renameSync(currentPath, legacyPath);
@@ -180,6 +198,21 @@ test('Windows token backend covers encrypted storage, legacy fallback, and clean
     tokenFileForService,
   });
   assert.throws(() => emptyEncryption.store('token', service), /no encrypted content/);
+});
+
+test('PowerShell resolution ignores a redirected SystemRoot', () => {
+  assert.equal(
+    resolveWindowsPowerShellPath('C:\\Windows'),
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  );
+  assert.equal(
+    resolveWindowsPowerShellPath('C:\\Users\\attacker\\Windows'),
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  );
+  assert.equal(
+    resolveWindowsPowerShellPath('D:\\Windows'),
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  );
 });
 
 test('macOS token backend covers Keychain success, fallback, deletion, and errors', () => {
@@ -212,7 +245,7 @@ test('macOS token backend covers Keychain success, fallback, deletion, and error
     runCommandFn: () => ({ status: 1, stdout: '', stderr: 'Keychain denied\n' }),
   });
   assert.throws(() => failing.store('token', service), /Keychain denied/);
-  assert.equal(failing.get(service), null);
+  assert.throws(() => failing.get(service), /Keychain denied/);
   assert.equal(failing.delete(service), false);
 });
 

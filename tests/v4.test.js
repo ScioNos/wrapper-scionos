@@ -10,7 +10,7 @@ import * as zlib from 'node:zlib';
 import { parseOptions, isLoopbackHost } from '../src/cli/args.js';
 import { main, resolveCommandInvocation } from '../src/cli/main.js';
 import { printError } from '../src/cli/commands/output.js';
-import { applyClaudeDesktopProxyProfile, defaultDesktopStrategy, discoverVerifiedDesktopRoutes, formatDesktopReplacementPrompt, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
+import { applyClaudeDesktopProxyProfile, defaultDesktopStrategy, discoverVerifiedDesktopRoutes, formatDesktopReplacementPrompt, handleClaudeDesktop, mergeExplicitProxyConfig, planInteractiveClaudeDesktopStart, requestedProxyConfig, runClaudeDesktopProxy, sameProxyConfig, storedProxyConfig, waitForProxyShutdown } from '../src/cli/commands/claude-desktop.js';
 import { extractModelMetadata, fetchModels, fetchModelsDirect } from '../src/routerlab/models.js';
 import { isCodexVersionSupported } from '../src/platform/detect.js';
 import { assertSupportedNodeVersion, isSupportedNodeVersion } from '../src/platform/runtime.js';
@@ -961,5 +961,47 @@ test('Desktop direct mode is removed and never prints its token', async () => {
       && error.code === 'invalid_usage'
       && !error.message.includes(token)
       && error.message.includes('apply-proxy'),
+  );
+});
+
+test('apply-proxy dry-run previews without resolving a token or contacting RouterLab', async () => {
+  const options = parseOptions(['--dry-run']);
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(String(line));
+  try {
+    await applyClaudeDesktopProxyProfile(options, {
+      resolveToken: async () => { throw new Error('dry-run must not resolve a token'); },
+      fetchModels: async () => { throw new Error('dry-run must not call RouterLab'); },
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  const output = lines.join('\n');
+  assert.match(output, /routesVerified/);
+  assert.match(output, /false/);
+});
+
+test('model discovery rejects streamed responses above the local size limit', async (t) => {
+  const payload = '{"data":[{"id":"' + 'x'.repeat(16 * 1024 * 1024) + '"}]}';
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(payload);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const result = await fetchModels('test-token', {
+    baseUrl: 'http://127.0.0.1:' + server.address().port,
+    timeoutMs: 5000,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.reason, 'invalid_response');
+  assert.match(result.message, /exceeds the local size limit/);
+});
+
+test('Claude Desktop handler reports unknown actions accurately', async () => {
+  await assert.rejects(
+    () => handleClaudeDesktop('unknown-action', parseOptions([])),
+    (error) => error.code === 'unknown_claude_desktop_action',
   );
 });

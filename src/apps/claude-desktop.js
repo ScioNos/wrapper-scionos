@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { findStrategy } from '../routerlab/strategies.js';
 import {
@@ -381,28 +381,99 @@ function withRollback(paths, operation) {
     paths.profilePath,
     paths.metaPath,
   ];
-  const snapshots = targetPaths.map((targetPath) => ({
-    path: targetPath,
-    content: fs.existsSync(targetPath) ? fs.readFileSync(targetPath) : null,
-    mode: fs.existsSync(targetPath) ? fs.statSync(targetPath).mode & 0o777 : null,
-  }));
-
+  const lockIdentity = targetPaths
+    .map((targetPath) => path.resolve(targetPath).toLowerCase())
+    .sort()
+    .join('\0');
+  const lockPath = path.join(
+    os.tmpdir(),
+    `wrapper-scionos-claude-desktop-${createHash('sha256').update(lockIdentity).digest('hex').slice(0, 24)}.lock`,
+  );
+  const lockDescriptor = acquireDesktopMutationLock(lockPath);
   try {
-    operation();
-  } catch (error) {
-    for (const snapshot of snapshots) {
-      if (snapshot.content !== null) {
-        ensurePrivateDirectory(path.dirname(snapshot.path));
-        fs.writeFileSync(snapshot.path, snapshot.content, { mode: snapshot.mode ?? PRIVATE_FILE_MODE });
-        if (process.platform !== 'win32') {
-          fs.chmodSync(snapshot.path, snapshot.mode ?? PRIVATE_FILE_MODE);
-          assertMode(snapshot.path, snapshot.mode ?? PRIVATE_FILE_MODE, 'rollback file');
+    const directoriesCreatedByOperation = findMissingParentDirectories(targetPaths);
+    const snapshots = targetPaths.map((targetPath) => ({
+      path: targetPath,
+      content: fs.existsSync(targetPath) ? fs.readFileSync(targetPath) : null,
+      mode: fs.existsSync(targetPath) ? fs.statSync(targetPath).mode & 0o777 : null,
+    }));
+
+    try {
+      operation();
+    } catch (error) {
+      for (const snapshot of snapshots) {
+        if (snapshot.content !== null) {
+          ensurePrivateDirectory(path.dirname(snapshot.path));
+          fs.writeFileSync(snapshot.path, snapshot.content, { mode: snapshot.mode ?? PRIVATE_FILE_MODE });
+          if (process.platform !== 'win32') {
+            fs.chmodSync(snapshot.path, snapshot.mode ?? PRIVATE_FILE_MODE);
+            assertMode(snapshot.path, snapshot.mode ?? PRIVATE_FILE_MODE, 'rollback file');
+          }
+        } else if (fs.existsSync(snapshot.path)) {
+          fs.unlinkSync(snapshot.path);
         }
-      } else if (fs.existsSync(snapshot.path)) {
-        fs.unlinkSync(snapshot.path);
+      }
+      removeEmptyDirectories(directoriesCreatedByOperation, error);
+      throw error;
+    }
+  } finally {
+    try {
+      fs.closeSync(lockDescriptor);
+    } finally {
+      try {
+        fs.unlinkSync(lockPath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
       }
     }
+  }
+}
+
+function acquireDesktopMutationLock(lockPath) {
+  let descriptor = null;
+  try {
+    descriptor = fs.openSync(lockPath, 'wx', PRIVATE_FILE_MODE);
+    fs.writeFileSync(descriptor, String(process.pid));
+    return descriptor;
+  } catch (error) {
+    if (descriptor !== null) {
+      fs.closeSync(descriptor);
+      try {
+        fs.unlinkSync(lockPath);
+      } catch (cleanupError) {
+        if (cleanupError?.code !== 'ENOENT') error.lockCleanupError = cleanupError;
+      }
+    }
+    if (error?.code === 'EEXIST') {
+      throw desktopError('concurrent_mutation', 'Another Wrapper-ScioNos process is updating the Claude Desktop profile. Try again after it finishes.');
+    }
     throw error;
+  }
+}
+
+function findMissingParentDirectories(targetPaths) {
+  const missing = new Set();
+  for (const targetPath of targetPaths) {
+    let current = path.dirname(targetPath);
+    while (current && !fs.existsSync(current)) {
+      missing.add(current);
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return [...missing].sort((left, right) => right.length - left.length);
+}
+
+function removeEmptyDirectories(directories, originalError) {
+  for (const directory of directories) {
+    try {
+      fs.rmdirSync(directory);
+    } catch (error) {
+      if (error?.code !== 'ENOENT' && error?.code !== 'ENOTEMPTY') {
+        originalError.rollbackDirectoryCleanupError ??= error;
+      }
+    }
   }
 }
 
@@ -652,7 +723,15 @@ function profileMatchesRoutes(profile, routes) {
     };
     return Object.keys(object).length === 1 ? route.routeId : object;
   });
-  return JSON.stringify(profile.inferenceModels) === JSON.stringify(expected);
+  return stableStringify(profile.inferenceModels) === stableStringify(expected);
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function normalizeModelMetadata(modelMetadata) {

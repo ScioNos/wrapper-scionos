@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## 7.2.0 - 2026-10-12
+
+### Changed
+
+- Aligned RouterLab Codex with the shared OpenAI GPT and Trial catalogues: `gpt-6.1-sol` is the GPT and launch default, and `deepseek-v4.1-flash-trial` is the Trial family default.
+- Updated the RouterLab Trial strategy to DeepSeek V4.1 Flash Trial, GLM 5.3 Flash Trial, Qwen 3.8 Flash Trial, GPT 6 Luna Trial, and MiniMax M3 Trial. Its fixed subagent now uses `deepseek-v4.1-flash-trial`.
+- Updated RouterLab OpenAI GPT to `gpt-6-astra` (Fable), `gpt-6.1-sol` (Opus and Sonnet), and `gpt-6-luna` (Haiku and default subagent). RouterLab OpenCode uses `gpt-6.1-sol` as its default to match this shared catalogue.
+- Updated RouterLab AWS Claude to `aws-claude-opus-5-5` and `aws-claude-sonnet-5-5`, retaining `aws-claude-haiku-4-5` for Haiku and the default subagent. The AWS strategy requires Claude Code 2.1.284 or newer.
+- Updated RouterLab Claude Native to Sonnet 5.5 (`claude-sonnet-5-5`) and Haiku 5.5 (`claude-haiku-5-5`), including the default Claude Code subagent and model-discovery requirements. Fable 5.1 and Opus 5.5 remain the Native models.
+- Claude Native requires Claude Code 2.1.293 or newer; CI validates with Claude Code 2.1.296.
+- RouterLab Codex prompts for OpenAI GPT-6, Open Source, or Trial before launch. Its native `/model` selector is limited to the selected family's verified models.
+- Updated the AWS Claude menu discount to 40% and renamed the Desktop entry to `Claude Desktop / Cowork`.
+
+### Fixed
+
+- Fixed Codex launches through modern npm-generated Windows command shims: quoted runtime overrides are now forwarded directly to the Node entry point without shell expansion.
+- Aligned regression tests with the updated service catalogues, default Codex model, Trial strategy, and Claude model mappings.
+- Hardened local proxy authentication, loopback binding, supported upstream paths, request timeouts, and model-discovery response limits.
+- Serialized Claude Desktop profile mutations and improved rollback and secure-storage failure reporting.
+- Excluded test files from coverage explicitly so Node 22 and Node 24 enforce thresholds against shipped code.
+- Corrected Markdown formatting, translated documentation, generated CLI option descriptions, and current Codex family-selection instructions.
+
+### Added
+
+- Added `--token-stdin` for commands that accept a token; inline `--token` now emits a warning about process listings and shell history.
+- Added real OpenCode integration checks to CI and the release verification command.
+
 ## 7.1.0 - 2026-09-25
 
 ### Added

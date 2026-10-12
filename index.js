@@ -19,7 +19,7 @@ export function handleTopLevelError(error, {
     processState.exitCode = 130;
     return;
   }
-  printErrorFn(error, { json: argv.includes('--json') });
+  printErrorFn(error, { json: argv.some((arg) => arg === '--json' || String(arg).startsWith('--json=')) });
   if (env.SCIONOS_DEBUG) errorLogger(error);
   processState.exitCode = error?.exitCode ?? 1;
 }

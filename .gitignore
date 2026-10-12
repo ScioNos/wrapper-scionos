@@ -3,6 +3,7 @@ npm-debug.log*
 *.log
 *.pid
 .tmp-package-audit/
+.npm-cache-temp/
 .codex-tmp/
 .claude/
 .codegraph/

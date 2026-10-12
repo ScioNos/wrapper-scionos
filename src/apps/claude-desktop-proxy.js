@@ -19,7 +19,7 @@ const BATCH_MEMBER_PATH = /^\/v1\/messages\/batches\/[^/]+$/;
 const BATCH_ACTION_PATH = /^\/v1\/messages\/batches\/[^/]+\/(cancel|results)$/;
 
 export function createClaudeDesktopProxy(options, dependencies = {}) {
-  if (Object.hasOwn(options, 'targetBaseUrl')) {
+  if (options.targetBaseUrl !== undefined) {
     throw proxyError('targetBaseUrl is not supported by the Claude Desktop proxy.', 500, 'unsupported_proxy_option');
   }
   const {

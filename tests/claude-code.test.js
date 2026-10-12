@@ -146,9 +146,9 @@ test('Claude Native injects the verified Fable option and official model aliases
   assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, undefined);
   assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, undefined);
   assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'claude-opus-5-5');
-  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-5');
-  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'claude-haiku-4-5');
-  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-4-5');
+  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'claude-sonnet-5-5');
+  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'claude-haiku-5-5');
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, 'claude-haiku-5-5');
 });
 
 test('Claude Code launch screens use wrapper-branded guided layout', () => {
@@ -334,7 +334,7 @@ test('interactive Claude strategy selection covers separators, Back, and selecte
   await assert.rejects(
     () => chooseStrategy({
       serviceValue: 'routerlab',
-      modelIds: ['claude-opus-5'],
+      modelIds: ['gpt-6-astra'],
       selectFn: async () => assert.fail('all-disabled choices must not prompt'),
     }),
     /No launchable strategy/,
@@ -359,7 +359,7 @@ test('Claude Code summaries, indicators, and missing CLI failures are covered', 
   assert.match(stripVTControlCharacters(getStrategyIndicator('default', [], 'routerlab')), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(
     'default',
-    ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     'routerlab',
   )), /●/);
   assert.match(stripVTControlCharacters(getStrategyIndicator(

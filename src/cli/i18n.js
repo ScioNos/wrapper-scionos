@@ -6,7 +6,7 @@ const TRANSLATIONS = Object.freeze({
     serviceLlmAvailability: 'ℹ Active LLM service — available models may vary',
     compatibility: 'Compatible Windows, macOS, Linux via ',
     chooseDestination: 'Choose where you want to go:',
-    chooseDesktopAction: 'Choose a Claude Desktop action:',
+    chooseDesktopAction: 'Choose a Claude Desktop / Cowork action:',
     chooseAccountAction: 'Choose an account action:',
     chooseTool: 'Choose a tool:',
     selectOption: 'Select an option:',
@@ -31,14 +31,14 @@ const TRANSLATIONS = Object.freeze({
     helpCompact: '↑↓ navigate • Enter select • 0/b/back back • q/quit/exit quit • Esc back',
     routes: {
       home: 'ScioNos Wrapper',
-      desktop: 'Claude Desktop',
+      desktop: 'Claude Desktop / Cowork',
       account: 'Account & access',
       tools: 'Tools & diagnostics',
     },
     menu: {
       home: {
         'claude-code': ['Claude Code', 'Start a coding session through RouterLab.'],
-        'claude-desktop': ['Claude Desktop', 'Configure and run the local Desktop mapping.'],
+        'claude-desktop': ['Claude Desktop / Cowork', 'Configure and run the local Desktop mapping.'],
         codex: ['Codex CLI', 'Start a Codex session through RouterLab.'],
         opencode: ['OpenCode CLI', 'Start an OpenCode session through RouterLab.'],
         auth: ['Account & access', 'Manage and validate your RouterLab token.'],
@@ -70,7 +70,7 @@ const TRANSLATIONS = Object.freeze({
     serviceLlmAvailability: 'ℹ Service LLM actif — les modèles disponibles peuvent varier',
     compatibility: 'Compatible Windows, macOS, Linux via ',
     chooseDestination: 'Choisissez une destination :',
-    chooseDesktopAction: 'Choisissez une action pour Claude Desktop :',
+    chooseDesktopAction: 'Choisissez une action pour Claude Desktop / Cowork :',
     chooseAccountAction: 'Choisissez une action de compte :',
     chooseTool: 'Choisissez un outil :',
     selectOption: 'Sélectionnez une option :',
@@ -95,14 +95,14 @@ const TRANSLATIONS = Object.freeze({
     helpCompact: '↑↓ naviguer • Entrée sélectionner • 0/b/back retour • q/quit/exit quitter • Échap retour',
     routes: {
       home: 'ScioNos Wrapper',
-      desktop: 'Claude Desktop',
+      desktop: 'Claude Desktop / Cowork',
       account: 'Compte et accès',
       tools: 'Outils et diagnostics',
     },
     menu: {
       home: {
         'claude-code': ['Claude Code', 'Démarrer une session de code via RouterLab.'],
-        'claude-desktop': ['Claude Desktop', 'Configurer et lancer le mappage Desktop local.'],
+        'claude-desktop': ['Claude Desktop / Cowork', 'Configurer et lancer le mappage Desktop local.'],
         codex: ['Codex CLI', 'Démarrer une session Codex via RouterLab.'],
         opencode: ['OpenCode CLI', 'Démarrer une session OpenCode via RouterLab.'],
         auth: ['Compte et accès', 'Gérer et valider votre jeton RouterLab.'],
@@ -159,14 +159,14 @@ const TRANSLATIONS = Object.freeze({
     helpCompact: '↑↓ navigieren • Enter auswählen • 0/b/back zurück • q/quit/exit beenden • Esc zurück',
     routes: {
       home: 'ScioNos Wrapper',
-      desktop: 'Claude Desktop',
+      desktop: 'Claude Desktop / Cowork',
       account: 'Konto und Zugriff',
       tools: 'Werkzeuge und Diagnose',
     },
     menu: {
       home: {
         'claude-code': ['Claude Code', 'Eine Codingsitzung über RouterLab starten.'],
-        'claude-desktop': ['Claude Desktop', 'Das lokale Desktop-Mapping konfigurieren und starten.'],
+        'claude-desktop': ['Claude Desktop / Cowork', 'Das lokale Desktop-Mapping konfigurieren und starten.'],
         codex: ['Codex CLI', 'Eine Codex-Sitzung über RouterLab starten.'],
         opencode: ['OpenCode CLI', 'Eine OpenCode-Sitzung über RouterLab starten.'],
         auth: ['Konto und Zugriff', 'Ihren RouterLab-Token verwalten und prüfen.'],

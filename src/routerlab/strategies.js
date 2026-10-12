@@ -10,11 +10,11 @@ const OPEN_SOURCE_MODEL_MAP = Object.freeze({
   subagent: 'kimi-k3',
 });
 const TRIAL_MODEL_MAP = Object.freeze({
-  fable: 'deepseek-v4.1-trial',
-  haiku: 'gemini-3.8-flash-trial',
+  fable: 'deepseek-v4.1-flash-trial',
+  haiku: 'gpt-6-luna-trial',
   sonnet: 'glm-5.3-flash-trial',
-  opus: 'qwen3.8-max-trial',
-  subagent: 'deepseek-v4.1-flash',
+  opus: 'qwen3.8-flash-trial',
+  subagent: 'deepseek-v4.1-flash-trial',
 });
 export const OPEN_SOURCE_MODELS = [
   'deepseek-v4.1-flash',
@@ -26,15 +26,14 @@ export const OPEN_SOURCE_MODELS = [
   'qwen3.8-max',
 ];
 export const TRIAL_MODELS = [
-  'deepseek-v4.1-trial',
-  'gemini-3.8-flash-trial',
+  'deepseek-v4.1-flash-trial',
   'glm-5.3-flash-trial',
+  'qwen3.8-flash-trial',
+  'gpt-6-luna-trial',
   'MiniMax-M3-trial',
-  'qwen3.8-max-trial',
-  TRIAL_MODEL_MAP.subagent,
 ];
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
-  'claude-haiku-4-5',
+  'claude-haiku-5-5',
   'aws-claude-haiku-4-5',
   'gpt-6-luna',
   'deepseek-v4.1-flash',
@@ -49,8 +48,8 @@ export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
 export const DEFAULT_CLAUDE_MODELS = [
   'claude-fable-5-1',
   'claude-opus-5-5',
-  'claude-sonnet-5',
-  'claude-haiku-4-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
 ];
 
 export const LLM_CLAUDE_MODELS = [
@@ -62,15 +61,14 @@ export const LLM_CLAUDE_MODELS = [
 
 export const AWS_CLAUDE_MODELS = [
   'aws-claude-haiku-4-5',
-  'aws-claude-sonnet-5',
-  'aws-claude-opus-5',
+  'aws-claude-sonnet-5-5',
+  'aws-claude-opus-5-5',
 ];
 
 export const OPENAI_GPT_MODELS = [
   'gpt-6-astra',
-  'gpt-5.6-luna',
-  'gpt-5.6-terra',
-  'gpt-5.6-sol',
+  'gpt-6.1-sol',
+  'gpt-6-luna',
 ];
 
 const LLM_DIVERS_MODEL_MAP = Object.freeze({
@@ -105,36 +103,38 @@ export const STRATEGIES = [
   {
     value: 'default',
     name: 'Claude Native',
+    minimumClaudeCodeVersion: '2.1.293',
     description: 'Adds Claude Fable 5.1 and pins the Opus 5.5, Sonnet, and Haiku aliases to their native RouterLab models.',
     selectionName: 'Claude Native',
-    selectionDescription: 'Fable => Claude Fable 5.1, Opus => Claude Opus 5.5, Sonnet => Claude Sonnet 5, Haiku and subagents => Claude Haiku 4.5.',
+    selectionDescription: 'Fable => Claude Fable 5.1, Opus => Claude Opus 5.5, Sonnet => Claude Sonnet 5.5, Haiku and subagents => Claude Haiku 5.5.',
     requiredModels: DEFAULT_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'claude-opus-5-5',
-      sonnet: 'claude-sonnet-5',
-      haiku: 'claude-haiku-4-5',
+      sonnet: 'claude-sonnet-5-5',
+      haiku: 'claude-haiku-5-5',
       subagent: 'claude-fable-5-1',
     }),
     claudeCodeEnvironment: {
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'claude-fable-5-1',
       ...createModelEnvironment({
         opus: 'claude-opus-5-5',
-        sonnet: 'claude-sonnet-5',
-        haiku: 'claude-haiku-4-5',
-        subagent: 'claude-haiku-4-5',
+        sonnet: 'claude-sonnet-5-5',
+        haiku: 'claude-haiku-5-5',
+        subagent: 'claude-haiku-5-5',
       }),
     },
   },
   {
     value: 'aws',
     name: 'Claude via AWS',
+    minimumClaudeCodeVersion: '2.1.284',
     description: 'Sets Claude Code model environment variables to AWS-backed Claude variants.',
-    selectionName: '💸 Claude via AWS (-50%)',
-    selectionDescription: 'Use aws-claude-haiku, aws-claude-sonnet, aws-claude-opus.',
+    selectionName: '💸 Claude via AWS (-40%)',
+    selectionDescription: 'Opus => AWS Claude Opus 5.5, Sonnet => AWS Claude Sonnet 5.5, Haiku and subagents => AWS Claude Haiku 4.5.',
     requiredModels: AWS_CLAUDE_MODELS,
     environment: createModelEnvironment({
-      opus: 'aws-claude-opus-5',
-      sonnet: 'aws-claude-sonnet-5',
+      opus: 'aws-claude-opus-5-5',
+      sonnet: 'aws-claude-sonnet-5-5',
       haiku: 'aws-claude-haiku-4-5',
       subagent: 'aws-claude-haiku-4-5',
     }),
@@ -155,22 +155,25 @@ export const STRATEGIES = [
   {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
-    description: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol.',
-    selectionDescription: 'Fable => GPT 6 Astra, Haiku => GPT 5.6 Luna, Sonnet => GPT 5.6 Terra, Opus => GPT 5.6 Sol.',
+    description: 'Fable => GPT 6 Astra, Opus and Sonnet => GPT 6.1 Sol, Haiku and subagents => GPT 6 Luna.',
+    selectionDescription: 'Fable => GPT 6 Astra, Opus and Sonnet => GPT 6.1 Sol, Haiku and subagents => GPT 6 Luna.',
     aliases: ['claude-gpt-5.4'],
     requiredModels: OPENAI_GPT_MODELS,
-    environment: createModelEnvironment({
-      opus: 'gpt-5.6-sol',
-      sonnet: 'gpt-5.6-terra',
-      haiku: 'gpt-5.6-luna',
-    }),
+    environment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
+      ...createModelEnvironment({
+        opus: 'gpt-6.1-sol',
+        sonnet: 'gpt-6.1-sol',
+        haiku: 'gpt-6-luna',
+      }),
+    },
     claudeCodeEnvironment: {
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
       ...createModelEnvironment({
-        opus: 'gpt-5.6-sol',
-        sonnet: 'gpt-5.6-terra',
-        haiku: 'gpt-5.6-luna',
-        subagent: 'gpt-5.6-luna',
+        opus: 'gpt-6.1-sol',
+        sonnet: 'gpt-6.1-sol',
+        haiku: 'gpt-6-luna',
+        subagent: 'gpt-6-luna',
       }),
     },
   },
@@ -203,8 +206,8 @@ export const STRATEGIES = [
     value: 'trial',
     name: 'Trial',
     selectionName: 'Trial',
-    description: 'Fable => DeepSeek V4.1 Trial, Haiku => Gemini 3.8 Flash Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Max Trial; fixed subagent => DeepSeek V4.1 Flash.',
-    selectionDescription: 'Fable => DeepSeek V4.1 Trial, Haiku => Gemini 3.8 Flash Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Max Trial; fixed subagent => DeepSeek V4.1 Flash.',
+    description: 'Fable => DeepSeek V4.1 Flash Trial, Haiku => GPT 6 Luna Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Flash Trial; fixed subagent => DeepSeek V4.1 Flash Trial.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Flash Trial, Haiku => GPT 6 Luna Trial, Sonnet => GLM 5.3 Flash Trial, Opus => Qwen 3.8 Flash Trial; fixed subagent => DeepSeek V4.1 Flash Trial.',
     requiredModels: TRIAL_MODELS,
     fixedSubagentModel: TRIAL_MODEL_MAP.subagent,
     environment: {
@@ -311,9 +314,6 @@ export function normalizeStrategyValue(strategyValue) {
   if (strategyValue === 'claude-gpt-5.4') {
     return 'claude-gpt';
   }
-  if (strategyValue === 'deepseek-v4' || strategyValue === 'claude-deepseek') {
-    return 'deepseek';
-  }
   return strategyValue;
 }
 
@@ -326,6 +326,8 @@ export function getServiceStrategies(serviceValue = DEFAULT_SERVICE) {
         return {
           ...strategy,
           ...(LLM_STRATEGY_OVERRIDES[strategy.value] ?? {}),
+          // Generic strategy-environment overrides stay disabled for compatibility.
+          // Claude Code's real launch path validates its separate subagent selection.
           allowSubagentOverride: false,
         };
       }
@@ -415,9 +417,11 @@ export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
   return [...models];
 }
 
-export function isSupportedClaudeCodeSubagentModel(model, serviceValue = DEFAULT_SERVICE) {
+export function isSupportedClaudeCodeSubagentModel(model, serviceValue = DEFAULT_SERVICE, strategyValue = null) {
   const normalized = String(model ?? '').trim();
-  return getClaudeCodeSubagentModels(serviceValue).includes(normalized);
+  const fixedModel = strategyValue ? findStrategy(strategyValue, serviceValue)?.fixedSubagentModel : null;
+  return getClaudeCodeSubagentModels(serviceValue).includes(normalized)
+    || Boolean(normalized && fixedModel === normalized);
 }
 
 export function allowsSubagentModelOverride(strategyValue, serviceValue = DEFAULT_SERVICE) {

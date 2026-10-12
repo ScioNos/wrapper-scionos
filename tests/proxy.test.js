@@ -4,7 +4,7 @@ import http from 'node:http';
 import zlib from 'node:zlib';
 import { createClaudeDesktopProxy } from '../src/apps/claude-desktop-proxy.js';
 import { DESKTOP_MAPPING_STRATEGIES, modelRoutesForDesktopMapping, modelRoutesForProxyStrategy } from '../src/apps/claude-desktop.js';
-import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
+import { createLongRunningLlmProxy, isAuthorized, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 
 const DESKTOP_GATEWAY_TOKEN = 'G'.repeat(43);
 
@@ -25,6 +25,17 @@ test('Claude Desktop proxy rejects configurable upstream endpoints', () => {
       { routeId: 'claude-collision', upstreamModel: 'model-b' },
     ],
   }), (error) => error.code === 'route_collision');
+});
+
+test('Claude Desktop proxy accepts an explicitly undefined targetBaseUrl option', () => {
+  const proxy = createClaudeDesktopProxy({
+    serviceValue: 'routerlab',
+    routerlabToken: 'upstream-token',
+    gatewayToken: DESKTOP_GATEWAY_TOKEN,
+    routes: modelRoutesForProxyStrategy('claude-gpt', 'routerlab'),
+    targetBaseUrl: undefined,
+  });
+  assert.equal(proxy.server.listening, false);
 });
 
 test('Claude Desktop proxy exposes mapped model list', async () => {
@@ -53,11 +64,11 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.data.some((model) => model.id === 'claude-opus-5-5'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-fable-5-1'), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-haiku-4-5'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-haiku-5-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-5.6-luna'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-6-luna'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3-flash' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-wen3.8-max'), true);
@@ -668,4 +679,78 @@ test('OpenCode OpenAI-compatible requests enforce the model allowlist and strip 
     await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
     await new Promise((resolve) => upstream.close(resolve));
   }
+});
+
+test('the generic proxy requires gateway authentication and loopback binding', async () => {
+  assert.throws(() => createLongRunningLlmProxy({
+    targetBaseUrl: 'https://api.routerlab.ch',
+    routerlabToken: 'upstream-token',
+    gatewayToken: '',
+  }), (error) => error.code === 'missing_gateway_token');
+  assert.equal(isAuthorized({ headers: {} }, ''), false);
+  assert.equal(isAuthorized({ headers: {} }, null), false);
+
+  await assert.rejects(() => startLongRunningLlmProxy({
+    host: '0.0.0.0',
+    targetBaseUrl: 'https://api.routerlab.ch',
+    routerlabToken: 'upstream-token',
+  }), /Invalid loopback host/);
+});
+
+test('the generic proxy rejects upstream paths outside its API allowlist', async () => {
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: 'https://api.routerlab.ch',
+    routerlabToken: 'upstream-token',
+  });
+  try {
+    const response = await fetch(proxy.baseUrl + '/v1/admin', {
+      headers: { authorization: 'Bearer ' + proxy.gatewayToken },
+    });
+    assert.equal(response.status, 404);
+    assert.equal((await response.json()).error.code, 'unsupported_upstream_path');
+  } finally {
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
+  }
+});
+
+test('the generic proxy applies an overall upstream timeout', async () => {
+  const upstream = http.createServer((_req, res) => {
+    setTimeout(() => {
+      res.writeHead(200);
+      res.end('late response');
+    }, 100);
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
+    routerlabToken: 'upstream-token',
+    upstreamTimeoutMs: 20,
+  });
+  try {
+    const response = await fetch(proxy.baseUrl + '/v1/models', {
+      headers: { authorization: 'Bearer ' + proxy.gatewayToken },
+    });
+    assert.equal(response.status, 504);
+    assert.equal((await response.json()).error.code, 'upstream_timeout');
+  } finally {
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('the generic proxy keeps a persistent server error listener after startup', async () => {
+  const proxy = await startLongRunningLlmProxy({
+    targetBaseUrl: 'https://api.routerlab.ch',
+    routerlabToken: 'upstream-token',
+  });
+  const messages = [];
+  const originalError = console.error;
+  console.error = (...args) => messages.push(args.map(String).join(' '));
+  try {
+    proxy.server.emit('error', new Error('synthetic server error'));
+  } finally {
+    console.error = originalError;
+    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
+  }
+  assert.match(messages.join('\n'), /synthetic server error/);
 });

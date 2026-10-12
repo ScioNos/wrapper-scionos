@@ -10,6 +10,9 @@ const WINDOWS_POWERSHELL_MODULE_PATHS = [
   'C:\\Program Files\\WindowsPowerShell\\Modules',
   'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\Modules',
 ];
+const WINDOWS_SYSTEM_ROOT_FALLBACK = 'C:\\Windows';
+let secretToolAvailabilityKnown = false;
+let secretToolAvailable = false;
 
 export function getSecureStorageBackend(backend = currentTokenBackend(), service = null) {
   return backend.status(service);
@@ -33,9 +36,7 @@ function runCommand(command, args, options = {}) {
 }
 
 function runPowerShell(command, options = {}) {
-  const powershell = process.env.SystemRoot
-    ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    : 'powershell.exe';
+  const powershell = resolveWindowsPowerShellPath(process.env.SystemRoot);
   const env = {
     ...process.env,
     PSModulePath: WINDOWS_POWERSHELL_MODULE_PATHS.join(';'),
@@ -56,6 +57,14 @@ function runPowerShell(command, options = {}) {
   return result.stdout.trim();
 }
 
+export function resolveWindowsPowerShellPath(value = process.env.SystemRoot) {
+  const candidate = String(value ?? '').trim().replace(/[\\/]+$/, '');
+  const systemRoot = /^C:\\Windows$/i.test(candidate)
+    ? candidate
+    : WINDOWS_SYSTEM_ROOT_FALLBACK;
+  return path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+}
+
 function getTokenFile(serviceValue, namespace = SECURE_STORAGE_SERVICE) {
   const service = requireServiceConfig(serviceValue);
   const overrideDir = process.env.WRAPPER_SCIONOS_TOKEN_DIR?.trim();
@@ -68,8 +77,9 @@ function getTokenFile(serviceValue, namespace = SECURE_STORAGE_SERVICE) {
 function hasNonEmptyFile(filePath, fileSystem = fs) {
   try {
     return fileSystem.statSync(filePath).size > 0;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
   }
 }
 
@@ -98,11 +108,10 @@ export function getStoredToken(serviceValue, { backend = currentTokenBackend() }
     return null;
   }
 
-  try {
-    return backend.get(service);
-  } catch {
-    return null;
-  }
+  // Backends represent a genuinely absent token as null. Propagate failures
+  // such as a missing keychain executable or DPAPI decryption errors so they
+  // cannot be mistaken for an empty store.
+  return backend.get(service);
 }
 
 function readWindowsTokenFile(tokenFile, {
@@ -124,12 +133,28 @@ function readWindowsTokenFile(tokenFile, {
 
 function readMacOSToken(account, namespace, runCommandFn = runCommand) {
   const result = runCommandFn('security', ['find-generic-password', '-a', account, '-s', namespace, '-w']);
-  return result.status === 0 ? result.stdout.trim() || null : null;
+  if (result.status === 0) return result.stdout.trim() || null;
+  if (result.status === 44) return null;
+  throw tokenBackendReadError('macOS Keychain', result);
 }
 
 function readLinuxSecretServiceToken(account, namespace, runCommandFn = runCommand) {
   const result = runCommandFn('secret-tool', ['lookup', 'service', namespace, 'account', account]);
-  return result.status === 0 ? result.stdout.trim() || null : null;
+  if (result.status === 0) return result.stdout.trim() || null;
+  if (result.status === 1
+    && (!String(result.stderr ?? '').trim()
+      || /(?:no such secret|secret not found|no matching secret)/i.test(String(result.stderr)))) {
+    return null;
+  }
+  throw tokenBackendReadError('Linux Secret Service', result);
+}
+
+function tokenBackendReadError(backend, result) {
+  const details = String(result.stderr || result.stdout || '').trim();
+  const error = new Error(`${backend} token read failed${details ? `: ${details}` : '.'}`);
+  error.code = 'token_backend_read_failed';
+  error.status = result.status;
+  return error;
 }
 
 export function deleteStoredToken(serviceValue, { backend = currentTokenBackend() } = {}) {
@@ -159,7 +184,11 @@ export function getTokenBackend(platform = process.platform) {
 }
 
 function hasSecretTool() {
-  return commandExists('secret-tool');
+  if (!secretToolAvailabilityKnown) {
+    secretToolAvailable = commandExists('secret-tool');
+    secretToolAvailabilityKnown = true;
+  }
+  return secretToolAvailable;
 }
 
 function linuxSecretServiceStatus() {
@@ -247,12 +276,12 @@ function storeWindowsToken(token, service, {
   tokenFileForService = getTokenFile,
 } = {}) {
   const tokenFile = tokenFileForService(service.value);
-  fileSystem.mkdirSync(path.dirname(tokenFile), { recursive: true });
+  fileSystem.mkdirSync(path.dirname(tokenFile), { recursive: true, mode: 0o700 });
   const encrypted = powerShellCommand(
     '$token = [Console]::In.ReadToEnd(); if ([string]::IsNullOrEmpty($token)) { throw "Token input is empty" }; $secure = ConvertTo-SecureString $token -AsPlainText -Force; ConvertFrom-SecureString $secure',
     { input: token },
   );
-  fileSystem.writeFileSync(tokenFile, encrypted, 'utf8');
+  fileSystem.writeFileSync(tokenFile, encrypted, { encoding: 'utf8', mode: 0o600 });
   if (!hasNonEmptyFile(tokenFile, fileSystem)) {
     throw new Error('Secure token file was created but no encrypted content was written.');
   }

@@ -194,8 +194,12 @@ export async function fetchModels(apiKey, options = {}) {
     if (response.ok) {
       let payload;
       try {
-        payload = await response.json();
-      } catch {
+        payload = await readBoundedModelResponse(response);
+      } catch (error) {
+        if (error?.code === 'ERR_MODEL_RESPONSE_TOO_LARGE') {
+          return { valid: false, reason: 'invalid_response', message: 'Model list response exceeds the local size limit' };
+        }
+        if (!(error instanceof SyntaxError)) throw error;
         return { valid: false, reason: 'invalid_response', message: 'Model list response is not valid JSON' };
       }
 
@@ -232,6 +236,40 @@ export async function fetchModels(apiKey, options = {}) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function readBoundedModelResponse(response) {
+  const reader = response.body?.getReader?.();
+  const chunks = [];
+  let size = 0;
+  const addChunk = (value) => {
+    const chunk = Buffer.from(value);
+    size += chunk.length;
+    if (size > MAX_MODEL_DISCOVERY_BYTES) {
+      const error = new Error('Model list response exceeds the local size limit');
+      error.code = 'ERR_MODEL_RESPONSE_TOO_LARGE';
+      throw error;
+    }
+    chunks.push(chunk);
+  };
+
+  if (reader) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        addChunk(value);
+      }
+    } catch (error) {
+      if (error?.code === 'ERR_MODEL_RESPONSE_TOO_LARGE') await reader.cancel().catch(() => {});
+      throw error;
+    }
+  } else if (response.body && typeof response.body[Symbol.asyncIterator] === 'function') {
+    for await (const chunk of response.body) addChunk(chunk);
+  } else if (response.body !== null) {
+    throw new SyntaxError('Model list response cannot be read as a bounded stream');
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
 export async function fetchModelsDirect(apiKey, options = {}) {

@@ -10,6 +10,7 @@ import {
   applyProxyClaudeDesktop,
   buildVerifiedClaudeDesktopRoutes,
   generateLocalProxyGatewayToken,
+  modelRoutesForProxyStrategy,
   readClaudeDesktopProxyCredential,
   readClaudeDesktopStatus,
   redactClaudeDesktopResult,
@@ -18,6 +19,7 @@ import {
 import { startClaudeDesktopProxy } from '../../apps/claude-desktop-proxy.js';
 import { print } from './output.js';
 import { translate } from '../i18n.js';
+import { resolveCliToken } from '../token-option.js';
 
 export async function handleClaudeDesktop(action, options) {
   if (action === 'status') {
@@ -35,8 +37,10 @@ export async function handleClaudeDesktop(action, options) {
   if (action === 'proxy') {
     return runClaudeDesktopProxy(options);
   }
-  const error = new Error('claude-desktop apply has been removed because direct profiles expose the RouterLab token. Use "claude-desktop apply-proxy --yes".');
-  error.code = 'direct_mode_removed';
+  const error = action === 'apply'
+    ? new Error('claude-desktop apply has been removed because direct profiles expose the RouterLab token. Use "claude-desktop apply-proxy --yes".')
+    : new Error(`Unknown Claude Desktop action "${action ?? ''}".`);
+  error.code = action === 'apply' ? 'direct_mode_removed' : 'unknown_claude_desktop_action';
   throw error;
 }
 
@@ -44,28 +48,31 @@ export async function applyClaudeDesktopProxyProfile(options, dependencies = opt
   const service = resolveValidatedDesktopService(options.service);
   const strategyValue = options.strategy ?? defaultDesktopStrategy(service.value);
   const strategyValues = resolveDesktopProxyStrategyValues(service.value, options);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
+  const gatewayToken = generateLocalProxyGatewayToken();
+  if (!options.yes) {
+    // Preview without prompting for a secret or contacting RouterLab.
+    const preview = applyProxyClaudeDesktop({
+      serviceValue: service.value,
+      strategyValue,
+      strategyValues,
+      routes: modelRoutesForProxyStrategy(strategyValue, service.value),
+      host: options.host,
+      port: options.port,
+      gatewayToken,
+      dryRun: true,
+    });
+    print({ ...redactClaudeDesktopResult(preview), routesVerified: false }, options);
+    return;
+  }
+
+  const resolveTokenFn = dependencies.resolveToken ?? resolveToken;
+  const token = resolveCliToken(options) ?? await resolveTokenFn({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
   const routes = await discoverVerifiedDesktopRoutes({
     service,
     strategyValue,
     strategyValues,
     token,
   }, dependencies);
-  const gatewayToken = generateLocalProxyGatewayToken();
-  if (!options.yes) {
-    const preview = applyProxyClaudeDesktop({
-      serviceValue: service.value,
-      strategyValue,
-      strategyValues,
-      routes,
-      host: options.host,
-      port: options.port,
-      gatewayToken,
-      dryRun: true,
-    });
-    print(redactClaudeDesktopResult(preview), options);
-    return;
-  }
 
   const startProxy = dependencies.startProxy ?? startClaudeDesktopProxy;
   const proxy = await startProxy({
@@ -132,7 +139,8 @@ export async function runClaudeDesktopProxy(options, dependencies = options.desk
   }
 
   const service = resolveValidatedDesktopService(config.serviceValue);
-  const token = options.token ?? await resolveToken({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
+  const resolveTokenFn = dependencies.resolveToken ?? resolveToken;
+  const token = resolveCliToken(options) ?? await resolveTokenFn({ serviceValue: service.value, noPrompt: options.noPrompt, language: options.language });
   const routes = await discoverVerifiedDesktopRoutes({
     service,
     strategyValue: config.strategyValue,

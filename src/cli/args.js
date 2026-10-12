@@ -9,9 +9,10 @@ export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--service'], value: '<routerlab|llm>', description: 'Select the RouterLab service.' },
   { flags: ['--lang', '--language'], value: '<en|fr|de>', description: 'Select the wrapper interface language.' },
   { flags: ['--strategy'], value: '<value>', description: 'Select a model-routing strategy.' },
-  { flags: ['--subagent-model'], value: '<id>', description: 'Select an LLM Claude Code subagent model.' },
-  { flags: ['--model'], value: '<value>', description: 'Select the initial Codex model.' },
-  { flags: ['--token'], value: '<value>', description: 'Override the service token for supported commands (not Claude Code; visible in shell history).' },
+  { flags: ['--subagent-model'], value: '<id>', description: 'Select a supported Claude Code subagent model.' },
+  { flags: ['--model'], value: '<value>', description: 'Select the initial Codex or OpenCode model.' },
+  { flags: ['--token'], value: '<value>', description: 'Override the service token for supported commands (not Claude Code). DEPRECATED: visible in process listings and shell history; prefer --token-stdin.' },
+  { flags: ['--token-stdin'], description: 'Read the service token from stdin (safer than --token).' },
   { flags: ['--host'], value: '<loopback>', description: 'Bind a local proxy to a loopback address.' },
   { flags: ['--port'], value: '<1-65535>', description: 'Select the Claude Desktop proxy port.' },
   { flags: ['--allow-origin'], value: '<origin>', description: 'Allow an exact CORS origin; repeatable.' },
@@ -36,7 +37,7 @@ export const OPTION_WITH_VALUE = new Set([
   '--service', '--lang', '--language', '--strategy', '--subagent-model', '--model', '--token', '--port', '--host', '--allow-origin',
 ]);
 
-const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--list-strategies']);
+const OPTION_WITHOUT_VALUE = new Set(['--no-prompt', '--yes', '-y', '--dry-run', '--json', '--help', '-h', '--version', '-v', '--list-strategies', '--token-stdin']);
 const REMOVED_OPTIONS = new Set(['--direct', '--proxy', '--transport']);
 
 export function isRecognizedWrapperOption(argument) {
@@ -61,6 +62,7 @@ export function parseOptions(argv) {
     help: false,
     version: false,
     token: null,
+    tokenFromStdin: false,
     host: '127.0.0.1',
     port: 15721,
     allowOrigins: [],
@@ -86,12 +88,17 @@ export function parseOptions(argv) {
       continue;
     }
 
-    const inline = arg.match(/^(--[^=]+)=(.*)$/);
+    const inline = arg.match(/^(-y|--[^=]+)=(.*)$/);
     const key = inline?.[1] ?? arg;
     const inlineValue = inline?.[2];
 
     if (REMOVED_OPTIONS.has(key)) {
-      throw new CliUsageError(`${key} has been removed. Codex now connects directly to RouterLab.`);
+      throw new CliUsageError(`${key} has been removed from Wrapper-ScioNos.`);
+    }
+
+    // Flags without a value must not silently swallow `=value`.
+    if (inline && OPTION_WITHOUT_VALUE.has(key)) {
+      throw new CliUsageError(`${key} does not take a value.`);
     }
 
     if (OPTION_WITH_VALUE.has(key)) {
@@ -109,7 +116,10 @@ export function parseOptions(argv) {
       if (key === '--strategy') options.strategy = value;
       if (key === '--subagent-model') options.subagentModel = value;
       if (key === '--model') options.model = value;
-      if (key === '--token') options.token = value;
+      if (key === '--token') {
+        options.token = value;
+        options.deprecations.push('token-inline');
+      }
       if (key === '--host') {
         if (!isLoopbackHost(value)) {
           throw new CliUsageError('--host must be a loopback address (127.0.0.1, localhost, or ::1).');
@@ -152,10 +162,17 @@ export function parseOptions(argv) {
       options.listStrategies = true;
       options.providedOptions.add('listStrategies');
       options.deprecations.push('--list-strategies');
+    } else if (arg === '--token-stdin') {
+      options.tokenFromStdin = true;
+      options.providedOptions.add('tokenFromStdin');
     } else {
       options.passthrough.push(arg);
       options.positionals.push(arg);
     }
+  }
+
+  if (options.tokenFromStdin && options.token) {
+    throw new CliUsageError('--token-stdin cannot be combined with --token.');
   }
 
   return options;
@@ -165,6 +182,12 @@ export function emitOptionDeprecations(options) {
   for (const option of new Set(options.deprecations ?? [])) {
     if (option === '--list-strategies') {
       warnDeprecationOnce('option:--list-strategies', '`--list-strategies` is deprecated; use `strategies`.');
+    }
+    if (option === 'token-inline') {
+      warnDeprecationOnce(
+        'option:--token-inline',
+        '`--token <value>` exposes the token in process listings and shell history; prefer `--token-stdin`.',
+      );
     }
   }
 }
@@ -191,6 +214,7 @@ function optionProperty(flag) {
     '--subagent-model': 'subagentModel',
     '--model': 'model',
     '--token': 'token',
+    '--token-stdin': 'tokenFromStdin',
     '--host': 'host',
     '--port': 'port',
     '--allow-origin': 'allowOrigins',

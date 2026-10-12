@@ -172,7 +172,22 @@ function isSemanticVersionSupported(version, minimum) {
   return true;
 }
 
+let defaultNpmGlobalBinPathResolved = false;
+let defaultNpmGlobalBinPath = null;
+
 export function getNpmGlobalBinPath(spawnSyncFn = spawnSync) {
+  if (spawnSyncFn === spawnSync && defaultNpmGlobalBinPathResolved) {
+    return defaultNpmGlobalBinPath;
+  }
+  const value = queryNpmGlobalBinPath(spawnSyncFn);
+  if (spawnSyncFn === spawnSync) {
+    defaultNpmGlobalBinPath = value;
+    defaultNpmGlobalBinPathResolved = true;
+  }
+  return value;
+}
+
+function queryNpmGlobalBinPath(spawnSyncFn) {
   try {
     const result = spawnSyncFn('npm', ['bin', '-g'], {
       encoding: 'utf8',
@@ -223,12 +238,6 @@ export function detectCodexCli({
   });
   detected.minimumVersion = MINIMUM_CODEX_VERSION;
   detected.versionSupported = detected.installed && isCodexVersionSupported(detected.version);
-  if (platform === 'win32' && detected.installed) {
-    return {
-      ...detected,
-      resolvedCliPath: detected.cliPath,
-    };
-  }
   return detected;
 }
 

@@ -34,8 +34,8 @@ const MODEL_FAMILY_LABELS = Object.freeze({
 const DEFAULT_NATIVE_STRATEGY_MODELS = [
   { role: 'fable', model: 'claude-fable-5-1' },
   { role: 'opus', model: 'claude-opus-5-5' },
-  { role: 'sonnet', model: 'claude-sonnet-5' },
-  { role: 'haiku', model: 'claude-haiku-4-5' },
+  { role: 'sonnet', model: 'claude-sonnet-5-5' },
+  { role: 'haiku', model: 'claude-haiku-5-5' },
 ];
 
 const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
@@ -46,6 +46,24 @@ const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
 };
 
 export const MODEL_ROUTE_METADATA = {
+  'gpt-6-astra': {
+    desktopRouteId: 'claude-6-astra',
+    label: 'gpt-6-astra',
+    codexModel: 'gpt-6-astra',
+    codexDisplayName: 'GPT 6 Astra',
+  },
+  'gpt-6.1-sol': {
+    desktopRouteId: 'claude-6.1-sol',
+    label: 'gpt-6.1-sol',
+    codexModel: 'gpt-6.1-sol',
+    codexDisplayName: 'GPT 6.1 Sol',
+  },
+  'gpt-6-luna': {
+    desktopRouteId: 'claude-6-luna',
+    label: 'gpt-6-luna',
+    codexModel: 'gpt-6-luna',
+    codexDisplayName: 'GPT 6 Luna',
+  },
   'claude-fable-5-1': {
     desktopRouteId: 'claude-fable-5-1',
     label: 'claude-fable-5-1',
@@ -65,6 +83,15 @@ export const MODEL_ROUTE_METADATA = {
   'claude-sonnet-5': {
     desktopRouteId: 'claude-sonnet-5',
     label: 'claude-sonnet-5',
+  },
+  'claude-sonnet-5-5': {
+    desktopRouteId: 'claude-sonnet-5-5',
+    label: 'claude-sonnet-5-5',
+  },
+  'claude-haiku-5-5': {
+    desktopRouteId: 'claude-haiku-5-5',
+    label: 'claude-haiku-5-5',
+    supports1m: true,
   },
   'claude-haiku-4-5-20251001': {
     desktopRouteId: 'claude-haiku-4-5',
@@ -106,13 +133,13 @@ export const MODEL_ROUTE_METADATA = {
     desktopRouteId: 'aws-claude-opus-4-8',
     label: 'aws-claude-opus-4-8',
   },
-  'aws-claude-sonnet-5': {
-    desktopRouteId: 'aws-claude-sonnet-5',
-    label: 'aws-claude-sonnet-5',
+  'aws-claude-sonnet-5-5': {
+    desktopRouteId: 'aws-claude-sonnet-5-5',
+    label: 'aws-claude-sonnet-5-5',
   },
-  'aws-claude-opus-5': {
-    desktopRouteId: 'aws-claude-opus-5',
-    label: 'aws-claude-opus-5',
+  'aws-claude-opus-5-5': {
+    desktopRouteId: 'aws-claude-opus-5-5',
+    label: 'aws-claude-opus-5-5',
   },
   'claude-gpt-5.5': {
     desktopRouteId: 'claude-5.5',
@@ -341,15 +368,20 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-fable-5',
   'claude-opus-5',
   'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
   'claude-sonnet-5',
   'claude-haiku-4-5',
   'claude-opus-4-8',
   'claude-sonnet-4-6',
-  'aws-claude-opus-5',
-  'aws-claude-sonnet-5',
+  'aws-claude-opus-5-5',
+  'aws-claude-sonnet-5-5',
   'aws-claude-haiku-4-5',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
+  'claude-6-astra',
+  'claude-6.1-sol',
+  'claude-6-luna',
   'claude-5.6-sol',
   'claude-5.6-terra',
   'claude-5.6-luna',
@@ -397,6 +429,9 @@ const CODEX_DISPLAY_NAMES = new Map([
   ['deepseek-v4-pro-0813', 'DeepSeek V4 Pro 0813'],
   ['minimax-m3', 'MiniMax M3'],
   ['deepseek-v4.1-trial', 'DeepSeek V4.1 Trial'],
+  ['deepseek-v4.1-flash-trial', 'DeepSeek V4.1 Flash Trial'],
+  ['gpt-6-luna-trial', 'GPT 6 Luna Trial'],
+  ['qwen3.8-flash-trial', 'Qwen 3.8 Flash Trial'],
   ['gemini-3.8-flash-trial', 'Gemini 3.8 Flash Trial'],
   ['glm-5.3-flash-trial', 'GLM 5.3 Flash Trial'],
   ['MiniMax-M3-trial', 'MiniMax M3 Trial'],
@@ -502,7 +537,7 @@ export function codexModelDisplayName(model) {
 }
 
 export function supportsOneMillionContext(model) {
-  const metadata = MODEL_ROUTE_METADATA[model.trim()];
+  const metadata = MODEL_ROUTE_METADATA[String(model ?? '').trim()];
   return metadata?.supports1m ?? true;
 }
 
@@ -533,7 +568,7 @@ export function sortDesktopRoutes(routes) {
 }
 
 export function isClaudeFamilyModel(model) {
-  const normalized = model.toLowerCase();
+  const normalized = String(model ?? '').toLowerCase();
   return normalized.startsWith('claude-fable-')
     || normalized.startsWith('claude-haiku-')
     || normalized.startsWith('claude-sonnet-')

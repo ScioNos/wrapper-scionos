@@ -13,9 +13,9 @@ import {
 import { detectCodexCli } from '../src/platform/detect.js';
 import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 
-const MODEL = 'gpt-5.6-sol';
-const CATALOG_MODELS = [MODEL, 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max'];
-const CATALOG_LABELS = ['GPT 5.6 Sol', 'GLM 5.3', 'GLM 5.3 Flash', 'Qwen 3.8 Max'];
+const MODEL = 'gpt-6.1-sol';
+const CATALOG_MODELS = [MODEL, 'deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
+const CATALOG_LABELS = ['GPT 6.1 Sol', 'DeepSeek V4.1 Flash Trial', 'GLM 5.3 Flash Trial', 'Qwen 3.8 Flash Trial', 'GPT 6 Luna Trial', 'MiniMax M3 Trial'];
 const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 
 test('installed Codex uses the temporary RouterLab catalog and direct Responses transport', {
@@ -43,12 +43,7 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
     const baseUrl = `http://127.0.0.1:${address.port}/v1`;
     catalog = writeCodexRuntimeModelCatalog({
       models: CATALOG_MODELS,
-      modelMetadata: [
-        { id: MODEL, displayName: CATALOG_LABELS[0] },
-        { id: 'glm-5.3', displayName: CATALOG_LABELS[1] },
-        { id: 'glm-5.3-flash', displayName: CATALOG_LABELS[2] },
-        { id: 'qwen3.8-max', displayName: CATALOG_LABELS[3] },
-      ],
+      modelMetadata: CATALOG_MODELS.map((id, index) => ({ id, displayName: CATALOG_LABELS[index] })),
       tmpDir: tempDir,
     });
     catalogPath = catalog.path;
@@ -100,7 +95,7 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
     assert.deepEqual(listedModels.data.map((entry) => entry.displayName), CATALOG_LABELS);
     assert.deepEqual(
       listedModels.data.map((entry) => entry.isDefault),
-      [true, false, false, false],
+      CATALOG_MODELS.map((model) => model === MODEL),
     );
     assert.equal(fs.existsSync(catalogPath), true);
 

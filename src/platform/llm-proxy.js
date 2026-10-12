@@ -6,10 +6,11 @@ import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
 import { DEFAULT_ANTHROPIC_VERSION } from '../routerlab/services.js';
 import { supportsOneMillionContext } from '../routerlab/strategy-models.js';
+import { normalizeLoopbackHost } from './loopback.js';
 
 export const DEFAULT_LLM_PROXY_HOST = '127.0.0.1';
-export const LEGACY_LLM_PROXY_GATEWAY_TOKEN = 'scionos-local';
 export const MAX_LLM_PROXY_REQUEST_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_UPSTREAM_TIMEOUT_MS = 120_000;
 
 export function generateLlmProxyGatewayToken() {
   return randomBytes(32).toString('base64url');
@@ -35,7 +36,12 @@ export function createLongRunningLlmProxy({
   upstreamAuth = 'both',
   beforeForward = null,
   allowedModels = null,
+  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
 }) {
+  // Never expose the token-forwarding proxy without a local gateway secret.
+  if (typeof gatewayToken !== 'string' || gatewayToken.length === 0) {
+    throw proxyError('A non-empty gateway token is required to start the local LLM proxy.', 500, 'missing_gateway_token');
+  }
   const effectiveAllowedModels = allowedModels ? new Set(allowedModels) : null;
   const server = http.createServer(async (req, res) => {
     try {
@@ -57,6 +63,7 @@ export function createLongRunningLlmProxy({
         routerlabToken,
         body: normalizedBodyText,
         upstreamAuth,
+        upstreamTimeoutMs,
       });
     } catch (error) {
       if (!res.headersSent) {
@@ -68,6 +75,9 @@ export function createLongRunningLlmProxy({
         res.destroy(error);
       }
     }
+  });
+  server.on('error', (error) => {
+    if (server.listening) console.error('Local LLM proxy server error:', error.message);
   });
 
   configureLongRunningHttpServer(server);
@@ -152,7 +162,8 @@ export async function startLongRunningLlmProxy({
   port = 0,
   ...options
 }) {
-  const listenHost = host === '[::1]' ? '::1' : host;
+  // The proxy forwards using the user's real RouterLab token; bind loopback only.
+  const listenHost = normalizeLoopbackHost(host ?? DEFAULT_LLM_PROXY_HOST);
   const displayHost = listenHost.includes(':') ? '[' + listenHost + ']' : listenHost;
   const gatewayToken = options.gatewayToken ?? generateLlmProxyGatewayToken();
   const { server } = createLongRunningLlmProxy({ ...options, gatewayToken });
@@ -199,23 +210,43 @@ export async function forwardLongRunningLlmRequest(req, res, {
   body,
   upstreamAuth = 'both',
   responseHeaders = {},
+  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
 }) {
   const upstreamUrl = buildUpstreamUrl(req, targetBaseUrl);
   const controller = new AbortController();
+  const timeoutMs = Number.isFinite(upstreamTimeoutMs) && upstreamTimeoutMs > 0
+    ? upstreamTimeoutMs
+    : DEFAULT_UPSTREAM_TIMEOUT_MS;
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  timeoutId.unref?.();
   const abort = () => controller.abort();
   req.once('aborted', abort);
   res.once('close', abort);
-  const upstream = await requestLongRunningHttp(upstreamUrl, {
-    method: req.method,
-    headers: forwardHeaders(req.headers, {
-      routerlabToken,
-      upstreamAuth,
-    }),
-    body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
-    signal: controller.signal,
-  });
-
-  await writeLongRunningHttpResponse(res, upstream, responseHeaders);
+  try {
+    const upstream = await requestLongRunningHttp(upstreamUrl, {
+      method: req.method,
+      headers: forwardHeaders(req.headers, {
+        routerlabToken,
+        upstreamAuth,
+      }),
+      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
+      signal: controller.signal,
+    });
+    await writeLongRunningHttpResponse(res, upstream, responseHeaders);
+  } catch (error) {
+    if (timedOut) {
+      throw proxyError(`Upstream request timed out after ${Math.round(timeoutMs / 1000)}s.`, 504, 'upstream_timeout');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    req.off('aborted', abort);
+    res.off('close', abort);
+  }
 }
 
 export function configureLongRunningHttpServer(server) {
@@ -227,6 +258,9 @@ export function configureLongRunningHttpServer(server) {
 
 export function buildUpstreamUrl(req, targetBaseUrl) {
   const requestUrl = new URL(req.url, 'http://127.0.0.1');
+  if (!isAllowedUpstreamPath(requestUrl.pathname)) {
+    throw proxyError('Unsupported upstream API path.', 404, 'unsupported_upstream_path');
+  }
   const base = new URL(targetBaseUrl);
   if (base.protocol !== 'http:' && base.protocol !== 'https:') {
     throw proxyError('Service base URL must use HTTP or HTTPS.', 500, 'invalid_service_base_url');
@@ -239,6 +273,15 @@ export function buildUpstreamUrl(req, targetBaseUrl) {
   base.pathname = (basePath || '') + deduplicatedRequestPath;
   base.search = requestUrl.search;
   return base;
+}
+
+function isAllowedUpstreamPath(pathname) {
+  return pathname === '/v1/models'
+    || pathname === '/v1/messages'
+    || pathname === '/v1/messages/count_tokens'
+    || /^\/v1\/messages\/batches(?:\/[A-Za-z0-9_-]+(?:\/(?:cancel|results))?)?$/.test(pathname)
+    || pathname === '/v1/chat/completions'
+    || pathname === '/v1/responses';
 }
 
 export function forwardHeaders(sourceHeaders, {
@@ -279,7 +322,7 @@ function connectionHeaderNames(value) {
 
 export function isAuthorized(req, gatewayToken) {
   if (!gatewayToken) {
-    return true;
+    return false;
   }
 
   const authorization = req.headers.authorization ?? '';
@@ -361,7 +404,6 @@ async function requestLongRunningHttp(url, { method, headers, body, signal }) {
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'http:' ? http : https;
     const upstreamReq = transport.request(url, { method, headers, signal }, resolve);
-    upstreamReq.setTimeout(0);
     upstreamReq.once('error', reject);
     upstreamReq.end(body);
   });

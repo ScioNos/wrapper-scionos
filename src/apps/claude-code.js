@@ -1,6 +1,6 @@
 import { password, Separator } from '@inquirer/prompts';
 import chalk from 'chalk';
-import { detectClaudeCode, MINIMUM_CLAUDE_CODE_VERSION } from '../platform/detect.js';
+import { detectClaudeCode, isClaudeCodeVersionSupported, MINIMUM_CLAUDE_CODE_VERSION } from '../platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/llm-proxy.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
@@ -9,6 +9,7 @@ import { assessStrategy, assessStrategyLaunch, findStrategy, getAuthorizedClaude
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { applyMenuControl, askSelect, formatBanner } from '../cli/menu.js';
 import { translate } from '../cli/i18n.js';
+import { mergeNoProxyValues } from '../platform/no-proxy.js';
 
 export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
   CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '0',
@@ -21,7 +22,7 @@ export function buildClaudeCodeEnvironment(token, service, strategyValue, option
   const fixedSubagentModel = findStrategy(strategyValue, service.value)?.fixedSubagentModel ?? null;
   if (
     requestedSubagentModel
-    && !isSupportedClaudeCodeSubagentModel(requestedSubagentModel, service.value)
+    && !isSupportedClaudeCodeSubagentModel(requestedSubagentModel, service.value, strategyValue)
   ) {
     throw new Error(`Subagent model "${requestedSubagentModel}" is not supported for ${service.label}.`);
   }
@@ -81,16 +82,6 @@ function isClaudeCodeRoutingEnvironmentKey(key) {
   return /^ANTHROPIC_(?:AWS|BEDROCK|FOUNDRY|VERTEX)_/.test(normalized)
     || /^ANTHROPIC_CUSTOM_MODEL_OPTION(?:_|$)/.test(normalized)
     || /^ANTHROPIC_DEFAULT_(?:FABLE|HAIKU|OPUS|SONNET)_MODEL(?:_|$)/.test(normalized);
-}
-
-function mergeNoProxyValues(environment, loopbackHost) {
-  const values = Object.entries(environment)
-    .filter(([key]) => key.toUpperCase() === 'NO_PROXY')
-    .flatMap(([, value]) => String(value ?? '').split(','))
-    .map((value) => value.trim())
-    .filter(Boolean);
-  values.push('127.0.0.1', 'localhost', '::1', loopbackHost);
-  return [...new Set(values.map((value) => value.toLowerCase()))].join(',');
 }
 
 export function selectTokenCandidate({
@@ -466,6 +457,12 @@ export async function launchClaudeCode(
       language,
     });
     if (selectedStrategy === null) return { kind: 'back' };
+    const strategy = findStrategy(selectedStrategy, service.value);
+    if (strategy?.minimumClaudeCodeVersion && !isClaudeCodeVersionSupported(claude.version, strategy.minimumClaudeCodeVersion)) {
+      const error = new Error(`Claude Code ${strategy.minimumClaudeCodeVersion} or newer is required for ${strategy.name}; detected ${claude.version ?? 'an unknown version'}. Run "claude update".`);
+      error.code = 'unsupported_claude_version';
+      throw error;
+    }
     selectedSubagentModel = await chooseSubagentModelFn({
       serviceValue: service.value,
       strategyValue: selectedStrategy,
@@ -518,7 +515,11 @@ export async function launchClaudeCode(
     throw error;
   } finally {
     if (proxy) {
-      await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
+      try {
+        await stopLongRunningLlmProxyFn(proxy, { graceMs: 2000 });
+      } catch (cleanupError) {
+        console.error('Failed to stop the local LLM proxy:', cleanupError.message);
+      }
     }
   }
 }

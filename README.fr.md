@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%5E22.13.0%20%7C%7C%20%3E%3D23.5.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Licence](https://img.shields.io/badge/licence-MIT-blue.svg)](./LICENSE)
 
-Un lanceur unique pour Claude Code, Claude Desktop, Codex CLI et OpenCode, routés via le service RouterLab sélectionné.
+Un lanceur unique pour cinq outils : Claude Code CLI, Claude Cowork, Claude Desktop, Codex CLI et OpenCode CLI, routés via le service RouterLab sélectionné.
 
 ## Pourquoi wrapper-scioNos ?
 
@@ -26,6 +26,7 @@ npx wrapper-scionos claude-code --service routerlab --strategy aws
 | --- | --- | --- |
 | Claude Code | Proxy loopback authentifié | Stratégie et sous-agent vérifié |
 | Claude Desktop | Proxy de mapping local et profil géré | Routes Desktop |
+| Claude Cowork | Via l’intégration Claude Desktop | Routes Desktop partagées |
 | Codex CLI | Endpoint Responses direct | Famille RouterLab puis catalogue natif `/model` |
 | OpenCode CLI | Proxy loopback OpenAI-compatible | Famille puis modèle exact |
 

@@ -1,4 +1,4 @@
-# wrapper-scionos
+# wrapper-scioNos
 
 [![npm-Version](https://img.shields.io/npm/v/wrapper-scionos?logo=npm&label=npm)](https://www.npmjs.com/package/wrapper-scionos)
 [![GitHub-Release](https://img.shields.io/github/v/release/ScioNos/wrapper-scionos?display_name=tag&sort=semver&label=release)](https://github.com/ScioNos/wrapper-scionos/releases)
@@ -7,7 +7,7 @@
 
 Ein gemeinsamer Launcher für Claude Code, Claude Desktop, Codex CLI und OpenCode — geroutet über den ausgewählten RouterLab-Dienst.
 
-## Warum wrapper-scionos?
+## Warum wrapper-scioNos?
 
 Behalten Sie Ihren bevorzugten Coding-Client und wählen Sie eine RouterLab-Modellfamilie für Ihre Arbeit. Der Wrapper verwaltet die Dienstauthentifizierung und das Routing; jeder native Client behält seine eigenen Werkzeuge und Sitzungen.
 
@@ -56,7 +56,7 @@ npm install -g wrapper-scionos
 wrapper-scionos --service routerlab
 ```
 
-Das installierte Paket stellt `wrapper-scionos` und `scionos` als gleichwertige Befehle bereit.
+Der Produktname lautet **wrapper-scioNos**. Das npm-Paket und der Hauptbefehl heißen `wrapper-scionos`; das installierte Paket stellt auch `scionos` als gleichwertigen Befehl bereit.
 
 Für `--service llm` zeigt der Wrapper einen neutralen Hinweis, weil der kostenlose Modellkatalog variieren kann:
 

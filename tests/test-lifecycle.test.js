@@ -27,17 +27,22 @@ test('recursive cleanup rejects the root and escaped paths and removes test chil
   await removeTestDirectory(root);
 });
 
-test('a redirected timed-out test process tree is killed and diagnostics survive', { timeout: 15000 }, async () => {
+test('a redirected timed-out test process tree is killed and diagnostics survive', { timeout: 20000 }, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-tree-'));
   const marker = path.join(root, 'grandchild.txt');
-  const childCode = `import fs from 'node:fs'; setInterval(() => fs.appendFileSync(${JSON.stringify(marker)}, 'x'), 20);`;
-  const parentCode = `import {spawn} from 'node:child_process'; spawn(process.execPath, ['--input-type=module','-e',${JSON.stringify(childCode)}], {stdio:'inherit'}); console.log('tree-started'); setInterval(()=>{},1000);`;
+  const childCode = `import fs from 'node:fs'; fs.appendFileSync(${JSON.stringify(marker)}, 'x'); console.log('tree-started'); setInterval(() => fs.appendFileSync(${JSON.stringify(marker)}, 'x'), 20);`;
+  const parentCode = `import {spawn} from 'node:child_process'; spawn(process.execPath, ['--input-type=module','-e',${JSON.stringify(childCode)}], {stdio:'inherit'}); setInterval(()=>{},1000);`;
   await withCleanup(async () => {
-    await assert.rejects(runTestProcess(process.execPath, ['--input-type=module', '-e', parentCode], { timeoutMs: 300 }), /timed out.*\nstdout:\ntree-started/);
+    await assert.rejects(runTestProcess(process.execPath, ['--input-type=module', '-e', parentCode], { timeoutMs: 300, readyText: 'tree-started' }), /timed out.*\nstdout:\ntree-started/);
     const size = fs.existsSync(marker) ? fs.statSync(marker).size : 0;
+    assert.ok(size > 0, 'The grandchild must have started writing before the timeout');
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(fs.existsSync(marker) ? fs.statSync(marker).size : 0, size, 'The grandchild must stop writing after tree cleanup');
   }, [() => removeTestDirectory(root)]);
+});
+
+test('a redirected process that never becomes ready has a bounded startup deadline', { timeout: 15000 }, async () => {
+  await assert.rejects(runTestProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { readyText: 'never-ready', startupTimeoutMs: 100 }), /startup timed out after 100ms/);
 });
 
 test('temporary cleanup rejects a junction or symlink pointing outside its intended parent', async () => {

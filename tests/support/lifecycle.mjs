@@ -61,20 +61,32 @@ export async function waitForTestChild(child, timeoutMs = 5000) {
   });
 }
 
-export async function runTestProcess(command, args, { timeoutMs = 45000, ...options } = {}) {
+export async function runTestProcess(command, args, { timeoutMs = 45000, readyText = null, startupTimeoutMs = 5000, ...options } = {}) {
   const child = spawnTestProcess(command, args, options);
   let stdout = '';
   let stderr = '';
-  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  let waitingForReady = readyText !== null;
+  let armTimeout;
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk;
+    if (waitingForReady && stdout.includes(readyText)) {
+      waitingForReady = false;
+      armTimeout(timeoutMs, false);
+    }
+  });
   child.stderr.on('data', (chunk) => { stderr += chunk; });
   let timer;
   return withCleanup(async () => {
     const result = await new Promise((resolve, reject) => {
       child.once('error', reject);
       child.once('close', (code, signal) => resolve({ code, signal }));
-      timer = setTimeout(() => {
-        reject(new Error(`Client test timed out after ${timeoutMs}ms.\nstdout:\n${stdout}\nstderr:\n${stderr}`));
-      }, timeoutMs);
+      armTimeout = (duration, startup) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          reject(new Error(`Client test ${startup ? 'startup ' : ''}timed out after ${duration}ms.\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+        }, duration);
+      };
+      armTimeout(waitingForReady ? startupTimeoutMs : timeoutMs, waitingForReady);
     });
     return { ...result, stdout, stderr, diagnostic: `exit=${result.code} signal=${result.signal ?? 'none'}\nstdout:\n${stdout}\nstderr:\n${stderr}` };
   }, [() => clearTimeout(timer), () => terminateChildTree(child), () => waitForTestChild(child)]);

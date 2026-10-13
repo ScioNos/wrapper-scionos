@@ -24,5 +24,8 @@ function run() {
       results.push({ api: 'SecKeychainFindGenericPassword', strings: strings, status: Number($.SecKeychainFindGenericPassword(null, serviceData.length, strings ? 'wrapper-scionos' : serviceData.bytes, accountData.length, strings ? account : accountData.bytes, null, null, Ref())) });
     } catch (_) { results.push({ api: 'SecKeychainFindGenericPassword', strings: strings, status: 'bridge-error' }); }
   });
+  try {
+    results.push({ api: 'SecKeychainFindGenericPassword', boxedNil: true, status: Number($.SecKeychainFindGenericPassword($(), serviceData.length, 'wrapper-scionos', accountData.length, account, null, null, Ref())) });
+  } catch (_) { results.push({ boxedNil: true, status: 'bridge-error' }); }
   return JSON.stringify(results);
 }

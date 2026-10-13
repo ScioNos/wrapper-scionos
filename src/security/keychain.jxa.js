@@ -16,9 +16,9 @@ function run() {
     var status;
     if (input.operation === 'store') {
       var password = $(input.token).dataUsingEncoding($.NSUTF8StringEncoding);
-      status = $.SecKeychainAddGenericPassword(null, service.length, input.namespace, account.length, input.account, password.length, password.bytes, null);
+      status = $.SecKeychainAddGenericPassword($(), service.length, input.namespace, account.length, input.account, password.length, password.bytes, null);
       if (status === -25299) {
-        status = $.SecKeychainFindGenericPassword(null, service.length, input.namespace, account.length, input.account, null, null, item);
+        status = $.SecKeychainFindGenericPassword($(), service.length, input.namespace, account.length, input.account, null, null, item);
         if (status === 0) {
           try {
             status = $.SecKeychainItemModifyAttributesAndData(item[0], null, password.length, password.bytes);
@@ -30,7 +30,7 @@ function run() {
     } else if (input.operation === 'get') {
       var length = Ref();
       var bytes = Ref();
-      status = $.SecKeychainFindGenericPassword(null, service.length, input.namespace, account.length, input.account, length, bytes, null);
+      status = $.SecKeychainFindGenericPassword($(), service.length, input.namespace, account.length, input.account, length, bytes, null);
       if (status === 0) {
         try {
           var data = $.NSData.dataWithBytesLength(bytes[0], length[0]);
@@ -40,7 +40,7 @@ function run() {
         }
       }
     } else if (input.operation === 'delete') {
-      status = $.SecKeychainFindGenericPassword(null, service.length, input.namespace, account.length, input.account, null, null, item);
+      status = $.SecKeychainFindGenericPassword($(), service.length, input.namespace, account.length, input.account, null, null, item);
       if (status === 0) {
         try {
           status = $.SecKeychainItemDelete(item[0]);

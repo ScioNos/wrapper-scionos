@@ -60,6 +60,9 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
       XDG_DATA_HOME: dataHome,
       XDG_CACHE_HOME: cacheHome,
       XDG_STATE_HOME: path.join(tempDir, 'state'),
+      // OpenCode 1's session creation consults PWD, even after spawn changes cwd.
+      PWD: tempDir,
+      INIT_CWD: tempDir,
       OPENCODE_DISABLE_AUTOUPDATE: '1',
       OPENCODE_DISABLE_PRUNE: '1',
       NO_COLOR: '1',

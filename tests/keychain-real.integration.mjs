@@ -10,7 +10,13 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
   const account = `wrapper-scionos-test-${randomUUID()}`;
   const oldAccount = `${account}-stdin-probe`;
   const service = { secureStorageAccount: account };
-  const backend = createMacOSTokenBackend();
+  const backend = createMacOSTokenBackend({ runCommandFn: (command, args, options) => {
+    const result = spawnSync(command, args, { ...options, encoding: 'utf8', killSignal: 'SIGKILL' });
+    if (result.status !== 0) {
+      t.diagnostic(`Keychain helper failure: operation=${JSON.parse(options.input).operation}, exit=${result.status}, signal=${result.signal ?? 'none'}, error=${result.error?.code ?? 'none'}`);
+    }
+    return result;
+  } });
   const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./support/keychain-probe.jxa.js', import.meta.url))], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
   t.diagnostic(`Native Keychain parameter probe: exit=${probe.status}, statuses=${probe.stdout?.trim() || 'unavailable'}`);
   await withCleanup(async () => {

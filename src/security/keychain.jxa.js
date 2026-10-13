@@ -1,6 +1,5 @@
 // Executed by macOS osascript, not Node. Secrets arrive only through stdin.
 ObjC.import('Foundation');
-ObjC.import('CoreFoundation');
 ObjC.import('Security');
 
 function run() {
@@ -20,11 +19,9 @@ function run() {
       if (status === -25299) {
         status = $.SecKeychainFindGenericPassword($(), service.length, input.namespace, account.length, input.account, null, null, item);
         if (status === 0) {
-          try {
-            status = $.SecKeychainItemModifyAttributesAndData(item[0], null, password.length, password.bytes);
-          } finally {
-            $.CFRelease(item[0]);
-          }
+          // JXA owns the bridged item object. The helper exits after this one
+          // operation; manually CFReleasing its wrapper can double-release it.
+          status = $.SecKeychainItemModifyAttributesAndData(item[0], null, password.length, password.bytes);
         }
       }
     } else if (input.operation === 'get') {
@@ -42,11 +39,7 @@ function run() {
     } else if (input.operation === 'delete') {
       status = $.SecKeychainFindGenericPassword($(), service.length, input.namespace, account.length, input.account, null, null, item);
       if (status === 0) {
-        try {
-          status = $.SecKeychainItemDelete(item[0]);
-        } finally {
-          $.CFRelease(item[0]);
-        }
+        status = $.SecKeychainItemDelete(item[0]);
       }
     } else {
       status = -50;

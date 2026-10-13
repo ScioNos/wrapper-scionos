@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - Updated English, French and German documentation for persistent Desktop/Cowork profiles, model selection, token storage/transmission, proxy settings, tested client versions and the difference between discovery and inference validation.
 - Removed unsubstantiated price/savings claims from current documentation and AWS selection labels.
 - Validated Windows/macOS/Linux CI: all 37 jobs passed across supported Node boundary versions and configured release lines, including minimum/recent OpenCode, real macOS Keychain and retained security/coverage assertions.
-- Added a release validation record, compatibility matrix and scoped factual claims for the future article. This preparation includes no npm package publication, tag, GitHub release or article.
+- Added a release validation record, compatibility matrix and scoped factual claims for the future article. Release references: [v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) and [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0). Desktop/Cowork application checks remain outside the validated scope.
 
 ## 7.2.0 - 2026-10-12
 

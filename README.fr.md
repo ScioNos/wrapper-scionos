@@ -18,6 +18,8 @@ npx wrapper-scionos claude-code --service routerlab --strategy aws
 
 **Version actuelle : `7.3.0`**
 
+[Notes de release v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0)
+
 [English](./README.md) · [Deutsch](./README.de.md) · [Journal des changements](./CHANGELOG.md)
 
 ## En bref

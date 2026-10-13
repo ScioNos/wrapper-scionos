@@ -1,6 +1,8 @@
 # Validation de wrapper-scioNos 7.3.0
 
-Préparation du 13 octobre 2026, à partir de `7.2.0`, commit `c2d64c77be5092fdd74e9d3246ac4b631cac8e45`. La version 7.3.0 est préparée et ses validations techniques sont réussies : [exécution GitHub Actions 38377724549](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), **37 jobs réussis, zéro échec**, sur le commit de code `df40a014447007171cf6b235a5aae7ddb12fa955`. La branche est `codex/release-7.3.0-validation`. Les ajouts ultérieurs consignent ces résultats dans la documentation. Aucun paquet npm, tag ou release GitHub n’a été publié et aucun article n’a été rédigé.
+Validation du 13 octobre 2026, à partir de `7.2.0`, commit `c2d64c77be5092fdd74e9d3246ac4b631cac8e45`. Les validations techniques de la version 7.3.0 sont réussies : [exécution GitHub Actions 38377724549](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), **37 jobs réussis, zéro échec**, sur le commit de code `df40a014447007171cf6b235a5aae7ddb12fa955`. La branche de validation est `codex/release-7.3.0-validation` ; le code testé est conservé pour la release, avec des ajouts de documentation. Aucun article n’a été rédigé.
+
+La publication 7.3.0 sur npm et GitHub a été autorisée le 13 octobre 2026. Références de version : [release GitHub v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0), [paquet npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0) et [branche principale](https://github.com/ScioNos/wrapper-scionos/tree/main).
 
 ## Corrections vérifiées
 
@@ -35,7 +37,7 @@ Environnement : Windows x64, Node 24.19.0 et exécutable officiel isolé Node 22
 | Test Keychain réel | Réussi sur les runners macOS, dont un job indépendant ; ignoré sur l’hôte Windows |
 | CI Windows/macOS/Linux | Réussie : 18 jobs généraux, 18 jobs OpenCode et un job Keychain indépendant |
 
-Les sorties détaillées et le récapitulatif `ci-7.3.0-results.json` sont conservés localement dans `.codex-tmp/` et exclus du paquet. L’archive finale est `.codex-tmp/wrapper-scionos-7.3.0.tgz`. Les diagnostics CI sont archivés pendant 14 jours. La validation distante a utilisé `gh`, le compte ScioNos et les runners standards du dépôt public ; aucune publication npm, de tag ou de release GitHub n’est autorisée à cette étape.
+Les sorties détaillées et le récapitulatif `ci-7.3.0-results.json` sont conservés localement dans `.codex-tmp/` et exclus du paquet. L’archive finale est `.codex-tmp/wrapper-scionos-7.3.0.tgz` ; elle accompagne la release GitHub et sert à la publication npm. Les diagnostics CI sont archivés pendant 14 jours. La validation et la release GitHub utilisent `gh` avec le compte ScioNos ; npm utilise le propriétaire `scionos`. Les runners de validation sont les runners standards du dépôt public.
 
 ## Résultats CI
 

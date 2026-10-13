@@ -1,3 +1,4 @@
+import { removeTestDirectory } from './support/lifecycle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -22,7 +23,7 @@ test('strategies command covers missing, invalid, and unavailable token/model pa
       if (previous[key] === undefined) delete process.env[key];
       else process.env[key] = previous[key];
     }
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    return removeTestDirectory(tempDir, process.cwd());
   });
 
   const originalLog = console.log;

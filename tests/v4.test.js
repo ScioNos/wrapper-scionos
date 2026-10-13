@@ -1,4 +1,5 @@
-import test from 'node:test';
+import { removeTestDirectory } from './support/lifecycle.mjs';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -28,6 +29,15 @@ import {
 } from '../src/apps/claude-desktop.js';
 import { buildUpstreamUrl, forwardHeaders, readRequestBody, startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 import { resetDeprecationWarningsForTests, warnDeprecationOnce } from '../src/cli/deprecations.js';
+
+const previousTokenDirectory = process.env.WRAPPER_SCIONOS_TOKEN_DIR;
+const isolatedTokenDirectory = fs.mkdtempSync(path.join(process.cwd(), '.test-v4-token-'));
+process.env.WRAPPER_SCIONOS_TOKEN_DIR = isolatedTokenDirectory;
+after(async () => {
+  if (previousTokenDirectory === undefined) delete process.env.WRAPPER_SCIONOS_TOKEN_DIR;
+  else process.env.WRAPPER_SCIONOS_TOKEN_DIR = previousTokenDirectory;
+  await removeTestDirectory(isolatedTokenDirectory, process.cwd());
+});
 
 const DESKTOP_TEST_TOKEN = 'T'.repeat(43);
 const desktopDiscovery = async (_token, { serviceValue }) => {
@@ -279,7 +289,7 @@ test('generated Desktop credentials are strong, readable only for loopback, and 
   const token = generateLocalProxyGatewayToken();
   assert.match(token, /^[A-Za-z0-9_-]{43}$/);
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-profile-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const profilePath = path.join(dir, 'profile.json');
   fs.writeFileSync(profilePath, JSON.stringify({
     inferenceGatewayApiKey: token,
@@ -358,7 +368,7 @@ test('request body decoding reports unsupported, corrupt, compressed, and decomp
 
 test('Claude Desktop profile metadata restores loopback URL, service, and strategies', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-meta-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
     threepConfigPath: path.join(dir, 'threep.json'),
@@ -455,16 +465,16 @@ test('Auth dry-run validates input and does not request a secret', async () => {
 
 test('CLI process exit codes distinguish success, usage, and runtime failures', (t) => {
   const root = path.resolve('index.js');
-  const success = spawnSync(process.execPath, [root, '--version'], { encoding: 'utf8' });
+  const success = spawnSync(process.execPath, [root, '--version'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
   if (success.error?.code === 'EPERM') {
     t.skip('The local coverage sandbox blocks child processes');
     return;
   }
   assert.equal(success.status, 0);
-  const usage = spawnSync(process.execPath, [root, '--json'], { encoding: 'utf8' });
+  const usage = spawnSync(process.execPath, [root, '--json'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
   assert.equal(usage.status, 2);
   assert.equal(JSON.parse(usage.stdout.trim()).error.code, 'invalid_usage');
-  const runtime = spawnSync(process.execPath, [root, 'codex', 'launch', '--no-prompt'], { encoding: 'utf8' });
+  const runtime = spawnSync(process.execPath, [root, 'codex', 'launch', '--no-prompt'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
   assert.equal(runtime.status, 1);
 });
 
@@ -741,7 +751,7 @@ test('global options can precede commands without consuming option values or pas
 
 test('Desktop proxy does not mutate a profile before token and port validation', async (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-transaction-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const envKeys = [
     'LOCALAPPDATA',
     'HOME',
@@ -808,7 +818,7 @@ test('Desktop proxy does not mutate a profile before token and port validation',
 
 test('Desktop command covers successful apply, stored-profile reuse, legacy replacement, and restore', async (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-command-success-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const envKeys = ['LOCALAPPDATA', 'HOME', 'XDG_CONFIG_HOME', 'WRAPPER_SCIONOS_TOKEN_DIR'];
   const previous = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   process.env.LOCALAPPDATA = path.join(dir, 'local');

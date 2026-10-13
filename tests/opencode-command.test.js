@@ -95,12 +95,25 @@ test('OpenCode rejects provider and model overrides before discovery', () => {
     ['--config=other.json'],
     ['--config-dir', 'other'],
     ['--config-content', '{}'],
+    ['--server', 'https://example.test'],
+    ['--attach=http://localhost:9999'],
+    ['serve'],
+    ['attach'],
   ]) {
     assert.throws(
       () => validateOpenCodeForwardedArgs(blocked),
       (error) => error.exitCode === 2 && /cannot be forwarded/.test(error.message),
     );
   }
+});
+
+test('OpenCode cleanup failures retain the original client failure', async () => {
+  const original = new Error('OpenCode startup failed');
+  const fixture = launchDependencies({ valid: true, models: ['gpt-5.6-sol'] }, {
+    launchOpenCode: async () => { throw original; },
+    stopLongRunningLlmProxy: async () => { throw new Error('proxy cleanup failed'); },
+  });
+  await assert.rejects(launchOpenCodeForService({ service: 'llm', model: 'gpt-5.6-sol', token: TOKEN, noPrompt: true }, fixture.dependencies), (error) => error === original && error.cleanupError.message === 'proxy cleanup failed');
 });
 
 test('OpenCode model selection never substitutes an unavailable explicit model', async () => {

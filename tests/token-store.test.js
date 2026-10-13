@@ -1,3 +1,4 @@
+import { removeTestDirectory } from './support/lifecycle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,7 +25,7 @@ function withTokenDirectory(t, prefix) {
   t.after(() => {
     if (previous === undefined) delete process.env.WRAPPER_SCIONOS_TOKEN_DIR;
     else process.env.WRAPPER_SCIONOS_TOKEN_DIR = previous;
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    return removeTestDirectory(tempDir, process.cwd());
   });
   return tempDir;
 }
@@ -161,7 +162,7 @@ test('public token storage APIs handle supported, unsupported, and failing backe
 
 test('Windows token backend covers encrypted storage, legacy fallback, and cleanup', (t) => {
   const tempDir = fs.mkdtempSync(path.join(process.cwd(), '.test-windows-token-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir, process.cwd()));
   const service = requireServiceConfig('routerlab');
   const tokenFileForService = (_serviceValue, namespace = SECURE_STORAGE_SERVICE) => (
     path.join(tempDir, namespace, service.secureStorageFileName)
@@ -220,18 +221,19 @@ test('macOS token backend covers Keychain success, fallback, deletion, and error
   const calls = [];
   const backend = createMacOSTokenBackend({
     runCommandFn: (_command, args, options = {}) => {
-      calls.push({ args, input: options.input });
-      const action = args[0];
-      const namespace = args[args.indexOf('-s') + 1];
-      if (action === 'add-generic-password') return { status: 0, stdout: '', stderr: '' };
-      if (action === 'find-generic-password') {
-        return namespace === 'claude-scionos'
-          ? { status: 0, stdout: ' legacy-keychain-token \n', stderr: '' }
-          : { status: 44, stdout: '', stderr: '' };
-      }
-      return namespace === 'claude-scionos'
-        ? { status: 0, stdout: '', stderr: '' }
-        : { status: 44, stdout: '', stderr: '' };
+      calls.push({ args, input: options.input, timeout: options.timeout });
+      const input = JSON.parse(options.input);
+      assert.equal(args.some((arg) => arg.includes('keychain-token')), false);
+      let payload;
+      if (input.operation === 'store') payload = { status: 0 };
+      else if (input.operation === 'get') {
+        payload = calls.length === 2
+          ? { status: 0, token: 'keychain-token' }
+          : input.namespace === 'claude-scionos'
+            ? { status: 0, token: 'legacy-keychain-token' }
+            : { status: -25300 };
+      } else payload = { status: input.namespace === 'claude-scionos' ? 0 : -25300 };
+      return { status: 0, stdout: JSON.stringify(payload), stderr: '' };
     },
   });
 
@@ -239,14 +241,27 @@ test('macOS token backend covers Keychain success, fallback, deletion, and error
   backend.store('keychain-token', service);
   assert.equal(backend.get(service), 'legacy-keychain-token');
   assert.equal(backend.delete(service), true);
-  assert.equal(calls[0].input, 'keychain-token');
+  assert.equal(JSON.parse(calls[0].input).token, 'keychain-token');
+  assert.equal(calls[0].timeout, 15000);
 
   const failing = createMacOSTokenBackend({
     runCommandFn: () => ({ status: 1, stdout: '', stderr: 'Keychain denied\n' }),
   });
-  assert.throws(() => failing.store('token', service), /Keychain denied/);
-  assert.throws(() => failing.get(service), /Keychain denied/);
-  assert.equal(failing.delete(service), false);
+  assert.throws(() => failing.store('token', service), /Keychain store failed/);
+  assert.throws(() => failing.get(service), /Keychain get failed/);
+  assert.throws(() => failing.delete(service), /Keychain delete failed/);
+});
+
+test('Keychain write verification and malformed helper responses fail without revealing secrets', () => {
+  const service = requireServiceConfig('llm');
+  const backend = createMacOSTokenBackend({ runCommandFn: (_cmd, _args, options) => ({ status: 0, stdout: JSON.stringify(JSON.parse(options.input).operation === 'store' ? { status: 0 } : { status: 0, token: 'wrong-secret' }) }) });
+  assert.throws(() => backend.store('secret-must-not-appear', service), /value-mismatch/);
+  for (const result of [{ status: 0, stdout: 'secret-must-not-appear' }, { status: 1, stderr: 'secret-must-not-appear' }, { status: 0, stdout: JSON.stringify({ status: -25293 }) }]) {
+    const failing = createMacOSTokenBackend({ runCommandFn: () => result });
+    assert.throws(() => failing.store('secret-must-not-appear', service), (error) => !error.message.includes('secret-must-not-appear') && /Keychain/.test(error.message));
+  }
+  const timeout = createMacOSTokenBackend({ runCommandFn: () => { throw Object.assign(new Error('secret'), { code: 'ETIMEDOUT' }); } });
+  assert.throws(() => timeout.get(service), /timeout/);
 });
 
 test('Linux Secret Service backend verifies writes and migrates legacy plaintext only after success', (t) => {

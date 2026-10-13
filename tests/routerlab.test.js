@@ -385,7 +385,7 @@ test('service strategy lists stay scoped', () => {
 
 test('Claude Code strategy choices match guided launcher labels and readiness', () => {
   const choices = getStrategyChoices([], 'routerlab');
-  assert.equal(choices.find((choice) => choice.value === 'aws').name, '💸 Claude via AWS (-40%)');
+  assert.equal(choices.find((choice) => choice.value === 'aws').name, '☁️ Claude via AWS');
   assert.equal(choices.some((choice) => choice.value === 'glm-5.2'), false);
   assert.equal(choices.find((choice) => choice.value === 'open-source').name, 'Open Source');
   assert.throws(() => getStrategyEnvironment('kimi-k2.7-code', 'routerlab'), /Unknown strategy/);

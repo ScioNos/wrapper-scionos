@@ -713,7 +713,7 @@ test('the generic proxy rejects upstream paths outside its API allowlist', async
   }
 });
 
-test('the generic proxy applies an overall upstream timeout', async () => {
+test('the generic proxy bounds the wait for the first response', async () => {
   const upstream = http.createServer((_req, res) => {
     setTimeout(() => {
       res.writeHead(200);
@@ -724,14 +724,14 @@ test('the generic proxy applies an overall upstream timeout', async () => {
   const proxy = await startLongRunningLlmProxy({
     targetBaseUrl: 'http://127.0.0.1:' + upstream.address().port,
     routerlabToken: 'upstream-token',
-    upstreamTimeoutMs: 20,
+    firstResponseTimeoutMs: 20,
   });
   try {
     const response = await fetch(proxy.baseUrl + '/v1/models', {
       headers: { authorization: 'Bearer ' + proxy.gatewayToken },
     });
     assert.equal(response.status, 504);
-    assert.equal((await response.json()).error.code, 'upstream_timeout');
+    assert.equal((await response.json()).error.code, 'upstream_first_response_timeout');
   } finally {
     await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
     await new Promise((resolve) => upstream.close(resolve));

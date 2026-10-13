@@ -126,6 +126,7 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
   }
 
   let proxy = null;
+  let launchError = null;
   try {
     proxy = await deps.startLongRunningLlmProxy({
       targetBaseUrl: service.baseUrl,
@@ -157,9 +158,15 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
       env,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
     });
+  } catch (error) {
+    launchError = error;
+    throw error;
   } finally {
     if (proxy) {
-      await deps.stopLongRunningLlmProxy(proxy, { graceMs: 2000 });
+      try { await deps.stopLongRunningLlmProxy(proxy, { graceMs: 2000 }); } catch (error) {
+        if (launchError) launchError.cleanupError = error;
+        else throw error;
+      }
     }
   }
 }
@@ -264,12 +271,14 @@ export function validateOpenCodeForwardedArgs(forwarded = []) {
     '--config',
     '--config-dir',
     '--config-content',
+    '--server',
+    '--attach',
   ]);
   for (const argument of forwarded) {
     const value = String(argument);
     const option = value.match(/^(--[^=]+)=/)?.[1] ?? value;
     const attachedShortModel = value.startsWith('-m') && value.length > 2;
-    if (blocked.has(option) || attachedShortModel) {
+    if (blocked.has(option) || attachedShortModel || (argument === forwarded[0] && ['attach', 'serve', 'service', 'web'].includes(value))) {
       const blockedOption = attachedShortModel ? '-m' : option;
       throw new CliUsageError(
         `${blockedOption} cannot be forwarded to OpenCode because RouterLab controls the provider and model selection. Use the wrapper --model option.`,

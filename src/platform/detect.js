@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildInteractiveCliInvocation } from './process.js';
+import { removeTemporaryDirectorySync } from './temp-directory.js';
 
 export function detectOS({
   platform = os.platform(),
@@ -279,6 +280,7 @@ export function detectOpenCodeCli({
     OPENCODE_DISABLE_AUTOUPDATE: '1',
   };
   let detected;
+  let detectionError = null;
   try {
     detected = detectCliFn({
       command: 'opencode',
@@ -286,12 +288,20 @@ export function detectOpenCodeCli({
       preferWindowsShim: true,
       env: isolatedEnv,
     });
+  } catch (error) {
+    detectionError = error;
+    throw error;
   } finally {
-    fs.rmSync(detectionRoot, { recursive: true, force: true });
+    try { removeTemporaryDirectorySync(detectionRoot, os.tmpdir()); } catch (error) {
+      if (detectionError) detectionError.cleanupError = error;
+      else throw error;
+    }
   }
   return {
     ...detected,
-    versionSupported: detected.installed,
+    versionSupported: detected.installed && isSemanticVersionSupported(detected.version, '1.18.30'),
+    minimumVersion: '1.18.30',
+    versionDiagnostic: 'OpenCode 2 uses a private --standalone server so the per-launch proxy configuration reaches inference; a shared service may ignore it or conflict on its port.',
   };
 }
 

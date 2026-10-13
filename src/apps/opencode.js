@@ -21,6 +21,9 @@ export function assertOpenCodeCliAvailable() {
   if (!openCode.installed) {
     throw new Error('OpenCode CLI not found. Install it with "npm install -g opencode-ai" first.');
   }
+  if (!openCode.versionSupported) {
+    throw new Error(`Unsupported OpenCode version ${openCode.version ?? 'unknown'}; use a validated client (1.18.30 or 2.0.27). ${openCode.versionDiagnostic ?? ''}`);
+  }
   return openCode;
 }
 
@@ -31,10 +34,22 @@ export function launchOpenCode({
   updateProcessExitCode = true,
 } = {}) {
   const resolvedOpenCode = openCode ?? assertOpenCodeCliAvailable();
-  return runInteractiveCli(resolvedOpenCode.cliPath, openCodeArgs, {
+  return runInteractiveCli(resolvedOpenCode.cliPath, buildOpenCodeRuntimeArgs(openCodeArgs, resolvedOpenCode.version), {
     env,
     updateProcessExitCode,
   });
+}
+
+export function buildOpenCodeRuntimeArgs(args = [], version = '') {
+  const major = Number(String(version).match(/(?:^|\s)v?(\d+)\./)?.[1]);
+  // v2's background service cannot own this launch's ephemeral gateway/env.
+  // A native private server retains sessions, tools, MCP, and permission policy.
+  if (major === 2 && !args.includes('--standalone')) {
+    const runIndex = args.indexOf('run');
+    if (runIndex >= 0) return [...args.slice(0, runIndex + 1), '--standalone', ...args.slice(runIndex + 1)];
+    return ['--standalone', ...args];
+  }
+  return [...args];
 }
 
 export function getOpenCodeAuthorizedModels(serviceValue = 'routerlab') {

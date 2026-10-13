@@ -4,10 +4,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { buildOpenCodeEnvironment } from '../src/apps/opencode.js';
-import { detectOpenCodeCli } from '../src/platform/detect.js';
-import { buildInteractiveCliInvocation } from '../src/platform/process.js';
+import { runTestProcess, withCleanup, removeTestDirectory, closeTestServer } from './support/lifecycle.mjs';
+import { buildOpenCodeEnvironment, buildOpenCodeRuntimeArgs } from '../src/apps/opencode.js';
+import { detectOpenCodeCli, detectCli } from '../src/platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 
 const MODEL = 'gpt-6-astra';
@@ -15,7 +14,8 @@ const ROUTERLAB_TOKEN = 'real-routerlab-token-with-enough-length';
 const LOCAL_GATEWAY_TOKEN = 'local-opencode-gateway-token-with-enough-length';
 
 test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { timeout: 60000 }, async (t) => {
-  const openCode = detectOpenCodeCli();
+  const requestedCli = process.env.SCIONOS_TEST_OPENCODE_CLI;
+  const openCode = detectOpenCodeCli(requestedCli ? { detectCliFn: (options) => detectCli({ ...options, candidates: [requestedCli], command: requestedCli }) } : {});
   assert.equal(openCode.installed, true, 'OpenCode CLI must be installed for the real integration check');
   assert.equal(openCode.versionSupported, true, `Unsupported OpenCode CLI version: ${openCode.version ?? 'unknown'}`);
   t.diagnostic(`Validating ${openCode.version}`);
@@ -31,8 +31,10 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
   let upstream = null;
   let proxy = null;
   const requests = [];
-  try {
-    upstream = createChatCompletionsServer(requests);
+  const toolPath = path.join(tempDir, 'tool-fixture.txt');
+  fs.writeFileSync(toolPath, 'opencode-tool-fixture-ok');
+  await withCleanup(async () => {
+    upstream = createChatCompletionsServer(requests, toolPath);
     await listenOnLoopback(upstream);
     proxy = await startLongRunningLlmProxy({
       targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
@@ -57,18 +59,21 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
       XDG_CONFIG_HOME: configHome,
       XDG_DATA_HOME: dataHome,
       XDG_CACHE_HOME: cacheHome,
+      XDG_STATE_HOME: path.join(tempDir, 'state'),
       OPENCODE_DISABLE_AUTOUPDATE: '1',
       OPENCODE_DISABLE_PRUNE: '1',
       NO_COLOR: '1',
     };
 
-    const result = await runOpenCode(openCode.cliPath, [
+    const result = await runTestProcess(openCode.cliPath, buildOpenCodeRuntimeArgs([
+      '--print-logs', '--log-level', openCode.version?.includes('2.0.') ? 'debug' : 'DEBUG',
       'run',
       '--format',
       'json',
-      'Reply with exactly opencode-smoke-ok and do not call tools.',
-    ], env, tempDir);
+      'Read tool-fixture.txt once with the read tool, then reply with exactly opencode-smoke-ok.',
+    ], openCode.version), { env, cwd: tempDir });
 
+    t.diagnostic(`Requests captured: ${JSON.stringify(requests.map(({ url, body }) => ({ url, model: body?.model, stream: body?.stream, tools: body?.tools?.map((tool) => tool.function?.name) })))}`);
     assert.equal(result.code, 0, result.diagnostic);
     assert.match(result.stdout, /opencode-smoke-ok/, result.diagnostic);
     assert.ok(requests.length >= 1, result.diagnostic);
@@ -77,14 +82,14 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
     assert.ok(requests.every((request) => request.body.model === MODEL));
     assert.equal(env.OPENCODE_CONFIG_CONTENT.includes('hostile'), false);
     assert.equal(env.OPENCODE_CONFIG_CONTENT.includes('hostile-routerlab-token'), false);
-  } finally {
-    await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
-    await closeServer(upstream);
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
+    assert.equal(env.OPENCODE_CONFIG_CONTENT.includes(ROUTERLAB_TOKEN), false);
+    assert.equal(Object.values(env).includes(ROUTERLAB_TOKEN), false);
+    assert.ok(requests.some(({ body }) => body.stream === true));
+    assert.ok(requests.some(({ body }) => body.messages?.some((message) => message.role === 'tool' && JSON.stringify(message.content).includes('opencode-tool-fixture-ok'))), 'The real read tool must return the fixture to the model');
+  }, [() => stopLongRunningLlmProxy(proxy, { graceMs: 0 }), () => closeTestServer(upstream), () => removeTestDirectory(tempDir)]);
 });
 
-function createChatCompletionsServer(requests) {
+function createChatCompletionsServer(requests, toolPath) {
   return http.createServer((req, res) => {
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
@@ -107,6 +112,17 @@ function createChatCompletionsServer(requests) {
         authorization: req.headers.authorization ?? null,
         body,
       });
+      const readTool = body.tools?.find((tool) => tool.function?.name === 'read');
+      const toolReturned = body.messages?.some((message) => message.role === 'tool');
+      if (readTool && !toolReturned && body.stream) {
+        const properties = readTool.function.parameters?.properties ?? {};
+        const key = ['filePath', 'path', 'file_path'].find((candidate) => candidate in properties) ?? 'filePath';
+        res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'close' });
+        res.write(`data: ${JSON.stringify({ id: 'chatcmpl_tool', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'call_read_fixture', type: 'function', function: { name: 'read', arguments: JSON.stringify({ [key]: toolPath }) } }] }, finish_reason: null }] })}\n\n`);
+        res.write(`data: ${JSON.stringify({ id: 'chatcmpl_tool', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] })}\n\n`);
+        res.end('data: [DONE]\n\n');
+        return;
+      }
       if (body.stream) {
         res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'close' });
         res.write(`data: ${JSON.stringify({
@@ -142,47 +158,6 @@ function listenOnLoopback(server) {
     server.listen(0, '127.0.0.1', () => {
       server.off('error', reject);
       resolve();
-    });
-  });
-}
-
-async function closeServer(server) {
-  if (!server?.listening) return;
-  server.closeAllConnections?.();
-  await new Promise((resolve) => server.close(resolve));
-}
-
-function runOpenCode(command, args, env, cwd) {
-  const invocation = buildInteractiveCliInvocation(command, args);
-  return new Promise((resolve, reject) => {
-    const child = spawn(invocation.command, invocation.args, {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      ...(invocation.spawnOptions ?? {}),
-    });
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error(`Real OpenCode integration timed out.\nstdout:\n${stdout}\nstderr:\n${stderr}`));
-    }, 45000);
-    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
-    child.once('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.once('exit', (code, signal) => {
-      clearTimeout(timer);
-      resolve({
-        code,
-        signal,
-        stdout,
-        stderr,
-        diagnostic: `exit=${code} signal=${signal ?? 'none'}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
-      });
     });
   });
 }

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { detectCodexCli, MINIMUM_CODEX_VERSION } from '../platform/detect.js';
 import { runInteractiveCli } from '../platform/process.js';
+import { removeTemporaryDirectorySync } from '../platform/temp-directory.js';
 import { codexModelDisplayName } from '../routerlab/strategy-models.js';
 import { OPENAI_GPT_MODELS, TRIAL_MODELS } from '../routerlab/strategies.js';
 
@@ -260,7 +261,7 @@ export function writeCodexRuntimeModelCatalog({
     );
   } catch (error) {
     try {
-      fs.rmSync(catalogDir, { recursive: true, force: true });
+      removeTemporaryDirectorySync(catalogDir, tmpDir);
     } catch (cleanupError) {
       error.cleanupError = cleanupError;
     }

@@ -11,6 +11,24 @@ import { normalizeLoopbackHost } from './loopback.js';
 export const DEFAULT_LLM_PROXY_HOST = '127.0.0.1';
 export const MAX_LLM_PROXY_REQUEST_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_UPSTREAM_TIMEOUT_MS = 120_000;
+export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 120_000;
+
+// Upstream response budgets are independent of the inbound HTTP server limits.
+export function resolveProxyTimeouts(options = {}, env = process.env) {
+  const read = (option, variable, fallback, allowZero = false) => {
+    const value = options[option] ?? env[variable] ?? fallback;
+    const number = Number(value);
+    if (!Number.isSafeInteger(number) || number < (allowZero ? 0 : 1) || number > 2_147_483_647) {
+      throw proxyError(`${variable} must be an integer in milliseconds ${allowZero ? '>= 0' : '> 0'} (maximum 2147483647).`, 500, 'invalid_proxy_timeout');
+    }
+    return number;
+  };
+  return {
+    firstResponseTimeoutMs: read('firstResponseTimeoutMs', 'WRAPPER_SCIONOS_PROXY_FIRST_RESPONSE_TIMEOUT_MS', options.upstreamTimeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS),
+    streamIdleTimeoutMs: read('streamIdleTimeoutMs', 'WRAPPER_SCIONOS_PROXY_STREAM_IDLE_TIMEOUT_MS', DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+    streamTotalTimeoutMs: read('streamTotalTimeoutMs', 'WRAPPER_SCIONOS_PROXY_STREAM_TOTAL_TIMEOUT_MS', 0, true),
+  };
+}
 
 export function generateLlmProxyGatewayToken() {
   return randomBytes(32).toString('base64url');
@@ -36,13 +54,14 @@ export function createLongRunningLlmProxy({
   upstreamAuth = 'both',
   beforeForward = null,
   allowedModels = null,
-  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
+  ...timeoutOptions
 }) {
   // Never expose the token-forwarding proxy without a local gateway secret.
   if (typeof gatewayToken !== 'string' || gatewayToken.length === 0) {
     throw proxyError('A non-empty gateway token is required to start the local LLM proxy.', 500, 'missing_gateway_token');
   }
   const effectiveAllowedModels = allowedModels ? new Set(allowedModels) : null;
+  const timeouts = resolveProxyTimeouts(timeoutOptions);
   const server = http.createServer(async (req, res) => {
     try {
       const handled = await beforeForward?.(req, res);
@@ -63,10 +82,10 @@ export function createLongRunningLlmProxy({
         routerlabToken,
         body: normalizedBodyText,
         upstreamAuth,
-        upstreamTimeoutMs,
+        ...timeouts,
       });
     } catch (error) {
-      if (!res.headersSent) {
+      if (!res.headersSent && !res.destroyed) {
         const payload = typeof error.toResponse === 'function'
           ? error.toResponse()
           : { error: { message: error.message, type: error.type ?? 'local_proxy_error', code: error.code ?? null } };
@@ -210,24 +229,42 @@ export async function forwardLongRunningLlmRequest(req, res, {
   body,
   upstreamAuth = 'both',
   responseHeaders = {},
-  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
+  ...timeoutOptions
 }) {
   const upstreamUrl = buildUpstreamUrl(req, targetBaseUrl);
   const controller = new AbortController();
-  const timeoutMs = Number.isFinite(upstreamTimeoutMs) && upstreamTimeoutMs > 0
-    ? upstreamTimeoutMs
-    : DEFAULT_UPSTREAM_TIMEOUT_MS;
-  let timedOut = false;
-  const timeoutId = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  timeoutId.unref?.();
+  const { firstResponseTimeoutMs, streamIdleTimeoutMs, streamTotalTimeoutMs } = resolveProxyTimeouts(timeoutOptions);
+  let timeoutError = null;
+  let firstTimer = null;
+  let idleTimer = null;
+  let totalTimer = null;
+  let upstream = null;
+  const deadline = (ms, code, label) => {
+    const timer = setTimeout(() => {
+      timeoutError = proxyError(`${label} timed out after ${ms}ms.`, 504, code);
+      controller.abort(timeoutError);
+    }, ms);
+    timer.unref?.();
+    return timer;
+  };
+  firstTimer = deadline(firstResponseTimeoutMs, 'upstream_first_response_timeout', 'Upstream first response');
+  const receivedChunk = () => {
+    if (firstTimer) {
+      clearTimeout(firstTimer);
+      firstTimer = null;
+      if (streamTotalTimeoutMs > 0) {
+        totalTimer = deadline(streamTotalTimeoutMs, 'upstream_total_timeout', 'Upstream stream duration');
+      }
+    }
+    clearTimeout(idleTimer);
+    idleTimer = deadline(streamIdleTimeoutMs, 'upstream_idle_timeout', 'Upstream stream inactivity');
+  };
   const abort = () => controller.abort();
   req.once('aborted', abort);
   res.once('close', abort);
   try {
-    const upstream = await requestLongRunningHttp(upstreamUrl, {
+    if (req.aborted || res.destroyed) controller.abort();
+    upstream = await requestLongRunningHttp(upstreamUrl, {
       method: req.method,
       headers: forwardHeaders(req.headers, {
         routerlabToken,
@@ -236,14 +273,17 @@ export async function forwardLongRunningLlmRequest(req, res, {
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
       signal: controller.signal,
     });
+    upstream.on('data', receivedChunk);
     await writeLongRunningHttpResponse(res, upstream, responseHeaders);
   } catch (error) {
-    if (timedOut) {
-      throw proxyError(`Upstream request timed out after ${Math.round(timeoutMs / 1000)}s.`, 504, 'upstream_timeout');
-    }
+    if (timeoutError) throw timeoutError;
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    clearTimeout(firstTimer);
+    clearTimeout(idleTimer);
+    clearTimeout(totalTimer);
+    upstream?.off('data', receivedChunk);
+    if (upstream && !upstream.complete) upstream.destroy();
     req.off('aborted', abort);
     res.off('close', abort);
   }
@@ -422,10 +462,6 @@ async function writeLongRunningHttpResponse(res, upstream, extraHeaders = {}) {
   res.writeHead(upstream.statusCode ?? 502, { ...responseHeaders, ...extraHeaders });
   try {
     await pipeline(upstream, res);
-  } catch (error) {
-    if (!res.destroyed) {
-      res.destroy(error);
-    }
   } finally {
     if (!res.destroyed && !res.writableEnded) {
       res.end();

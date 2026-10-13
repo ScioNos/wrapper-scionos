@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildInteractiveCliInvocation } from '../src/platform/process.js';
+import { withCleanup, removeTestDirectory, runTestProcess } from './support/lifecycle.mjs';
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(TEST_DIR, '..');
@@ -21,11 +20,10 @@ const npmEnv = {
   npm_config_cache: path.join(tempDir, 'npm-cache'),
 };
 
-try {
-  const packResult = runCommand(npmCommand, ['pack', '--silent', PROJECT_ROOT], {
+await withCleanup(async () => {
+  const packResult = await runCommand(npmCommand, ['pack', '--silent', PROJECT_ROOT], {
     cwd: tempDir,
     env: npmEnv,
-    encoding: 'utf8',
   });
   const tarballName = packResult.stdout.trim().split(/\r?\n/).filter(Boolean).at(-1);
   if (!tarballName) {
@@ -33,10 +31,9 @@ try {
   }
   const tarballPath = path.join(tempDir, tarballName);
 
-  runCommand(npmCommand, ['install', '--prefix', installPrefix, tarballPath], {
+  await runCommand(npmCommand, ['install', '--prefix', installPrefix, tarballPath], {
     cwd: tempDir,
     env: npmEnv,
-    stdio: 'inherit',
   });
 
   const binDirectory = path.join(installPrefix, 'node_modules', '.bin');
@@ -72,7 +69,7 @@ try {
   ];
 
   for (const smokeCase of smokeCases) {
-    const result = spawnSync(process.execPath, [
+    const result = await runTestProcess(process.execPath, [
       ENTRY_SMOKE,
       '--label',
       smokeCase.label,
@@ -83,25 +80,21 @@ try {
     ], {
       cwd: PROJECT_ROOT,
       env: npmEnv,
-      stdio: 'inherit',
+      timeoutMs: 90000,
     });
-    if (result.error) throw result.error;
-    if (result.status !== 0) process.exit(result.status ?? 1);
+    if (result.code !== 0) throw new Error(result.diagnostic);
+    console.log(result.stdout.trim());
   }
-} finally {
-  fs.rmSync(tempDir, { recursive: true, force: true });
-}
+}, [() => removeTestDirectory(tempDir)]);
 
-function runCommand(command, args, options = {}) {
-  const invocation = buildInteractiveCliInvocation(command, args);
-  const result = spawnSync(invocation.command, invocation.args, {
+async function runCommand(command, args, options = {}) {
+  const result = await runTestProcess(command, args, {
     env: process.env,
     ...options,
-    ...(invocation.spawnOptions ?? {}),
+    timeoutMs: 120000,
   });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} exited with ${result.status}.`);
+  if (result.code !== 0) {
+    throw new Error(`${command} ${args.join(' ')} failed.\n${result.diagnostic}`);
   }
   return result;
 }

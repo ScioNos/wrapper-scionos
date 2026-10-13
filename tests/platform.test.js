@@ -1,3 +1,4 @@
+import { removeTestDirectory } from './support/lifecycle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { buildInteractiveCliInvocation, isWindowsExecutableShim, quoteWindowsCmdArg, resolveNpmShimNodeScript, runInteractiveCli } from '../src/platform/process.js';
 import { mergeNoProxyValues } from '../src/platform/no-proxy.js';
+import { resolveNpmShimExecutable } from '../src/platform/process.js';
 import {
   checkGitBashOnWindows,
   claudeCodeCandidates,
@@ -68,6 +70,21 @@ test('Windows command shims resolve npm entry points without a shell and reject 
   assert.deepEqual(invocation.spawnOptions, { windowsVerbatimArguments: true });
 });
 
+test('native executable npm shims preserve quoted argv without cmd.exe', () => {
+  const resolve = (source) => resolveNpmShimExecutable('C:\\tools\\node_modules\\.bin\\codex.cmd', { readFileSync: () => source, existsSync: () => true });
+  assert.equal(resolve('"%dp0%\\..\\@openai\\codex\\bin\\codex.exe" %*'), 'C:\\tools\\node_modules\\@openai\\codex\\bin\\codex.exe');
+  assert.equal(resolve('"%dp0%\\..\\@openai\\codex\\bin\\codex.exe" %* & echo injected'), null);
+  assert.equal(resolve('"%dp0%\\..\\..\\outside.exe" %*'), null);
+  const argv = ['-c', 'model="gpt-6.1-sol"'];
+  assert.deepEqual(buildInteractiveCliInvocation('C:\\tools\\codex.cmd', argv, { platform: 'win32', resolveNpmShimFn: () => null, resolveNpmExecutableFn: () => 'C:\\tools\\node_modules\\codex.exe' }), { command: 'C:\\tools\\node_modules\\codex.exe', args: argv, spawnOptions: {} });
+});
+
+test('local node_modules/.bin npm shims resolve one safe parent hop', () => {
+  const resolve = (target) => resolveNpmShimNodeScript('C:\\tools\\node_modules\\.bin\\codex.cmd', { readFileSync: () => `"%_prog%" "%dp0%\\${target}" %*`, existsSync: () => true });
+  assert.equal(resolve('..\\@openai\\codex\\bin\\codex.js'), 'C:\\tools\\node_modules\\@openai\\codex\\bin\\codex.js');
+  assert.equal(resolve('..\\..\\outside.js'), null);
+});
+
 test('npm shim resolution accepts generated formats and refuses ambiguous targets', () => {
   const resolve = (invocation, exists = true) => resolveNpmShimNodeScript('C:\\tools\\codex.cmd', {
     readFileSync: () => '@ECHO off\r\n' + invocation + '\r\n',
@@ -90,7 +107,7 @@ test('a modern npm Windows shim forwards quoted Codex overrides without shell ex
   }
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-npm-cmd-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir));
   const scriptDir = path.join(tempDir, 'node_modules', 'capture', 'bin');
   fs.mkdirSync(scriptDir, { recursive: true });
   const scriptPath = path.join(scriptDir, 'capture.js');
@@ -131,7 +148,7 @@ test('unrecognized Windows cmd shims forward plain arguments and reject unsafe o
   }
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-cmd-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir));
   const capturePath = path.join(tempDir, 'capture.json');
   const scriptPath = path.join(tempDir, 'capture.mjs');
   const shimPath = path.join(tempDir, 'capture.cmd');
@@ -430,7 +447,7 @@ test('Git Bash detection covers non-Windows, configured, and missing paths', () 
 
 test('platform detection skips an executable whose version command fails', (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-detect-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir));
   const broken = path.join(tempDir, process.platform === 'win32' ? 'broken.cmd' : 'broken');
   fs.writeFileSync(broken, process.platform === 'win32' ? '@exit /b 9\r\n' : '#!/bin/sh\nexit 9\n');
   if (process.platform !== 'win32') fs.chmodSync(broken, 0o755);
@@ -441,7 +458,7 @@ test('platform detection skips an executable whose version command fails', (t) =
 });
 test('platform detection skips a version command that exceeds its timeout', (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-detect-timeout-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir));
   const hanging = path.join(tempDir, process.platform === 'win32' ? 'hanging.cmd' : 'hanging');
   const working = path.join(tempDir, process.platform === 'win32' ? 'working.cmd' : 'working');
   fs.writeFileSync(hanging, '');
@@ -476,7 +493,7 @@ test('Claude Code version policy accepts only 2.1.220 or newer semantic versions
   assert.equal(isClaudeCodeVersionSupported('2.2.0'), true);
   assert.equal(isClaudeCodeVersionSupported('unknown'), false);
 });
-test('interactive child startup errors are surfaced', async () => {
+test('interactive child startup errors are surfaced', { timeout: 10000 }, async () => {
   await assert.rejects(
     () => runInteractiveCli('definitely-missing-wrapper-scionos-executable'),
     /ENOENT|spawn/,
@@ -496,7 +513,7 @@ test('interactive child can return its code without updating the parent exit sta
     else process.exitCode = previousExitCode;
   }
 });
-test('interactive child exits and SIGINT terminates its process tree with code 130', async () => {
+test('interactive child exits and SIGINT terminates its process tree with code 130', { timeout: 15000 }, async () => {
   const previousExitCode = process.exitCode;
   const normalExit = await runInteractiveCli(process.execPath, ['-e', 'process.exit(7)']);
   assert.equal(normalExit, 7);

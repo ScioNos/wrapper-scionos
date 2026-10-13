@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { MAIN_MENU_ITEMS } from '../src/cli/menu.js';
 import { findWindowsExecutable } from '../src/platform/detect.js';
-import { buildInteractiveCliInvocation } from '../src/platform/process.js';
+import { spawnTestProcess, waitForTestChild, withCleanup } from './support/lifecycle.mjs';
+import { terminateChildTree } from '../src/platform/process.js';
 
 let requestedArgs = process.argv.slice(2);
 let displayLabel = null;
@@ -39,11 +39,9 @@ function resolveCommand(command) {
 }
 
 const command = resolveCommand(requestedCommand);
-const invocation = buildInteractiveCliInvocation(command, args);
-const child = spawn(invocation.command, invocation.args, {
+const child = spawnTestProcess(command, args, {
   stdio: ['pipe', 'pipe', 'pipe'],
   env: process.env,
-  ...(invocation.spawnOptions ?? {}),
 });
 
 let stdout = '';
@@ -66,12 +64,12 @@ child.stderr.on('data', (chunk) => {
   stderr += chunk;
 });
 
-const timeout = setTimeout(() => child.kill(), 60000);
-const result = await new Promise((resolve, reject) => {
+let timeout;
+const result = await withCleanup(() => new Promise((resolve, reject) => {
   child.once('error', reject);
-  child.once('exit', (code, signal) => resolve({ code, signal }));
-});
-clearTimeout(timeout);
+  child.once('close', (code, signal) => resolve({ code, signal }));
+  timeout = setTimeout(() => reject(new Error(`Entry-mode smoke timed out.\nstdout:\n${stdout}\nstderr:\n${stderr}`)), 60000);
+}), [() => clearTimeout(timeout), () => terminateChildTree(child), () => waitForTestChild(child)]);
 
 assert.equal(answered, true, `Interactive menu did not open.\nstdout:\n${stdout}\nstderr:\n${stderr}`);
 assert.equal(result.signal, null, `CLI was terminated by ${result.signal}.\nstderr:\n${stderr}`);

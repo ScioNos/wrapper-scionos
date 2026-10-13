@@ -1,3 +1,4 @@
+import { removeTestDirectory } from './support/lifecycle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -196,7 +197,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
 
 test('Claude Desktop proxy application and restore write v2 metadata without RouterLab token', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-proxy-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
     threepConfigPath: path.join(dir, 'threep.json'),
@@ -252,7 +253,7 @@ test('Claude Desktop fails closed when private directory permissions cannot be e
   }
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-permissions-'));
   fs.chmodSync(dir, 0o777);
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const chmodSync = fs.chmodSync;
   fs.chmodSync = () => {};
   t.after(() => { fs.chmodSync = chmodSync; });
@@ -277,7 +278,7 @@ test('Claude Desktop fails closed when private directory permissions cannot be e
 
 test('Claude Desktop rollback removes newly created directories and refuses a concurrent mutation', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-rollback-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const createdDirectory = path.join(dir, 'created', 'nested');
   const paths = {
     normalConfigPath: path.join(createdDirectory, 'normal.json'),
@@ -332,7 +333,7 @@ test('Claude Desktop rollback removes newly created directories and refuses a co
 
 test('Claude Desktop profile matching ignores JSON object key order', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-stable-profile-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
     threepConfigPath: path.join(dir, 'threep.json'),
@@ -379,7 +380,7 @@ test('Claude Desktop profile helpers cover model specs, redaction, and invalid c
   assert.equal(buildLoopbackUrl('[::1]', 15721), 'http://[::1]:15721');
 
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-invalid-profile-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const profilePath = path.join(dir, 'profile.json');
   fs.writeFileSync(profilePath, '{"inferenceGatewayApiKey":"x","inferenceGatewayBaseUrl":"not a url"}');
   assert.equal(readClaudeDesktopProxyCredential({ profilePath, metaPath: path.join(dir, 'missing.json') }), null);
@@ -387,7 +388,7 @@ test('Claude Desktop profile helpers cover model specs, redaction, and invalid c
 
 test('Claude Desktop status distinguishes healthy, unapplied, and corrupt profiles', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-status-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
     threepConfigPath: path.join(dir, 'threep.json'),
@@ -471,7 +472,7 @@ test('verified Desktop routes expose only authorized models and explicit metadat
 
 test('invalid existing Desktop JSON is never overwritten', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-invalid-json-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const paths = {
     normalConfigPath: path.join(dir, 'normal.json'),
     threepConfigPath: path.join(dir, 'threep.json'),
@@ -494,7 +495,7 @@ test('invalid existing Desktop JSON is never overwritten', (t) => {
 
 test('proxy credential parsing rejects deceptive loopback URLs and direct metadata', (t) => {
   const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-credentials-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   const profilePath = path.join(dir, 'profile.json');
   const metaPath = path.join(dir, '_meta.json');
   fs.writeFileSync(profilePath, JSON.stringify({

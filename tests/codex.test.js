@@ -1,3 +1,4 @@
+import { removeTestDirectory } from './support/lifecycle.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,7 +18,7 @@ import {
 
 function nativeTempDir(t, label) {
   const dir = fs.mkdtempSync(path.join(process.cwd(), `.test-codex-native-${label}-`));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
   return dir;
 }
 

@@ -1,5 +1,13 @@
 import test from 'node:test';
+import { buildOpenCodeRuntimeArgs } from '../src/apps/opencode.js';
 import assert from 'node:assert/strict';
+
+test('OpenCode v2 puts private-server selection on the native command and keeps permissions untouched', () => {
+  assert.deepEqual(buildOpenCodeRuntimeArgs(['run', 'hello'], 'opencode v2.0.27'), ['run', '--standalone', 'hello']);
+  assert.deepEqual(buildOpenCodeRuntimeArgs([], 'opencode v2.0.27'), ['--standalone']);
+  assert.deepEqual(buildOpenCodeRuntimeArgs(['run', '--standalone', 'hello'], 'opencode v2.0.27'), ['run', '--standalone', 'hello']);
+  assert.deepEqual(buildOpenCodeRuntimeArgs(['run', 'hello'], '1.18.30'), ['run', 'hello']);
+});
 import {
   appendOpenCodeApiPath,
   buildOpenCodeConfigContent,

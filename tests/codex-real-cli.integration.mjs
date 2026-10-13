@@ -4,14 +4,14 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { runTestProcess, spawnTestProcess, waitForTestChild, removeTestDirectory, closeTestServer, withCleanup } from './support/lifecycle.mjs';
 import {
   buildCodexRuntimeArgs,
   cleanupCodexRuntimeModelCatalog,
   writeCodexRuntimeModelCatalog,
 } from '../src/apps/codex.js';
-import { detectCodexCli } from '../src/platform/detect.js';
-import { buildInteractiveCliInvocation } from '../src/platform/process.js';
+import { detectCodexCli, detectCli } from '../src/platform/detect.js';
+import { terminateChildTree } from '../src/platform/process.js';
 
 const MODEL = 'gpt-6.1-sol';
 const CATALOG_MODELS = [MODEL, 'deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
@@ -21,7 +21,8 @@ const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 test('installed Codex uses the temporary RouterLab catalog and direct Responses transport', {
   timeout: 45000,
 }, async (t) => {
-  const codex = detectCodexCli();
+  const requestedCli = process.env.SCIONOS_TEST_CODEX_CLI;
+  const codex = detectCodexCli(requestedCli ? { detectCliFn: (options) => detectCli({ ...options, candidates: [requestedCli], command: requestedCli }) } : {});
   assert.equal(codex.installed, true, 'The official Codex CLI must be installed for this validation');
   assert.equal(codex.versionSupported, true, `Unsupported Codex CLI version: ${codex.version ?? 'unknown'}`);
   t.diagnostic(`Validating ${codex.version}`);
@@ -34,7 +35,7 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
   let catalog = null;
   let catalogPath = null;
 
-  try {
+  await withCleanup(async () => {
     server = createResponsesServer(requests);
     await listenOnLoopback(server);
     const address = server.address();
@@ -117,18 +118,7 @@ test('installed Codex uses the temporary RouterLab catalog and direct Responses 
     assert.equal(request.authorization, `Bearer ${LOCAL_API_KEY}`);
     assert.equal(request.body.model, MODEL);
     assert.equal(fs.existsSync(catalogPath), true);
-  } finally {
-    await closeServer(server);
-    cleanupCodexRuntimeModelCatalog(catalog);
-    if (catalogPath) assert.equal(fs.existsSync(catalogPath), false);
-    await new Promise((resolve) => setTimeout(resolve, 250));
-    fs.rmSync(tempDir, {
-      recursive: true,
-      force: true,
-      maxRetries: 100,
-      retryDelay: 100,
-    });
-  }
+  }, [() => closeServer(server), () => cleanupCodexRuntimeModelCatalog(catalog), () => removeTestDirectory(tempDir)]);
 });
 
 function createResponsesServer(requests) {
@@ -246,62 +236,15 @@ async function listenOnLoopback(server) {
   });
 }
 
-async function closeServer(server) {
-  if (!server) return;
-  server.closeAllConnections?.();
-  if (server.listening) {
-    await new Promise((resolve) => server.close(resolve));
-  }
-}
-
-async function runCodex(command, args, env) {
-  const invocation = buildInteractiveCliInvocation(command, args);
-  const child = spawn(invocation.command, invocation.args, {
-    cwd: process.cwd(),
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-    ...(invocation.spawnOptions ?? {}),
-  });
-  let stdout = '';
-  let stderr = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    stderr += chunk.toString();
-  });
-
-  let timer = null;
-  try {
-    const result = await new Promise((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', (code, signal) => resolve({ code, signal }));
-      timer = setTimeout(() => {
-        terminateChildTree(child);
-        reject(new Error(`Codex validation timed out.\nstdout:\n${stdout}\nstderr:\n${stderr}`));
-      }, 30000);
-      timer.unref?.();
-    });
-    return {
-      ...result,
-      stdout,
-      stderr,
-      diagnostic: `stdout:\n${stdout}\nstderr:\n${stderr}`,
-    };
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
+const closeServer = closeTestServer;
+const runCodex = (command, args, env) => runTestProcess(command, args, { env, timeoutMs: 30000 });
 
 async function listCodexModels(command, args, env) {
-  const invocation = buildInteractiveCliInvocation(command, args);
-  const child = spawn(invocation.command, invocation.args, {
+  const child = spawnTestProcess(command, args, {
     cwd: process.cwd(),
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
-    ...(invocation.spawnOptions ?? {}),
   });
   let stdout = '';
   let stderr = '';
@@ -310,7 +253,7 @@ async function listCodexModels(command, args, env) {
   let settled = false;
   let timer = null;
 
-  try {
+  return withCleanup(async () => {
     return await new Promise((resolve, reject) => {
       const fail = (error) => {
         if (settled) return;
@@ -377,33 +320,11 @@ async function listCodexModels(command, args, env) {
           clientInfo: {
             name: 'wrapper-scionos-smoke',
             title: 'wrapper-scionos smoke test',
-            version: '5.0.0',
+            version: '7.3.0',
           },
           capabilities: null,
         },
       })}\n`);
     });
-  } finally {
-    if (timer) clearTimeout(timer);
-    child.stdin.end();
-    terminateChildTree(child);
-    await waitForChildClose(child);
-  }
-}
-
-async function waitForChildClose(child) {
-  if (!child || (child.exitCode !== null && child.stdout?.readableEnded && child.stderr?.readableEnded)) return;
-  await new Promise((resolve) => child.once('close', resolve));
-}
-
-function terminateChildTree(child) {
-  if (!child?.pid || child.exitCode !== null) return;
-  if (process.platform === 'win32') {
-    spawnSync('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    return;
-  }
-  child.kill('SIGKILL');
+  }, [() => clearTimeout(timer), () => child.stdin.end(), () => terminateChildTree(child), () => waitForTestChild(child)]);
 }

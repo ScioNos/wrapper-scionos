@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -57,14 +57,17 @@ export async function runInteractiveCli(command, args = [], {
   return exitCode;
 }
 
-function terminateChildTree(child, signal) {
-  if (!child?.pid || child.exitCode !== null) return;
+export function terminateChildTree(child, signal = 'SIGKILL') {
+  if (!child?.pid) return;
   if (process.platform === 'win32') {
-    const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
+    const result = spawnSync('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true,
+      timeout: 5000,
+      killSignal: 'SIGKILL',
     });
-    killer.on('error', () => {});
+    // A blocked/unavailable taskkill must not leave a signal wait hanging.
+    if (result.error || result.status !== 0) child.kill('SIGKILL');
     return;
   }
   try {
@@ -82,6 +85,7 @@ export function buildInteractiveCliInvocation(command, args = [], {
   comSpec = process.env.ComSpec,
   nodePath = process.execPath,
   resolveNpmShimFn = resolveNpmShimNodeScript,
+  resolveNpmExecutableFn = resolveNpmShimExecutable,
 } = {}) {
   if (isWindowsExecutableShim(command, platform)) {
     const nodeScript = resolveNpmShimFn(command);
@@ -92,6 +96,8 @@ export function buildInteractiveCliInvocation(command, args = [], {
         spawnOptions: {},
       };
     }
+    const executable = resolveNpmExecutableFn(command);
+    if (executable) return { command: executable, args: [...args], spawnOptions: {} };
     return {
       command: comSpec || 'cmd.exe',
       args: ['/d', '/s', '/c', buildWindowsCommandLine(command, args)],
@@ -99,6 +105,20 @@ export function buildInteractiveCliInvocation(command, args = [], {
     };
   }
   return { command, args, spawnOptions: {} };
+}
+
+export function resolveNpmShimExecutable(command, {
+  readFileSync = fs.readFileSync,
+  existsSync = fs.existsSync,
+} = {}) {
+  if (!/\.cmd$/i.test(String(command))) return null;
+  let contents;
+  try { contents = readFileSync(command, 'utf8'); } catch { return null; }
+  const target = String(contents).match(/^[ \t]*"(%dp0%[^"\r\n]+\.exe)"[ \t]+%\*[ \t]*$/im)?.[1];
+  if (!target) return null;
+  const executable = path.win32.resolve(path.win32.dirname(command), target.replace(/^%dp0%[\\/]/i, ''));
+  if (!/[\\/]node_modules[\\/]/i.test(executable) || !existsSync(executable)) return null;
+  return executable;
 }
 
 export function resolveNpmShimNodeScript(command, {
@@ -122,10 +142,13 @@ export function resolveNpmShimNodeScript(command, {
   let scriptPath;
   if (/^%dp0%\\/i.test(target)) {
     const relativePath = target.slice('%dp0%'.length + 1);
-    if (relativePath.split('\\').includes('..') || !/\\node_modules\\/i.test('\\' + relativePath)) {
-      return null;
-    }
-    scriptPath = path.win32.resolve(path.win32.dirname(command), relativePath);
+    const shimDirectory = path.win32.dirname(command);
+    const segments = relativePath.split('\\');
+    const localBinShim = path.win32.basename(shimDirectory).toLowerCase() === '.bin'
+      && path.win32.basename(path.win32.dirname(shimDirectory)).toLowerCase() === 'node_modules'
+      && segments[0] === '..' && !segments.slice(1).includes('..');
+    if (!localBinShim && (segments.includes('..') || !/\\node_modules\\/i.test('\\' + relativePath))) return null;
+    scriptPath = path.win32.resolve(shimDirectory, relativePath);
   } else if (path.win32.isAbsolute(target) && /\\node_modules\\/i.test(target)) {
     scriptPath = path.win32.resolve(target);
   } else {

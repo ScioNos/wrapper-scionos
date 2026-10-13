@@ -38,6 +38,7 @@ const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
   resolveTokenWithSource,
   selectFamily: askSelect,
   selectModel: askSelect,
+  isInteractive: () => Boolean(process.stdin.isTTY),
   writeCodexRuntimeModelCatalog,
 });
 
@@ -112,17 +113,18 @@ export async function launchCodexForService(options, dependencies = {}) {
     selectionModels = selectedFamily
       ? selectedFamily.models.map(({ model: familyModel }) => familyModel)
       : availableModels;
-    const requestedModel = options.model
-      ?? (selectedFamily
-        ? (selectionModels.includes(selectedFamily.defaultModel)
-          ? selectedFamily.defaultModel
-          : selectionModels[0])
-        : defaultCodexModelForService(service.value));
+    const preferredModel = selectedFamily?.defaultModel ?? defaultCodexModelForService(service.value);
+    const preferredMissing = selectedFamily && !selectionModels.includes(preferredModel);
+    if (!options.model && preferredMissing && (options.noPrompt || !deps.isInteractive())) {
+      throw new Error(`Preferred Codex model "${preferredModel}" is unavailable in family "${selectedFamily.name}" on ${service.label}. Available: ${selectionModels.join(', ')}. Provide --model <id> explicitly.`);
+    }
+    const requestedModel = options.model ?? (preferredMissing ? null : preferredModel);
     model = await resolveCodexLaunchModel({
       requestedModel,
       availableModels: selectionModels,
       service,
-      noPrompt: true,
+      noPrompt: !preferredMissing || Boolean(options.noPrompt),
+      requireExplicitChoice: Boolean(preferredMissing),
       language: options.language,
       selectModel: deps.selectModel,
     });
@@ -165,9 +167,10 @@ export async function launchCodexForService(options, dependencies = {}) {
     }
   }
   const catalog = deps.writeCodexRuntimeModelCatalog({
-    models: service.value === 'routerlab' && selectedFamily ? selectionModels : availableModels,
+    models: selectedFamily ? selectionModels : availableModels,
     modelMetadata: modelResult.modelMetadata ?? [],
   });
+  let launchError = null;
   try {
     const codexArgs = buildCodexRuntimeArgs({
       providerName: service.value,
@@ -181,8 +184,14 @@ export async function launchCodexForService(options, dependencies = {}) {
       codex,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
     });
+  } catch (error) {
+    launchError = error;
+    throw error;
   } finally {
-    deps.cleanupCodexRuntimeModelCatalog(catalog);
+    try { deps.cleanupCodexRuntimeModelCatalog(catalog); } catch (error) {
+      if (launchError) launchError.cleanupError = error;
+      else throw error;
+    }
   }
 }
 
@@ -319,6 +328,7 @@ export async function resolveCodexLaunchModel({
   noPrompt = false,
   language = 'en',
   selectModel = askSelect,
+  requireExplicitChoice = false,
 }) {
   if (requestedModel !== null && requestedModel !== undefined) {
     if (!availableModels.includes(requestedModel)) {
@@ -335,10 +345,10 @@ export async function resolveCodexLaunchModel({
     return defaultModel;
   }
 
-  if (availableModels.length === 1) {
+  if (availableModels.length === 1 && !requireExplicitChoice) {
     return availableModels[0];
   }
-  return applyMenuControl(await selectModel({
+  const selected = applyMenuControl(await selectModel({
     message: translate(language, 'selectCodexModel', { service: service.label }),
     language,
     helpMode: 'compact',
@@ -357,6 +367,8 @@ export async function resolveCodexLaunchModel({
       },
     ],
   }), { allowBack: false });
+  if (!availableModels.includes(selected)) throw codexModelUnavailableError(selected, service, availableModels);
+  return selected;
 }
 
 export function explicitCodexToken(token, envToken) {

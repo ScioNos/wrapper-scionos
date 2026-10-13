@@ -12,11 +12,11 @@ Ein gemeinsamer Launcher für fünf Werkzeuge: Claude Code CLI, Claude Cowork, C
 Behalten Sie Ihren bevorzugten Coding-Client und wählen Sie eine RouterLab-Modellfamilie für Ihre Arbeit. Der Wrapper verwaltet die Dienstauthentifizierung und das Routing; jeder native Client behält seine eigenen Werkzeuge und Sitzungen.
 
 ```bash
-# Günstig explorieren, stark finishen (AWS Claude-Routen, ~40 % unter Listenpreis)
+# AWS-Claude-Familie auswählen
 npx wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
-**Aktuelle Version: `7.2.0`**
+**Aktuelle Version: `7.3.0`**
 
 [English](./README.md) · [Français](./README.fr.md) · [Changelog](./CHANGELOG.md)
 
@@ -38,7 +38,7 @@ Der Dienst wird vor dem Öffnen des Menüs einmal ausgewählt und bleibt währen
 - Ein Token für den ausgewählten RouterLab-Dienst.
 - Claude Code `>=2.1.220`; RouterLab Claude Native benötigt `>=2.1.293` und AWS Claude `>=2.1.284`. Release-Prüfungen verwenden `2.1.296`.
 - Codex CLI `>=0.144.1`.
-- OpenCode über npm installiert (`opencode-ai`); Release-Prüfungen verwenden `1.18.30`.
+- OpenCode `>=1.18.30`; Windows-Prüfungen validieren `opencode-ai@1.18.30` und `@opencode/cli@2.0.27`.
 - Windows, macOS oder `claude-desktop-debian` unter Linux für Claude-Desktop-Profile.
 
 ## Schnellstart
@@ -59,7 +59,7 @@ wrapper-scionos --service routerlab
 
 Der Produktname lautet **wrapper-scioNos**. Das npm-Paket und der Hauptbefehl heißen `wrapper-scionos`; das installierte Paket stellt auch `scionos` als gleichwertigen Befehl bereit.
 
-Für `--service llm` zeigt der Wrapper einen neutralen Hinweis, weil der kostenlose Modellkatalog variieren kann:
+Für `--service llm` zeigt der Wrapper einen neutralen Hinweis, weil der Modellkatalog variieren kann:
 
 ```text
 ℹ LLM-Dienst aktiv — verfügbare Modelle können variieren
@@ -164,7 +164,7 @@ wrapper-scionos codex launch --service routerlab
 wrapper-scionos codex launch --service llm
 ```
 
-Auf `routerlab` wählen Sie beim interaktiven Start zuerst **OpenAI GPT-6**, **Open Source** oder **Trial**. Danach startet Codex mit dem temporären geprüften Katalog dieser Familie. Der native `/model`-Selektor wechselt Modelle innerhalb der gewählten Familie. Die bevorzugten Modelle sind `gpt-6.1-sol`, `deepseek-v4.1-flash` und `deepseek-v4.1-flash-trial`; fehlt das bevorzugte Modell, startet die Familie mit ihrem ersten geprüften Modell.
+Auf `routerlab` wählen Sie beim interaktiven Start zuerst **OpenAI GPT-6**, **Open Source** oder **Trial**. Danach startet Codex mit dem temporären geprüften Katalog dieser Familie. Der native `/model`-Selektor wechselt Modelle innerhalb der gewählten Familie. Die bevorzugten Modelle sind `gpt-6.1-sol`, `deepseek-v4.1-flash` und `deepseek-v4.1-flash-trial`; fehlt das bevorzugte Modell, verlangt der interaktive Modus eine explizite Auswahl aus den verfügbaren Modellen, auch bei nur einem Modell. Nicht interaktiv wird der Start mit einem Hinweis auf `--model <id>` abgebrochen. Ein nicht verfügbares explizites Modell führt immer zu einem Fehler.
 
 Ohne gewählte Familie ist der RouterLab-Standard **`gpt-6.1-sol`**. Der Dienst `llm` behält **`gpt-5.6-sol`**, und sein Hauptmenüeintrag startet Codex direkt. Explizite Modelle und diese Dienststandards müssen entdeckt und autorisiert sein. Mit `--strategy claude-gpt|open-source|trial` wählen Sie eine RouterLab-Familie in der Befehlszeile, mit `--model` ein genaues Modell.
 
@@ -188,13 +188,42 @@ Interaktiv wird zuerst eine Familie und danach das genaue Modell gewählt. OpenC
 OpenCode aktualisieren:
 
 ```bash
-opencode upgrade --method npm
+opencode upgrade --method npm # 1.x
+# 2.x: opencode upgrade --help
 ```
+
+## Zeitlimits für Proxy-Antworten
+
+Claude Code, OpenCode, Desktop und Cowork verwenden diese beim Proxy-Start gelesenen Umgebungsvariablen. Werte sind ganze Millisekunden; ungültige Werte verhindern den Start.
+
+| Variable | Standard | Bedeutung |
+| --- | --- | --- |
+| `WRAPPER_SCIONOS_PROXY_FIRST_RESPONSE_TIMEOUT_MS` | `120000` | Von der Upstream-Anfrage bis zu den ersten Body-Bytes; Header allein setzen das Limit nicht zurück |
+| `WRAPPER_SCIONOS_PROXY_STREAM_IDLE_TIMEOUT_MS` | `120000` | Maximaler Abstand zwischen Body-Blöcken; bei jedem Block zurückgesetzt |
+| `WRAPPER_SCIONOS_PROXY_STREAM_TOTAL_TIMEOUT_MS` | `0` | Gesamtdauer nach dem ersten Block; null deaktiviert die Grenze |
+
+Erstantwort- und Inaktivitätslimits müssen positiv sein. Ein aktiver Stream darf standardmäßig länger als 120 Sekunden laufen. Eine Client-Trennung bricht die Upstream-Anfrage ab. Vor Beginn einer Antwort liefert ein Timeout HTTP 504; während der Antwort wird der Stream geschlossen. Timer und Upstream-Streams werden nach jedem Ausgang bereinigt.
+
+Eingehende Client-Header haben weiterhin 30 Sekunden und der vollständige Request-Body 120 Sekunden, mit höchstens 64 MiB komprimiert und dekomprimiert. Diese festen Empfangslimits sind von den Upstream-Antwortlimits getrennt. Codex verwendet seinen nativen direkten Transport ohne diese Proxy-Einstellungen.
+
+## Dauerhafte Profile und Geheimnisse
+
+Desktop und Cowork teilen ein verwaltetes Desktop-Profil und dessen Proxy. Das Anwenden schreibt Gateway-URL, zufälligen lokalen Zugangsschlüssel, Modellrouten und Cowork-Egress-Host dauerhaft in das Claude-3p-Profil und dessen `_meta.json`. Beim Stoppen des Proxys bleibt das Profil aktiv. Starten Sie den Proxy erneut oder stellen Sie mit `wrapper-scionos claude-desktop restore --yes` das offizielle Profil wieder her. Status und Dry-run zeigen den Zustand. Profil-/Proxy-Tests bestätigen keine Ausführung in der Desktop- oder Cowork-Anwendung.
+
+Gespeicherte Dienst-Tokens verwenden Windows DPAPI, macOS Keychain oder Linux Secret Service. Linux benötigt `secret-tool`; es gibt keinen Klartext-Fallback. Der macOS-Helfer ruft Security-APIs über `osascript` auf, empfängt das Geheimnis über stdin, prüft jeden Schreibvorgang durch erneutes Lesen, lehnt interaktive Keychain-Abfragen ab und begrenzt jede Operation auf 15 Sekunden. Der echte macOS-Test ist noch als Release-Voraussetzung auszuführen; siehe Validierungsbericht.
+
+Während der Ausführung hält der Wrapper den Dienst-Token im Speicher. Claude Code und OpenCode erhalten nur einen lokalen Proxy-Schlüssel über ihre Kindprozess-Umgebung; Desktop speichert diesen lokalen Schlüssel im Profil. Codex erhält den Dienst-Token über `OPENAI_API_KEY` im Kindprozess. Umgebungen sind für den Prozess und ausreichend privilegierte Prozesse sichtbar; sicherer Speicher schützt Tokens im Ruhezustand. Maskierte Eingabe oder `--token-stdin` ist einem Token als Argument vorzuziehen.
+
+## Geprüfte Kompatibilität
+
+Unter Windows mit Node 24.19.0 bestand Claude Code 2.1.296 13 Routing-Szenarien; Codex 0.144.1 und 0.157.0 bestanden Responses-Streaming und natives model/list; OpenCode 1.18.30 und 2.0.27 bestanden exaktes Modell, HTTP-Pfade, Authentifizierung, Streaming und einen nativen read-Werkzeugzyklus mit simulierten Anbietern. OpenCode 2 verwendet den nativen Modus `--standalone`, damit sein privater Server die temporäre Proxy-Konfiguration erhält. Sein gemeinsam genutzter Hintergrunddienst ist mit dieser Integration pro Start inkompatibel.
+
+Ein entdecktes und autorisiertes Modell ist auswählbar; dies belegt weder reale RouterLab-Inferenz noch dessen Werkzeugkompatibilität. Produktionsinferenz, echte Desktop-/Cowork-Anwendungsläufe und plattformübergreifende CI-Ergebnisse werden hier nicht behauptet. Preise, Einsparungen, Hosting-Standorte und Abonnements benötigen separate RouterLab-Belege. Der [Validierungsbericht 7.3.0](./docs/release-7.3.0-validation.md) nennt Umfang und ausstehende Prüfungen.
 
 ## Sicherheitsgarantien
 
 - Claude Code und OpenCode verwenden authentifizierte Loopback-Proxys mit prozessgebundenen Zugangsdaten.
-- Claude Desktop speichert im verwalteten Profil nur ein zufälliges lokales Zugangsinstrument; der RouterLab-Token bleibt im sicheren Speicher.
+- Claude Desktop speichert im verwalteten Profil nur ein zufälliges lokales Zugangsinstrument; der Dienst-Token bleibt im Wrapper und seiner gewählten Token-Quelle.
 - Codex erhält den Dienst-Token über `OPENAI_API_KEY` und verwendet einen temporären geprüften Modellkatalog.
 - Die Modellprüfung erfolgt vor Proxy-Erstellung oder Client-Start und blockiert bei Authentifizierungs-, Netzwerk-, Antwort-, Server-, Katalog- oder Schnittmengenfehlern.
 - Benutzerdefinierte Provider- und Basis-URL-Overrides können das feste RouterLab-Produktionsziel nicht ändern.
@@ -210,11 +239,12 @@ npm run test:entry-modes
 npm run test:claude-real
 npm run test:codex-real
 npm run test:opencode-real
+npm run test:keychain-real # macOS
 npm audit
 npm pack --dry-run
 ```
 
-`npm run release:check` führt Abdeckung, Startmodus-Prüfungen, alle drei echten Clients, das Abhängigkeits-Audit und die Paketprüfung nacheinander aus.
+`npm run release:check` führt Unit-Tests, Abdeckung, Startmodi, alle drei echten Clients, Keychain, Audit und Paketprüfung aus. Keychain wird außerhalb von macOS übersprungen; dies erfüllt nicht die macOS-Release-Voraussetzung.
 
 Die Real-Client-Smoke-Tests verwenden ausschließlich Loopback-Fakes und kontaktieren RouterLab nicht. Die Abdeckung muss 85 % für Zeilen/Funktionen und 80 % für Branches erreichen.
 
@@ -222,7 +252,7 @@ Ein lokales, noch nicht veröffentlichtes Paket testen:
 
 ```bash
 npm pack
-npx --yes --package ./wrapper-scionos-7.2.0.tgz wrapper-scionos
+npx --yes --package ./wrapper-scionos-7.3.0.tgz wrapper-scionos
 ```
 
 ## Lizenz

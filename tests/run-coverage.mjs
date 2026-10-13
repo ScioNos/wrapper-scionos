@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
-const args = ['--test'];
+const args = ['--test', '--test-timeout=30000'];
 args.push(
   '--experimental-test-coverage',
   '--test-coverage-exclude=tests/**',
@@ -13,6 +13,8 @@ const result = spawnSync(process.execPath, args, {
   cwd: process.cwd(),
   env: process.env,
   stdio: 'inherit',
+  timeout: 180000,
+  killSignal: 'SIGKILL',
 });
 
 if (result.error) throw result.error;

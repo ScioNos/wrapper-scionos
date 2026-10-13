@@ -5,6 +5,7 @@ npm-debug.log*
 .tmp-package-audit/
 .npm-cache-temp/
 .codex-tmp/
+.test-logs/
 .claude/
 .codegraph/
 .env

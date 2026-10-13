@@ -4,10 +4,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { runTestProcess, removeTestDirectory, closeTestServer } from './support/lifecycle.mjs';
 import { buildClaudeCodeEnvironment } from '../src/apps/claude-code.js';
 import { detectClaudeCode } from '../src/platform/detect.js';
-import { buildInteractiveCliInvocation } from '../src/platform/process.js';
 import { requireServiceConfig } from '../src/routerlab/services.js';
 
 const LOCAL_GATEWAY_TOKEN = 'local-claude-gateway-token-with-enough-length';
@@ -28,7 +27,7 @@ for (const scenario of [
   { service: 'routerlab', strategy: 'trial', model: 'sonnet', expectedModel: 'glm-5.3-flash-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
   { service: 'routerlab', strategy: 'trial', model: 'opus', expectedModel: 'qwen3.8-flash-trial', allowedModels: ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial'] },
 ]) {
-test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.strategy}/${scenario.model} routing against hostile local settings`, async (t) => {
+test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.strategy}/${scenario.model} routing against hostile local settings`, { timeout: 60000 }, async (t) => {
   const claude = detectClaudeCode();
   assert.equal(claude.installed, true, 'Claude Code must be installed for the real integration check');
   assert.equal(
@@ -38,7 +37,7 @@ test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.str
   );
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-claude-real-'));
-  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  t.after(() => removeTestDirectory(tempDir));
   let trapHits = 0;
   const trap = http.createServer((_req, res) => {
     trapHits += 1;
@@ -46,7 +45,7 @@ test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.str
     res.end('{"error":{"message":"hostile endpoint was used"}}');
   });
   await listen(trap);
-  t.after(() => close(trap));
+  t.after(() => closeTestServer(trap));
 
   const captured = [];
   const gateway = http.createServer((req, res) => {
@@ -89,7 +88,7 @@ test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.str
     });
   });
   await listen(gateway);
-  t.after(() => close(gateway));
+  t.after(() => closeTestServer(gateway));
 
   const configDir = path.join(tempDir, 'claude-config');
   fs.mkdirSync(configDir, { recursive: true });
@@ -118,7 +117,7 @@ test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.str
   });
   assert.equal(Object.values(env).includes(RAW_ROUTERLAB_SENTINEL), false);
 
-  const result = await runClaude(claude.cliPath, [
+  const result = await runTestProcess(claude.cliPath, [
     '--print',
     'Reply with exactly claude-smoke-ok.',
     '--model',
@@ -128,7 +127,7 @@ test(`real Claude Code honors wrapper-managed ${scenario.service}/${scenario.str
     '--max-turns',
     '1',
     '--no-session-persistence',
-  ], env);
+  ], { env, cwd: tempDir, timeoutMs: 30000 });
 
   assert.equal(result.code, 0, `${result.diagnostic}\ncaptured:\n${JSON.stringify(captured, null, 2)}`);
   assert.match(result.stdout, /claude-smoke-ok/);
@@ -214,49 +213,6 @@ function listen(server) {
     server.listen(0, '127.0.0.1', () => {
       server.off('error', reject);
       resolve();
-    });
-  });
-}
-
-function close(server) {
-  if (!server.listening) return Promise.resolve();
-  return new Promise((resolve) => server.close(resolve));
-}
-
-function runClaude(command, args, env) {
-  const invocation = buildInteractiveCliInvocation(command, args);
-  return new Promise((resolve, reject) => {
-    const child = spawn(invocation.command, invocation.args, {
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      ...(invocation.spawnOptions ?? {}),
-    });
-    let stdout = '';
-    let stderr = '';
-    const timeout = setTimeout(() => {
-      child.kill();
-      reject(new Error('Real Claude Code integration timed out'));
-    }, 30000);
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.once('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.once('exit', (code, signal) => {
-      clearTimeout(timeout);
-      resolve({
-        code,
-        signal,
-        stdout,
-        stderr,
-        diagnostic: `exit=${code} signal=${signal ?? 'none'}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
-      });
     });
   });
 }

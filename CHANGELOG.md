@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 7.3.0 - 2026-10-13
+
+### Fixed
+
+- Replaced the shared proxy's 120-second total request cap with independent first-body-byte and resettable inactivity deadlines (both 120 seconds by default). Total streaming duration is unlimited by default and explicitly configurable. Claude Code, OpenCode, and the shared Desktop/Cowork proxy use the same settings; Codex remains direct.
+- Removed Codex's silent first-model substitution when a selected family's preferred model is missing. Interactive launches require a choice, including for a single available model; non-interactive launches require `--model`. Explicit unavailable models still fail. Every explicitly selected family limits the temporary native catalogue.
+- Replaced macOS `security add-generic-password -w` prompting with a stdin-only native Security framework helper, bounded operations and write/read verification. Added an isolated real Keychain test; its macOS result remains a publication gate.
+- OpenCode 2 uses its native private `--standalone` server to consume per-launch proxy configuration. The 2.0.27 shared-service failure was reproduced before any upstream request; 1.18.30 and 2.0.27 private-server checks passed on Windows, including streaming and a real read-tool cycle.
+- Bounded process-tree termination, test subprocesses and interruption tests. Cleanup preserves original failures, attempts every resource cleanup, verifies recursive targets and retries temporary Windows locks. Redirected interruption checks pass.
+- Preserved client failures when Codex catalogue or OpenCode proxy cleanup also fails.
+
+### Documentation and validation
+
+- Updated English, French and German documentation for persistent Desktop/Cowork profiles, model selection, token storage/transmission, proxy settings, tested client versions and the difference between discovery and inference validation.
+- Removed unsubstantiated price/savings claims from current documentation and AWS selection labels.
+- Prepared Windows/macOS/Linux CI across supported Node boundary versions and current release lines, separate minimum/recent OpenCode jobs, a real macOS Keychain gate and retained security/coverage assertions.
+- Added a release validation record, compatibility matrix and scoped factual claims for the future article. No npm/GitHub publication or article is part of this preparation.
+
 ## 7.2.0 - 2026-10-12
 
 ### Changed

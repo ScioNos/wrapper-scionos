@@ -4,6 +4,7 @@ import {
   forwardLongRunningLlmRequest,
   isAuthorized,
   readRequestBody,
+  resolveProxyTimeouts,
   writeJson,
 } from '../platform/llm-proxy.js';
 import { normalizeLoopbackHost, validateLoopbackPort } from '../platform/loopback.js';
@@ -43,12 +44,14 @@ export function createClaudeDesktopProxy(options, dependencies = {}) {
   const verifiedRoutes = validateRoutes(routes);
   const routeMap = new Map(verifiedRoutes.map((route) => [route.routeId, route.upstreamModel]));
   const forwardRequest = dependencies.forwardRequest ?? forwardLongRunningLlmRequest;
+  const timeouts = resolveProxyTimeouts(options);
 
   const { server } = createLongRunningLlmProxy({
     targetBaseUrl: service.baseUrl,
     routerlabToken,
     gatewayToken,
     upstreamAuth: 'anthropic',
+    ...timeouts,
     beforeForward: (req, res) => handleDesktopProxyRequest(req, res, {
       service,
       routerlabToken,
@@ -57,6 +60,7 @@ export function createClaudeDesktopProxy(options, dependencies = {}) {
       routes: verifiedRoutes,
       routeMap,
       forwardRequest,
+      timeouts,
     }),
   });
   return { server, routes: verifiedRoutes };
@@ -132,6 +136,7 @@ async function handleDesktopProxyRequest(req, res, context) {
     body,
     upstreamAuth: 'anthropic',
     responseHeaders: cors ?? {},
+    ...context.timeouts,
   });
   return true;
 }

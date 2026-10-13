@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { requireServiceConfig } from '../routerlab/services.js';
 
 export const SECURE_STORAGE_SERVICE = 'wrapper-scionos';
+export const TOKEN_COMMAND_TIMEOUT_MS = 15_000;
 const LEGACY_SECURE_STORAGE_SERVICE = 'claude-scionos';
 const WINDOWS_POWERSHELL_MODULE_PATHS = [
   'C:\\Program Files\\WindowsPowerShell\\Modules',
@@ -19,7 +21,7 @@ export function getSecureStorageBackend(backend = currentTokenBackend(), service
 }
 
 function commandExists(command) {
-  const result = spawnSync(command, ['--help'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const result = spawnSync(command, ['--help'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: TOKEN_COMMAND_TIMEOUT_MS, killSignal: 'SIGKILL' });
   return !result.error;
 }
 
@@ -28,6 +30,9 @@ function runCommand(command, args, options = {}) {
     encoding: 'utf8',
     input: options.input,
     env: options.env,
+    timeout: TOKEN_COMMAND_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+    windowsHide: true,
   });
   if (result.error) {
     throw result.error;
@@ -46,6 +51,9 @@ function runPowerShell(command, options = {}) {
     encoding: 'utf8',
     input: options.input,
     env,
+    timeout: TOKEN_COMMAND_TIMEOUT_MS,
+    killSignal: 'SIGKILL',
+    windowsHide: true,
   });
 
   if (result.error) {
@@ -132,10 +140,37 @@ function readWindowsTokenFile(tokenFile, {
 }
 
 function readMacOSToken(account, namespace, runCommandFn = runCommand) {
-  const result = runCommandFn('security', ['find-generic-password', '-a', account, '-s', namespace, '-w']);
-  if (result.status === 0) return result.stdout.trim() || null;
-  if (result.status === 44) return null;
-  throw tokenBackendReadError('macOS Keychain', result);
+  const result = runKeychain('get', account, namespace, undefined, runCommandFn);
+  if (result.status === 0) return result.token || null;
+  if (result.status === -25300) return null;
+  throw keychainError('read', result.status);
+}
+
+function keychainError(operation, status) {
+  const error = new Error(`macOS Keychain ${operation} failed (OSStatus ${status}); unlock/authorize the Keychain and retry. No plaintext fallback is used.`);
+  error.code = 'keychain_operation_failed';
+  error.status = status;
+  return error;
+}
+
+function runKeychain(operation, account, namespace, token, runCommandFn) {
+  let result;
+  try {
+    result = runCommandFn('/usr/bin/osascript', [
+      '-l', 'JavaScript', fileURLToPath(new URL('./keychain.jxa.js', import.meta.url)),
+    ], { input: JSON.stringify({ operation, account, namespace, token }), timeout: TOKEN_COMMAND_TIMEOUT_MS });
+  } catch (error) {
+    throw keychainError(operation, error.code === 'ETIMEDOUT' ? 'timeout' : 'system-command-error');
+  }
+  // Never include helper stdout/stderr in errors: a read carries the secret.
+  if (result.status !== 0) throw keychainError(operation, result.error?.code ?? 'helper-failed');
+  try {
+    const payload = JSON.parse(result.stdout);
+    if (!Number.isInteger(payload.status)) throw new Error('invalid status');
+    return payload;
+  } catch {
+    throw keychainError(operation, 'invalid-helper-response');
+  }
 }
 
 function readLinuxSecretServiceToken(account, namespace, runCommandFn = runCommand) {
@@ -311,17 +346,12 @@ function deleteWindowsToken(service, {
 }
 
 function storeMacOSToken(token, service, runCommandFn = runCommand) {
-  const result = runCommandFn('security', [
-    'add-generic-password',
-    '-U',
-    '-a',
-    service.secureStorageAccount,
-    '-s',
-    SECURE_STORAGE_SERVICE,
-    '-w',
-  ], { input: token });
+  const result = runKeychain('store', service.secureStorageAccount, SECURE_STORAGE_SERVICE, token, runCommandFn);
   if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || 'Unable to store token in Keychain').trim());
+    throw keychainError('write', result.status);
+  }
+  if (readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn) !== token) {
+    throw keychainError('write verification', 'value-mismatch');
   }
 }
 
@@ -332,9 +362,11 @@ function getMacOSToken(service, runCommandFn = runCommand) {
 
 function deleteMacOSToken(service, runCommandFn = runCommand) {
   return [SECURE_STORAGE_SERVICE, LEGACY_SECURE_STORAGE_SERVICE]
-    .map((namespace) => runCommandFn('security', [
-      'delete-generic-password', '-a', service.secureStorageAccount, '-s', namespace,
-    ]).status === 0)
+    .map((namespace) => {
+      const result = runKeychain('delete', service.secureStorageAccount, namespace, undefined, runCommandFn);
+      if (result.status !== 0 && result.status !== -25300) throw keychainError('delete', result.status);
+      return result.status === 0;
+    })
     .some(Boolean);
 }
 

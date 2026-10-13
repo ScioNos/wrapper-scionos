@@ -2,7 +2,7 @@
 
 Validation du 13 octobre 2026, à partir de `7.2.0`, commit `c2d64c77be5092fdd74e9d3246ac4b631cac8e45`. Les validations techniques de la version 7.3.0 sont réussies : [exécution GitHub Actions 38377724549](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), **37 jobs réussis, zéro échec**, sur le commit de code `df40a014447007171cf6b235a5aae7ddb12fa955`. La branche de validation est `codex/release-7.3.0-validation` ; le code testé est conservé pour la release, avec des ajouts de documentation. Aucun article n’a été rédigé.
 
-La publication 7.3.0 sur npm et GitHub a été autorisée le 13 octobre 2026. Références de version : [release GitHub v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0), [paquet npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0) et [branche principale](https://github.com/ScioNos/wrapper-scionos/tree/main).
+La [release GitHub v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) est publiée le 13 octobre 2026, avec le tag `v7.3.0` sur le commit `c6e108e05f70e53b870c42759bab988e200e6b59` et l’[archive npm validée](https://github.com/ScioNos/wrapper-scionos/releases/download/v7.3.0/wrapper-scionos-7.3.0.tgz). Les changements sont intégrés dans la [branche principale](https://github.com/ScioNos/wrapper-scionos/tree/main). À sa demande, le propriétaire prend en charge lui-même la publication du [paquet npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0) ; cette publication npm n’est pas réalisée par cette session.
 
 ## Corrections vérifiées
 

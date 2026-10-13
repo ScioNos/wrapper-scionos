@@ -24,9 +24,10 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
     const old = spawnSync('/usr/bin/security', ['add-generic-password', '-a', oldAccount, '-s', 'claude-scionos', '-w'], { input: 'fake-old-token\n', encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });
     const oldRead = spawnSync('/usr/bin/security', ['find-generic-password', '-a', oldAccount, '-s', 'claude-scionos', '-w'], { encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });
     t.diagnostic(`Legacy security -w stdin probe: exit=${old.status}, error=${old.error?.code ?? 'none'}, roundTripMatches=${oldRead.status === 0 && oldRead.stdout.trim() === 'fake-old-token'} (no secret output retained)`);
-    const legacy = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('../src/security/keychain.jxa.js', import.meta.url))], { input: JSON.stringify({ operation: 'store', account, namespace: 'claude-scionos', token: 'fake-legacy-token' }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
-    assert.equal(legacy.status, 0, 'Keychain helper must complete non-interactively');
-    assert.equal(JSON.parse(legacy.stdout).status, 0, 'Keychain must accept the temporary entry');
+    // Create an entry with the old executable's access controls. Its command
+    // receives the fixed fake value through stdin, never process arguments.
+    const legacy = spawnSync('/usr/bin/security', ['-i'], { input: `add-generic-password -a ${account} -s claude-scionos -w fake-legacy-token\n`, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+    assert.equal(legacy.status, 0, 'Legacy security helper must complete non-interactively');
     assert.equal(backend.get(service), 'fake-legacy-token');
     backend.store('fake-first-token', service);
     assert.equal(backend.get(service), 'fake-first-token');

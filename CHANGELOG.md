@@ -8,17 +8,17 @@ All notable changes to this project will be documented in this file.
 
 - Replaced the shared proxy's 120-second total request cap with independent first-body-byte and resettable inactivity deadlines (both 120 seconds by default). Total streaming duration is unlimited by default and explicitly configurable. Claude Code, OpenCode, and the shared Desktop/Cowork proxy use the same settings; Codex remains direct.
 - Removed Codex's silent first-model substitution when a selected family's preferred model is missing. Interactive launches require a choice, including for a single available model; non-interactive launches require `--model`. Explicit unavailable models still fail. Every explicitly selected family limits the temporary native catalogue.
-- Replaced macOS `security add-generic-password -w` prompting with a stdin-only native Security framework helper, bounded operations and write/read verification. Added an isolated real Keychain test; its macOS result remains a publication gate.
-- OpenCode 2 uses its native private `--standalone` server to consume per-launch proxy configuration. The 2.0.27 shared-service failure was reproduced before any upstream request; 1.18.30 and 2.0.27 private-server checks passed on Windows, including streaming and a real read-tool cycle.
-- Bounded process-tree termination, test subprocesses and interruption tests. Cleanup preserves original failures, attempts every resource cleanup, verifies recursive targets and retries temporary Windows locks. Redirected interruption checks pass.
+- Replaced macOS `security add-generic-password -w` prompting with stdin-only writes, bounded operations and write/read verification. New entries use the native Security helper; existing security-owned entries retain their ACLs and use hex stdin batch updates. Real macOS tests passed for native UTF-8 round trips, current/legacy entries, updates and deletion. The old stdin command returned success but failed its value round trip on the runner.
+- OpenCode 2 uses its native private `--standalone` server to consume per-launch proxy configuration. The 2.0.27 shared-service failure was reproduced before any upstream request; 1.18.30 and 2.0.27 checks passed on Windows, macOS and Linux, including streaming and a real read-tool cycle. Test workspaces use canonical paths and matching PWD/INIT_CWD to preserve native directory permissions.
+- Bounded process-tree termination, test subprocesses and interruption tests. Cleanup preserves original failures, attempts every resource cleanup, verifies recursive targets and retries temporary Windows locks. Redirected timeout checks wait for a writing grandchild before starting their deadline; startup has its own bound.
 - Preserved client failures when Codex catalogue or OpenCode proxy cleanup also fails.
 
 ### Documentation and validation
 
 - Updated English, French and German documentation for persistent Desktop/Cowork profiles, model selection, token storage/transmission, proxy settings, tested client versions and the difference between discovery and inference validation.
 - Removed unsubstantiated price/savings claims from current documentation and AWS selection labels.
-- Prepared Windows/macOS/Linux CI across supported Node boundary versions and current release lines, separate minimum/recent OpenCode jobs, a real macOS Keychain gate and retained security/coverage assertions.
-- Added a release validation record, compatibility matrix and scoped factual claims for the future article. No npm/GitHub publication or article is part of this preparation.
+- Validated Windows/macOS/Linux CI: all 37 jobs passed across supported Node boundary versions and configured release lines, including minimum/recent OpenCode, real macOS Keychain and retained security/coverage assertions.
+- Added a release validation record, compatibility matrix and scoped factual claims for the future article. This preparation includes no npm package publication, tag, GitHub release or article.
 
 ## 7.2.0 - 2026-10-12
 

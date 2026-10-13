@@ -219,35 +219,36 @@ test('PowerShell resolution ignores a redirected SystemRoot', () => {
 test('macOS token backend covers Keychain success, fallback, deletion, and errors', () => {
   const service = requireServiceConfig('llm');
   const calls = [];
+  const tokens = new Map([['claude-scionos', 'legacy-keychain-token']]);
   const backend = createMacOSTokenBackend({
     runCommandFn: (_command, args, options = {}) => {
       calls.push({ args, input: options.input, timeout: options.timeout });
       const input = JSON.parse(options.input);
       assert.equal(args.some((arg) => arg.includes('keychain-token')), false);
       let payload;
-      if (input.operation === 'store') payload = { status: 0 };
+      if (input.operation === 'store') {
+        tokens.set(input.namespace, input.token);
+        payload = { status: 0 };
+      }
       else if (input.operation === 'get') {
-        payload = calls.length === 2
-          ? { status: 0, token: 'keychain-token' }
-          : input.namespace === 'claude-scionos'
-            ? { status: 0, token: 'legacy-keychain-token' }
-            : { status: -25300 };
-      } else payload = { status: input.namespace === 'claude-scionos' ? 0 : -25300 };
+        payload = tokens.has(input.namespace) ? { status: 0, token: tokens.get(input.namespace) } : { status: -25300 };
+      } else payload = { status: tokens.delete(input.namespace) ? 0 : -25300 };
       return { status: 0, stdout: JSON.stringify(payload), stderr: '' };
     },
   });
 
   assert.deepEqual(backend.status(), { supported: true, backend: 'macOS Keychain' });
-  backend.store('keychain-token', service);
   assert.equal(backend.get(service), 'legacy-keychain-token');
+  backend.store('keychain-token', service);
+  assert.equal(backend.get(service), 'keychain-token');
   assert.equal(backend.delete(service), true);
-  assert.equal(JSON.parse(calls[0].input).token, 'keychain-token');
-  assert.equal(calls[0].timeout, 15000);
+  assert.equal(JSON.parse(calls.find((call) => JSON.parse(call.input).operation === 'store').input).token, 'keychain-token');
+  assert.equal(calls.every((call) => call.timeout === 15000), true);
 
   const failing = createMacOSTokenBackend({
     runCommandFn: () => ({ status: 1, stdout: '', stderr: 'Keychain denied\n' }),
   });
-  assert.throws(() => failing.store('token', service), /Keychain store failed/);
+  assert.throws(() => failing.store('token', service), /Keychain .* failed/);
   assert.throws(() => failing.get(service), /Keychain get failed/);
   assert.throws(() => failing.delete(service), /Keychain delete failed/);
 });
@@ -272,6 +273,11 @@ test('Keychain retains access to security-created entries without changing their
     assert.equal(options.timeout, 15000);
     assert.equal(args.some((arg) => arg.includes('fake-compatibility-token')), false);
     if (command === '/usr/bin/security') {
+      if (args[0] === '-i') {
+        assert.deepEqual(args, ['-i']);
+        assert.equal(options.input, `add-generic-password -U -a ${service.secureStorageAccount} -s wrapper-scionos -X ${Buffer.from('fake-compatibility-token').toString('hex')}\n`);
+        return { status: 0 };
+      }
       assert.deepEqual(args, ['find-generic-password', '-a', service.secureStorageAccount, '-s', 'wrapper-scionos', '-w']);
       return { status: 0, stdout: 'fake-compatibility-token\n' };
     }
@@ -279,7 +285,7 @@ test('Keychain retains access to security-created entries without changing their
   } });
   backend.store('fake-compatibility-token', service);
   assert.equal(backend.get(service), 'fake-compatibility-token');
-  assert.deepEqual(commands, ['/usr/bin/osascript', '/usr/bin/osascript', '/usr/bin/security', '/usr/bin/osascript', '/usr/bin/security']);
+  assert.deepEqual(commands, ['/usr/bin/osascript', '/usr/bin/security', '/usr/bin/osascript', '/usr/bin/security', '/usr/bin/osascript', '/usr/bin/security']);
   for (const compatibility of [{ status: 44, stdout: '' }, { status: 1, stderr: 'secret-must-not-appear' }, Object.assign(new Error('secret-must-not-appear'), { code: 'ETIMEDOUT' })]) {
     const reader = createMacOSTokenBackend({ runCommandFn: (command) => {
       if (command !== '/usr/bin/security') return { status: 0, stdout: '{"status":-25293}' };
@@ -288,6 +294,26 @@ test('Keychain retains access to security-created entries without changing their
     } });
     if (compatibility.status === 44) assert.equal(reader.get(service), null);
     else assert.throws(() => reader.get(service), (error) => /Keychain compatibility read failed/.test(error.message) && !error.message.includes('secret-must-not-appear'));
+  }
+});
+
+test('Keychain compatibility writes reject command injection and truncation before invoking security', () => {
+  let commandCount = 0;
+  const backend = createMacOSTokenBackend({ runCommandFn: (command) => {
+    commandCount++;
+    assert.equal(command, '/usr/bin/osascript');
+    return { status: 0, stdout: '{"status":-25293}' };
+  } });
+  assert.throws(() => backend.store('fake-token', { secureStorageAccount: 'fake\ndelete-keychain' }), /invalid-account/);
+  assert.throws(() => backend.store('x'.repeat(4096), { secureStorageAccount: 'safe-test-account' }), /compatibility-input-too-long/);
+  assert.equal(commandCount, 2);
+  for (const failure of [{ status: 1, stderr: 'secret-must-not-appear' }, Object.assign(new Error('secret-must-not-appear'), { code: 'ETIMEDOUT' })]) {
+    const writer = createMacOSTokenBackend({ runCommandFn: (command) => {
+      if (command === '/usr/bin/osascript') return { status: 0, stdout: '{"status":-25293}' };
+      if (failure instanceof Error) throw failure;
+      return failure;
+    } });
+    assert.throws(() => writer.store('secret-must-not-appear', { secureStorageAccount: 'safe-test-account' }), (error) => /Keychain write failed/.test(error.message) && !error.message.includes('secret-must-not-appear'));
   }
 });
 

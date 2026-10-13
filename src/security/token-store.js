@@ -361,9 +361,27 @@ function deleteWindowsToken(service, {
 }
 
 function storeMacOSToken(token, service, runCommandFn = runCommand) {
-  const result = runKeychain('store', service.secureStorageAccount, SECURE_STORAGE_SERVICE, token, runCommandFn);
-  if (result.status !== 0) {
-    throw keychainError('write', result.status);
+  const account = service.secureStorageAccount;
+  const existing = runKeychain('get', account, SECURE_STORAGE_SERVICE, undefined, runCommandFn);
+  if (existing.status === -25293) {
+    // Keep the executable trusted by an existing item's ACL. The security
+    // command parser receives a single hex-only password value through stdin.
+    if (!/^[A-Za-z0-9._-]+$/.test(account)) throw keychainError('write', 'invalid-account');
+    const input = `add-generic-password -U -a ${account} -s ${SECURE_STORAGE_SERVICE} -X ${Buffer.from(token, 'utf8').toString('hex')}\n`;
+    // Apple's batch reader has a 4096-byte line buffer. Never let it truncate
+    // an operation or interpret a remainder as another command.
+    if (Buffer.byteLength(input, 'utf8') >= 4096) throw keychainError('write', 'compatibility-input-too-long');
+    let result;
+    try {
+      result = runCommandFn('/usr/bin/security', ['-i'], { input, timeout: TOKEN_COMMAND_TIMEOUT_MS });
+    } catch (error) {
+      throw keychainError('write', error.code === 'ETIMEDOUT' ? 'timeout' : 'system-command-error');
+    }
+    if (result.status !== 0) throw keychainError('write', result.error?.code ?? result.status);
+  } else {
+    if (existing.status !== 0 && existing.status !== -25300) throw keychainError('write preflight', existing.status);
+    const result = runKeychain('store', account, SECURE_STORAGE_SERVICE, token, runCommandFn);
+    if (result.status !== 0) throw keychainError('write', result.status);
   }
   if (readMacOSToken(service.secureStorageAccount, SECURE_STORAGE_SERVICE, runCommandFn) !== token) {
     throw keychainError('write verification', 'value-mismatch');

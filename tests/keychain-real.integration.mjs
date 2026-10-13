@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { createMacOSTokenBackend } from '../src/security/token-store.js';
 import { withCleanup } from './support/lifecycle.mjs';
 
@@ -14,12 +13,11 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
   const backend = createMacOSTokenBackend({ runCommandFn: (command, args, options) => {
     const result = spawnSync(command, args, { ...options, encoding: 'utf8', killSignal: 'SIGKILL' });
     if (result.status !== 0) {
-      t.diagnostic(`Keychain helper failure: operation=${JSON.parse(options.input).operation}, exit=${result.status}, signal=${result.signal ?? 'none'}, error=${result.error?.code ?? 'none'}`);
+      const operation = command === '/usr/bin/osascript' ? JSON.parse(options.input).operation : 'compatibility';
+      t.diagnostic(`Keychain helper failure: operation=${operation}, exit=${result.status}, signal=${result.signal ?? 'none'}, error=${result.error?.code ?? 'none'}`);
     }
     return result;
   } });
-  const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./support/keychain-probe.jxa.js', import.meta.url))], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
-  t.diagnostic(`Native Keychain parameter probe: exit=${probe.status}, statuses=${probe.stdout?.trim() || 'unavailable'}`);
   await withCleanup(async () => {
     backend.store('fake-native-token', nativeService);
     assert.equal(backend.get(nativeService), 'fake-native-token');

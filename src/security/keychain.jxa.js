@@ -8,34 +8,46 @@ function run() {
     $.SecKeychainSetUserInteractionAllowed(false);
     var inputData = $.NSFileHandle.fileHandleWithStandardInput.readDataToEndOfFile;
     var input = JSON.parse($.NSString.alloc.initWithDataEncoding(inputData, $.NSUTF8StringEncoding).js);
-    // Build a native dictionary: JXA's conversion of JavaScript objects and
-    // booleans does not guarantee the CF types expected by Security.
-    var query = $.NSMutableDictionary.alloc.init;
-    query.setObjectForKey($.kSecClassGenericPassword, $.kSecClass);
-    query.setObjectForKey($(input.namespace), $.kSecAttrService);
-    query.setObjectForKey($(input.account), $.kSecAttrAccount);
-    // This is the macOS file-based Keychain. Interaction was disabled above;
-    // data-protection query flags are not accepted by its legacy item APIs.
+    // Use explicit UTF-8 buffers with the file-based Keychain APIs. This avoids
+    // JXA's ambiguous conversion of a query dictionary to CFDictionaryRef.
+    var service = $(input.namespace).dataUsingEncoding($.NSUTF8StringEncoding);
+    var account = $(input.account).dataUsingEncoding($.NSUTF8StringEncoding);
+    var item = Ref();
     var status;
     if (input.operation === 'store') {
-      var changes = $.NSMutableDictionary.alloc.init;
-      var passwordData = $(input.token).dataUsingEncoding($.NSUTF8StringEncoding);
-      changes.setObjectForKey(passwordData, $.kSecValueData);
-      status = $.SecItemUpdate(query, changes);
-      if (status === -25300) {
-        query.setObjectForKey(passwordData, $.kSecValueData);
-        status = $.SecItemAdd(query, null);
+      var password = $(input.token).dataUsingEncoding($.NSUTF8StringEncoding);
+      status = $.SecKeychainAddGenericPassword(null, service.length, service.bytes, account.length, account.bytes, password.length, password.bytes, null);
+      if (status === -25299) {
+        status = $.SecKeychainFindGenericPassword(null, service.length, service.bytes, account.length, account.bytes, null, null, item);
+        if (status === 0) {
+          try {
+            status = $.SecKeychainItemModifyAttributesAndData(item[0], null, password.length, password.bytes);
+          } finally {
+            $.CFRelease(item[0]);
+          }
+        }
       }
     } else if (input.operation === 'get') {
-      query.setObjectForKey($.kCFBooleanTrue, $.kSecReturnData);
-      query.setObjectForKey($.kSecMatchLimitOne, $.kSecMatchLimit);
-      var result = Ref();
-      status = $.SecItemCopyMatching(query, result);
+      var length = Ref();
+      var bytes = Ref();
+      status = $.SecKeychainFindGenericPassword(null, service.length, service.bytes, account.length, account.bytes, length, bytes, null);
       if (status === 0) {
-        return JSON.stringify({ status: 0, token: $.NSString.alloc.initWithDataEncoding(result[0], $.NSUTF8StringEncoding).js });
+        try {
+          var data = $.NSData.dataWithBytesLength(bytes[0], length[0]);
+          return JSON.stringify({ status: 0, token: $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js });
+        } finally {
+          $.SecKeychainItemFreeContent(null, bytes[0]);
+        }
       }
     } else if (input.operation === 'delete') {
-      status = $.SecItemDelete(query);
+      status = $.SecKeychainFindGenericPassword(null, service.length, service.bytes, account.length, account.bytes, null, null, item);
+      if (status === 0) {
+        try {
+          status = $.SecKeychainItemDelete(item[0]);
+        } finally {
+          $.CFRelease(item[0]);
+        }
+      }
     } else {
       status = -50;
     }

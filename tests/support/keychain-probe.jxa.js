@@ -17,5 +17,12 @@ function run() {
     if (authenticationFlag) query.setObjectForKey($.kSecUseAuthenticationUIFail, $.kSecUseAuthenticationUI);
     results.push({ authenticationFlag: authenticationFlag, status: Number($.SecItemCopyMatching(query, Ref())) });
   });
+  var serviceData = $('wrapper-scionos').dataUsingEncoding($.NSUTF8StringEncoding);
+  var accountData = $(account).dataUsingEncoding($.NSUTF8StringEncoding);
+  [false, true].forEach(function (strings) {
+    try {
+      results.push({ api: 'SecKeychainFindGenericPassword', strings: strings, status: Number($.SecKeychainFindGenericPassword(null, serviceData.length, strings ? 'wrapper-scionos' : serviceData.bytes, accountData.length, strings ? account : accountData.bytes, null, null, Ref())) });
+    } catch (_) { results.push({ api: 'SecKeychainFindGenericPassword', strings: strings, status: 'bridge-error' }); }
+  });
   return JSON.stringify(results);
 }

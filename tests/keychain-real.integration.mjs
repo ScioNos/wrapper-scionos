@@ -10,6 +10,8 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
   const account = `wrapper-scionos-test-${randomUUID()}`;
   const service = { secureStorageAccount: account };
   const backend = createMacOSTokenBackend();
+  const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./support/keychain-probe.jxa.js', import.meta.url))], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+  t.diagnostic(`Native Keychain parameter probe: exit=${probe.status}, statuses=${probe.stdout?.trim() || 'unavailable'}`);
   await withCleanup(async () => {
     // Record the old command's real non-TTY behavior, with a strict deadline.
     const old = spawnSync('/usr/bin/security', ['add-generic-password', '-a', account, '-s', 'claude-scionos', '-w'], { input: 'fake-old-token\n', encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });

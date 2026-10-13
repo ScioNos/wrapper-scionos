@@ -20,7 +20,7 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
   assert.equal(openCode.versionSupported, true, `Unsupported OpenCode CLI version: ${openCode.version ?? 'unknown'}`);
   t.diagnostic(`Validating ${openCode.version}`);
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-opencode-real-'));
+  const tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wrapper-scionos-opencode-real-')));
   const configHome = path.join(tempDir, 'config');
   const dataHome = path.join(tempDir, 'data');
   const cacheHome = path.join(tempDir, 'cache');
@@ -89,7 +89,7 @@ test('installed OpenCode uses the wrapper local OpenAI-compatible provider', { t
     assert.equal(Object.values(env).includes(ROUTERLAB_TOKEN), false);
     assert.ok(requests.some(({ body }) => body.stream === true));
     assert.ok(requests.some(({ body }) => body.messages?.some((message) => message.role === 'tool' && JSON.stringify(message.content).includes('opencode-tool-fixture-ok'))), 'The real read tool must return the fixture to the model');
-  }, [() => stopLongRunningLlmProxy(proxy, { graceMs: 0 }), () => closeTestServer(upstream), () => removeTestDirectory(tempDir)]);
+  }, [() => stopLongRunningLlmProxy(proxy, { graceMs: 0 }), () => closeTestServer(upstream), () => removeTestDirectory(tempDir, fs.realpathSync(os.tmpdir()))]);
 });
 
 function createChatCompletionsServer(requests, toolPath) {

@@ -35,6 +35,7 @@ jobs:
         with:
           name: keychain-macos
           path: .test-logs/
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
@@ -94,6 +95,7 @@ jobs:
         with:
           name: tests-${{ matrix.os }}-${{ matrix.node }}
           path: .test-logs/
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14
 
@@ -128,5 +130,6 @@ jobs:
         with:
           name: opencode-${{ matrix.os }}-${{ matrix.node }}-${{ strategy.job-index }}
           path: .test-logs/
+          include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

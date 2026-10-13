@@ -14,7 +14,8 @@ function run() {
     query.setObjectForKey($.kSecClassGenericPassword, $.kSecClass);
     query.setObjectForKey($(input.namespace), $.kSecAttrService);
     query.setObjectForKey($(input.account), $.kSecAttrAccount);
-    query.setObjectForKey($.kSecUseAuthenticationUIFail, $.kSecUseAuthenticationUI);
+    // This is the macOS file-based Keychain. Interaction was disabled above;
+    // data-protection query flags are not accepted by its legacy item APIs.
     var status;
     if (input.operation === 'store') {
       var changes = $.NSMutableDictionary.alloc.init;

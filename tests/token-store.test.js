@@ -264,6 +264,33 @@ test('Keychain write verification and malformed helper responses fail without re
   assert.throws(() => timeout.get(service), /timeout/);
 });
 
+test('Keychain retains access to security-created entries without changing their ACLs', () => {
+  const service = requireServiceConfig('llm');
+  const commands = [];
+  const backend = createMacOSTokenBackend({ runCommandFn: (command, args, options) => {
+    commands.push(command);
+    assert.equal(options.timeout, 15000);
+    assert.equal(args.some((arg) => arg.includes('fake-compatibility-token')), false);
+    if (command === '/usr/bin/security') {
+      assert.deepEqual(args, ['find-generic-password', '-a', service.secureStorageAccount, '-s', 'wrapper-scionos', '-w']);
+      return { status: 0, stdout: 'fake-compatibility-token\n' };
+    }
+    return { status: 0, stdout: JSON.stringify({ status: JSON.parse(options.input).operation === 'store' ? 0 : -25293 }) };
+  } });
+  backend.store('fake-compatibility-token', service);
+  assert.equal(backend.get(service), 'fake-compatibility-token');
+  assert.deepEqual(commands, ['/usr/bin/osascript', '/usr/bin/osascript', '/usr/bin/security', '/usr/bin/osascript', '/usr/bin/security']);
+  for (const compatibility of [{ status: 44, stdout: '' }, { status: 1, stderr: 'secret-must-not-appear' }, Object.assign(new Error('secret-must-not-appear'), { code: 'ETIMEDOUT' })]) {
+    const reader = createMacOSTokenBackend({ runCommandFn: (command) => {
+      if (command !== '/usr/bin/security') return { status: 0, stdout: '{"status":-25293}' };
+      if (compatibility instanceof Error) throw compatibility;
+      return compatibility;
+    } });
+    if (compatibility.status === 44) assert.equal(reader.get(service), null);
+    else assert.throws(() => reader.get(service), (error) => /Keychain compatibility read failed/.test(error.message) && !error.message.includes('secret-must-not-appear'));
+  }
+});
+
 test('Linux Secret Service backend verifies writes and migrates legacy plaintext only after success', (t) => {
   const tempDir = withTokenDirectory(t, '.test-linux-secret-service-');
   const service = requireServiceConfig('routerlab');

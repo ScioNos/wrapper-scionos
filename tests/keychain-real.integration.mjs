@@ -10,6 +10,7 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
   const account = `wrapper-scionos-test-${randomUUID()}`;
   const oldAccount = `${account}-stdin-probe`;
   const service = { secureStorageAccount: account };
+  const nativeService = { secureStorageAccount: `${account}-native` };
   const backend = createMacOSTokenBackend({ runCommandFn: (command, args, options) => {
     const result = spawnSync(command, args, { ...options, encoding: 'utf8', killSignal: 'SIGKILL' });
     if (result.status !== 0) {
@@ -20,6 +21,13 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
   const probe = spawnSync('/usr/bin/osascript', ['-l', 'JavaScript', fileURLToPath(new URL('./support/keychain-probe.jxa.js', import.meta.url))], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
   t.diagnostic(`Native Keychain parameter probe: exit=${probe.status}, statuses=${probe.stdout?.trim() || 'unavailable'}`);
   await withCleanup(async () => {
+    backend.store('fake-native-token', nativeService);
+    assert.equal(backend.get(nativeService), 'fake-native-token');
+    const nativeUpdatedToken = 'fake-native-quote"-slash\\-unicode-é-行';
+    backend.store(nativeUpdatedToken, nativeService);
+    assert.equal(backend.get(nativeService), nativeUpdatedToken);
+    assert.equal(backend.delete(nativeService), true);
+    assert.equal(backend.get(nativeService), null);
     // Record the old command's real non-TTY behavior, with a strict deadline.
     const old = spawnSync('/usr/bin/security', ['add-generic-password', '-a', oldAccount, '-s', 'claude-scionos', '-w'], { input: 'fake-old-token\n', encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });
     const oldRead = spawnSync('/usr/bin/security', ['find-generic-password', '-a', oldAccount, '-s', 'claude-scionos', '-w'], { encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });
@@ -29,6 +37,9 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
     const legacy = spawnSync('/usr/bin/security', ['-i'], { input: `add-generic-password -a ${account} -s claude-scionos -w fake-legacy-token\n`, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
     assert.equal(legacy.status, 0, 'Legacy security helper must complete non-interactively');
     assert.equal(backend.get(service), 'fake-legacy-token');
+    const current = spawnSync('/usr/bin/security', ['-i'], { input: `add-generic-password -a ${account} -s wrapper-scionos -w fake-existing-token\n`, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+    assert.equal(current.status, 0, 'Existing current-namespace entry must be created');
+    assert.equal(backend.get(service), 'fake-existing-token');
     backend.store('fake-first-token', service);
     assert.equal(backend.get(service), 'fake-first-token');
     backend.store('fake-updated-token', service);
@@ -36,7 +47,7 @@ test('real macOS Keychain stores, updates, verifies, reads legacy, and deletes o
     assert.equal(backend.delete(service), true);
     assert.equal(backend.get(service), null);
     assert.equal(backend.delete(service), false);
-  }, [() => backend.delete(service), () => {
+  }, [() => backend.delete(service), () => backend.delete(nativeService), () => {
     const cleanup = spawnSync('/usr/bin/security', ['delete-generic-password', '-a', oldAccount, '-s', 'claude-scionos'], { encoding: 'utf8', timeout: 2000, killSignal: 'SIGKILL' });
     assert.ok(!cleanup.error && (cleanup.status === 0 || cleanup.status === 44), 'Legacy probe cleanup must complete or report an absent item');
   }]);

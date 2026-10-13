@@ -143,11 +143,26 @@ function readMacOSToken(account, namespace, runCommandFn = runCommand) {
   const result = runKeychain('get', account, namespace, undefined, runCommandFn);
   if (result.status === 0) return result.token || null;
   if (result.status === -25300) return null;
+  if (result.status === -25293) {
+    // Entries made by earlier releases may trust security rather than
+    // osascript. Reuse that trusted reader without modifying their ACLs.
+    let compatibility;
+    try {
+      compatibility = runCommandFn('/usr/bin/security', [
+        'find-generic-password', '-a', account, '-s', namespace, '-w',
+      ], { timeout: TOKEN_COMMAND_TIMEOUT_MS });
+    } catch (error) {
+      throw keychainError('compatibility read', error.code === 'ETIMEDOUT' ? 'timeout' : 'system-command-error');
+    }
+    if (compatibility.status === 0) return compatibility.stdout.replace(/\r?\n$/, '') || null;
+    if (compatibility.status === 44) return null;
+    throw keychainError('compatibility read', compatibility.error?.code ?? compatibility.status);
+  }
   throw keychainError('read', result.status);
 }
 
 function keychainError(operation, status) {
-  const error = new Error(`macOS Keychain ${operation} failed (OSStatus ${status}); unlock/authorize the Keychain and retry. No plaintext fallback is used.`);
+  const error = new Error(`macOS Keychain ${operation} failed (status ${status}); check Keychain availability and access permissions. No plaintext fallback is used.`);
   error.code = 'keychain_operation_failed';
   error.status = status;
   return error;

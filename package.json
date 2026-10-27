@@ -1,6 +1,6 @@
 {
   "name": "wrapper-scionos",
-  "version": "7.3.0",
+  "version": "8.0.0-beta.1",
   "description": "Extensible ScioNos CLI wrapper for RouterLab-backed coding assistants",
   "type": "module",
   "main": "index.js",
@@ -22,12 +22,13 @@
     "test": "node --test --test-timeout=30000",
     "test:claude-real": "node --test tests/claude-real-cli.integration.mjs",
     "test:codex-real": "node --test tests/codex-real-cli.integration.mjs",
+    "test:codex-app-real": "node --test tests/codex-app-real.integration.mjs",
     "test:opencode-real": "node --test tests/opencode-real-cli.integration.mjs",
     "test:keychain-real": "node --test tests/keychain-real.integration.mjs",
     "start": "node index.js",
     "test:entry-modes": "node tests/run-entry-mode-smokes.mjs",
     "test:coverage": "node tests/run-coverage.mjs",
-    "release:check": "npm test && npm run test:coverage && npm run test:entry-modes && npm run test:claude-real && npm run test:codex-real && npm run test:opencode-real && npm run test:keychain-real && npm audit && npm pack --dry-run"
+    "release:check": "npm test && npm run test:coverage && npm run test:entry-modes && npm run test:claude-real && npm run test:codex-real && npm run test:opencode-real && npm run test:keychain-real && npm run test:codex-app-real && npm audit && npm pack --dry-run"
   },
   "keywords": [
     "scionos",
@@ -46,7 +47,10 @@
   "dependencies": {
     "@inquirer/core": "^11.2.1",
     "@inquirer/prompts": "^8.5.2",
-    "chalk": "^6.0.0"
+    "chalk": "^6.0.0",
+    "fast-string-width": "^3.0.2",
+    "fast-wrap-ansi": "^0.2.2",
+    "toml-eslint-parser": "0.10.0"
   },
   "repository": {
     "type": "git",

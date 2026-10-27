@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 8.0.0-beta.1 - 2026-10-27
+
+### Changed
+
+- Made the active interface language visible in the console header and added `L`/Home language selection for English, French and German in both menus. Changes apply to the current session and launch prompts without changing the selected service, models or direct-command defaults. The AWS family label uses `💸 Claude via AWS`.
+- Added the structured terminal console with persistent service/token context, Home, Launch, Desktop applications, Account & access, and Diagnostics. Navigation uses a sidebar from 100 columns, a top row below that, and a linear fallback for small, incompatible, or redirected terminals.
+- Interactive Claude Code, Codex and OpenCode sessions return home after success, failure or interruption. Direct commands retain their output and exit-code contracts. The terminal is released before native execution and restored afterward.
+- Added paginated keyboard controls, English/French/German text, explicit recovery for unavailable saved choices, and background local inspection without repeated network polling.
+- Separated launch preparation from execution. Prepared capabilities expose public catalogue data; execution refreshes credentials and discovery before creating resources or spawning clients.
+- Desktop proxy sessions remain active while navigating. The console supports start, stop, model-family editing, configured routes and confirmed official-mode restoration. Stopping or exiting preserves the applied profile; only console-owned proxies are stopped.
+
+### Added
+
+- Clickable terminal navigation, tool/model selectors, checkboxes, confirmations and language control, with wheel scrolling and clickable pagination. Keyboard controls remain available, including over SSH; `SCIONOS_MOUSE=0` disables capture. Mouse reporting is removed before native execution and restored on return. Windows OS input reads are stopped while clients run and the duplicated input handle closes only on final shutdown, avoiding stolen keys and pending Q-only exits.
+- Six separate Home entries retaining shortcuts 1–4 and adding 5 for Claude Cowork and 6 for Codex App. Claude Desktop/Cowork retain their shared profile; Codex App has independent actions, status and per-service preferences.
+- `codex-app status|launch|restore` (default status), preview-only dry runs and explicit `--yes` activation/recovery. Windows package-identity and macOS bundle detection validate the embedded engine; Linux reports unsupported. Codex App uses direct Responses with a verified family catalogue and durable secure-store command authentication.
+- TOML 1.0 AST-directed text patches preserve unrelated settings, MCP configuration, comments, BOM and line endings. Dated backup, private write-ahead recovery journal, owner lock, optimistic concurrency checks and atomic writes protect the shared configuration. Shutdown restores the owned group together, preserving unrelated edits and refusing conflicting personal changes. Abrupt-stop recovery requires explicit restoration.
+- Interactive App exit offers graceful close, leave-open restoration or cancellation, without forced application termination. SIGTERM and noninteractive exit restore while leaving the app open. Runtime helpers and catalogues remain available to open apps after restoration.
+- Embedded-engine integration check against an isolated home and loopback Responses provider, covering native catalogue loading, secure-store auth without RouterLab environment variables, tool execution and a follow-up turn. No production configuration is activated by this test.
+- Optional per-service/client launch preferences in `~/.wrapper-scionos/ui-state.json`, written atomically only after successful process creation. No tokens, journals or validation state are persisted; unreadable or unwritable preferences do not block the console.
+- Regression coverage for keyboard navigation, resizing, preferences, preparation/execution, unavailable models, proxy ownership, interruption and terminal cleanup. Historical 7.3.0 cross-platform results remain separate from the 8.0.0 validation record.
+
 ## 7.3.0 - 2026-10-13
 
 ### Fixed

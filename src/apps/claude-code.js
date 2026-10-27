@@ -381,8 +381,10 @@ export async function chooseSubagentModel({
 }
 
 export async function launchClaudeCode(
-  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, language = 'en', claudeArgs, version = null, allowBack = false },
-  {
+  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, language = 'en', claudeArgs, version = null, allowBack = false, prepareOnly = false, quiet = false, updateProcessExitCode = true, onSpawn = null },
+  dependencies = {},
+) {
+  const {
     chooseSubagentModelFn = chooseSubagentModel,
     chooseStrategyFn = chooseStrategy,
     detectClaudeCodeFn = detectClaudeCode,
@@ -391,15 +393,14 @@ export async function launchClaudeCode(
     runInteractiveCliFn = runInteractiveCli,
     startLongRunningLlmProxyFn = startLongRunningLlmProxy,
     stopLongRunningLlmProxyFn = stopLongRunningLlmProxy,
-  } = {},
-) {
+  } = dependencies;
   const serviceConfig = requireServiceConfig(serviceValue);
   const baseUrlResolution = resolveServiceBaseUrlWithSource(serviceConfig.value, process.env);
   const service = {
     ...serviceConfig,
     baseUrl: validateServiceBaseUrl(baseUrlResolution.baseUrl, serviceConfig.value),
   };
-  if (!noPrompt) {
+  if (!noPrompt && !quiet) {
     console.log(formatClaudeCodeIntro(version, service.label));
   }
 
@@ -423,7 +424,7 @@ export async function launchClaudeCode(
         storedTokenPresent: false,
       }
     : await resolveTokenWithSourceFn({ serviceValue: service.value, noPrompt, language });
-  warnClaudeCodeTokenConflict(service, resolvedToken);
+  if (!quiet) warnClaudeCodeTokenConflict(service, resolvedToken);
   const token = resolvedToken.token;
   const tokenFormat = validateTokenFormat(token);
   if (!tokenFormat.valid) {
@@ -443,6 +444,31 @@ export async function launchClaudeCode(
       reason: 'no_authorized_models',
       message: `the verified catalog contains none of the ${authorizedModels.size} authorized Claude Code models`,
     }, service);
+  }
+
+  if (prepareOnly) {
+    // The UI receives public catalogue data; credentials remain in this closure.
+    return {
+      models: modelIds,
+      tokenSource: resolvedToken.source,
+      families: buildStrategyPromptChoices(modelIds, service.value).map((choice) => {
+        const strategy = findStrategy(choice.value, service.value);
+        const versionMissing = strategy?.minimumClaudeCodeVersion
+          && !isClaudeCodeVersionSupported(claude.version, strategy.minimumClaudeCodeVersion);
+        return {
+          value: choice.value, name: choice.short,
+          disabled: choice.disabled || (versionMissing ? `Claude Code >= ${strategy.minimumClaudeCodeVersion}` : false),
+          defaultSubagent: getClaudeCodeStrategyEnvironment(choice.value, service.value).CLAUDE_CODE_SUBAGENT_MODEL,
+          fixedSubagent: strategy?.fixedSubagentModel ?? null,
+        };
+      }),
+      subagents: getClaudeCodeSubagentModels(service.value).filter((model) => modelIds.includes(model)),
+      execute: (selection, hooks = {}) => launchClaudeCode({
+        serviceValue: service.value, strategyValue: selection.family, token: tokenOverride,
+        subagentModel: selection.subagent, claudeArgs, language,
+        noPrompt: true, quiet: true, updateProcessExitCode: false, ...hooks,
+      }, { ...dependencies, ...(resolvedToken.source === 'prompt' ? { resolveTokenWithSourceFn: async () => resolvedToken } : {}) }),
+    };
   }
 
   let selectedStrategy;
@@ -491,7 +517,7 @@ export async function launchClaudeCode(
     });
     const selectedStrategyName = getStrategyDisplayName(selectedStrategy, service.value);
 
-    if (!noPrompt) {
+    if (!noPrompt && !quiet) {
       console.log(formatLaunchSummary({
         service,
         strategy: selectedStrategyName,
@@ -501,8 +527,12 @@ export async function launchClaudeCode(
       console.log(chalk.green(`Launching Claude Code [${selectedStrategyName}]...\n`));
     }
 
-    await runInteractiveCliFn(claude.cliPath, claudeArgs, { env });
-    return { kind: 'launched' };
+    const exitCode = await runInteractiveCliFn(claude.cliPath, claudeArgs, {
+      env,
+      ...(!updateProcessExitCode ? { updateProcessExitCode: false } : {}),
+      ...(onSpawn ? { onSpawn } : {}),
+    });
+    return updateProcessExitCode ? { kind: 'launched' } : { kind: 'launched', exitCode };
   } catch (error) {
     if (proxy) {
       try {

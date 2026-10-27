@@ -37,7 +37,7 @@ export async function handleAuth(action, options, {
       return;
     }
     const language = options.language ?? 'en';
-    const token = resolveCliToken(options) ?? await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` });
+    const token = resolveCliToken(options) ?? await passwordFn({ message: `${service.label} ${translate(language, 'tokenWord')}:` }, { signal: options.signal });
     const format = validateTokenFormat(token);
     if (!format.valid) throw new Error(format.message);
     const storage = storeTokenFn(token.trim(), service.value);

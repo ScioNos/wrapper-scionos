@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%5E22.13.0%20%7C%7C%20%3E%3D23.5.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-One launcher for five tools: Claude Code CLI, Claude Cowork, Claude Desktop, Codex CLI and OpenCode CLI — routed through the selected RouterLab service.
+One launcher for six tools: Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Claude Cowork and Codex App, routed through the selected RouterLab service.
 
 ## Why wrapper-scioNos?
 
@@ -16,9 +16,9 @@ Keep your preferred coding client and choose a RouterLab model family for your w
 npx wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
-**Current release: `7.3.0`**
+**Beta: [`8.0.0-beta.1`](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1) — Structured terminal console.**
 
-[Release notes v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0)
+Latest stable release: [Release notes v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0). Download the beta package from the GitHub prerelease assets.
 
 [Français](./README.fr.md) · [Deutsch](./README.de.md) · [Changelog](./CHANGELOG.md)
 
@@ -31,6 +31,7 @@ npx wrapper-scionos claude-code --service routerlab --strategy aws
 | Claude Cowork | Through the Claude Desktop integration | Shared Desktop routes |
 | Codex CLI | Direct Responses endpoint | RouterLab family, then native `/model` catalogue |
 | OpenCode CLI | Authenticated OpenAI-compatible loopback proxy | Family, then exact model |
+| Codex App | Direct Responses endpoint with restorable temporary settings | Family and model from the verified Codex catalogue |
 
 The service is selected once, before the menu opens, and remains fixed for the session. The wrapper validates the service token, discovers the current catalogue, and fails closed when no authorized model is available.
 
@@ -40,6 +41,7 @@ The service is selected once, before the menu opens, and remains fixed for the s
 - A token for the selected RouterLab service.
 - Claude Code `>=2.1.220`; RouterLab Claude Native requires `>=2.1.293` and AWS Claude requires `>=2.1.284`. Release checks use `2.1.296`.
 - Codex CLI `>=0.144.1` for Codex launches.
+- Codex App on Windows or macOS with embedded engine `>=0.164.0`; Linux is unsupported. Locally checked with App `26.1021.3705.0` and engine `0.164.0-alpha.11.1`.
 - OpenCode `>=1.18.30`; Windows checks validate `opencode-ai@1.18.30` and `@opencode/cli@2.0.27`.
 - Windows, macOS, or `claude-desktop-debian` on Linux for Claude Desktop profiles.
 
@@ -69,34 +71,65 @@ For `--service llm`, the wrapper displays this neutral notice because the servic
 
 The notice is not displayed for `routerlab`.
 
-## Interactive menu
+## Structured terminal console
 
-The home menu provides the same entry points on every platform:
+The console provides **Home**, **Launch**, **Desktop applications**, **Account & access**, and **Diagnostics**. Navigation uses a sidebar from 100 columns and a top row between 60 and 99 columns. Windows smaller than 60 columns or 18 rows, `TERM=dumb` terminals, and redirected output use the linear menu.
 
-```text
-1. Claude Code
-2. Claude Desktop / Cowork
-3. Codex CLI
-4. OpenCode CLI
-5. Account & access
-6. Tools & diagnostics
-0. Exit
+```bash
+npm start -- --lang en
+node index.js --lang en
+# In PowerShell, if npm.ps1 consumes the arguments:
+npm.cmd start -- --lang en
 ```
+
+Home shows locally detected clients and distinguishes **token stored** from **access verified**. Local inspection runs in the background. Navigation does not repeatedly contact the service; access and models are checked again before each launch.
 
 | Input | Action |
 | --- | --- |
-| `↑` / `↓` | Move through the choices, with wraparound |
-| `Enter` | Confirm the highlighted choice |
-| A number | Select the displayed shortcut |
-| Label, value or model ID | Select a matching choice |
-| `0`, `b`, `back` | Go back; `0` exits from the home menu |
-| `q`, `quit`, `exit` | Quit the wrapper from any menu |
-| `Esc` | Go back, or quit from the home menu |
-| `Ctrl+C` | Interrupt with exit code `130` |
+| Left click | Activate a tool, navigation tab, choice, checkbox or button |
+| Mouse wheel / `[‹]` and `[›]` | Scroll lists and change pages |
+| `L` or the header language | Choose English, French or German |
+| `Tab` | Switch between navigation and content |
+| `↑` / `↓` | Navigate available choices, with pagination |
+| `Enter` | Activate the selected choice |
+| `Space` | Toggle a preference or Desktop model family |
+| `1`, `2`, `3`, `4`, `5`, `6` on Home | Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Claude Cowork, Codex App |
+| `Q` or `0` | Exit the console |
+| `Esc` | Cancel a picker or return Home |
+| `Ctrl+C` | Exit the console (`130`); in a native client, interrupt its session and return Home |
 
-The full keyboard help is shown on the home menu and a compact version is used in submenus. Once a native client starts, its keyboard input and output remain entirely native to that client.
+Mouse input is enabled automatically in compatible terminals, including SSH to a VPS when the local terminal forwards mouse events. Keyboard controls remain available throughout. Set `SCIONOS_MOUSE=0` to disable mouse capture and use the terminal’s normal text selection. Mouse capture is disabled for `TERM=dumb` and `TERM=linux`.
+
+A paginated summary presents the complete configuration before confirming a launch. The console releases the terminal and disables its mouse capture while the native client runs, then returns Home after success, failure, or interruption. Direct commands retain their exit codes. The linear menu keeps its existing numeric and text inputs.
+
+**Remember this configuration** is enabled by default. After the client actually starts, selections are saved in `~/.wrapper-scionos/ui-state.json`, separately for each service and client. This file contains no tokens, journal, or access validation state. An unavailable saved choice requires an explicit replacement. Disabling the checkbox leaves the previous saved configuration unchanged.
+
+Desktop applications shows the shared Claude Desktop / Cowork profile separately from this console’s proxy. The proxy stays active while navigating. Stopping it keeps the profile applied; restoring official mode removes the profile after confirmation. Existing profiles containing multiple model families are preserved. Exiting stops the console’s proxies. Codex App has its own actions and status.
+
+### Codex App and TOML preservation
+
+First store the token in **Account & access** or run `node index.js auth login --service routerlab`. Choose **6 — Codex App**, a family and model, then confirm the summary. The console remains available while the application runs. If Codex App was already open, restart it yourself to load the new connection.
+
+```bash
+node index.js codex-app status --json
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --dry-run --no-prompt --json
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --yes --no-prompt
+# The launch command stays active. Ctrl+C restores the previous settings.
+node index.js codex-app restore --dry-run --json
+node index.js codex-app restore --yes
+```
+
+`codex-app` defaults to status. Launch dry-runs create no files and do not open the application; access/model discovery still requires a connection. Direct launches without prompting require `--yes`. Restore without `--yes` only previews. JSON launch output requires `--dry-run`; other commands retain their usual JSON envelope and exit-code conventions.
+
+Only `model`, `model_provider`, `model_catalog_json` and the reserved provider `scionos_routerlab` or `scionos_llm` are changed. Unrelated settings, MCP servers, comments, order, UTF-8 BOM and line endings are preserved. An existing unowned reserved provider is refused. The first activation creates a dated backup and private journal under `~/.wrapper-scionos/codex-app/`; a session lock and atomic writes guard concurrent changes. Invalid TOML is refused.
+
+Interactive exit offers a normal close request followed by restoration, restoration while leaving the app open, or cancellation. Closure is never forced. SIGTERM and noninteractive exit restore without closing the app. An open app may keep its loaded connection until its next restart. Changes to any owned setting block the entire restoration and preserve the current file; unrelated personal edits survive restoration. After a crash, inspect status and explicitly use `codex-app restore --dry-run` followed by `codex-app restore --yes`, or Desktop applications. The backup is never blindly copied over your configuration.
+
+The token stays in the existing secure store. A durable, independent credential helper reads it from the app process without RouterLab terminal variables. No token is written to TOML, catalogue, journal or preferences. Helper and catalogue files are retained while an open app might still need them. App preferences are separate from Codex CLI for each service. Responses connects directly; [OpenAI documents command authentication for the Windows app](https://learn.chatgpt.com/docs/enterprise/connect-to-a-gateway#configure-the-windows-app). Native checks use a temporary `CODEX_HOME`; activating your real configuration requires the explicit console action or `launch --yes`.
 
 ### Interface language
+
+The active language is visible in the header. Press **L**, or choose **Language / Langue / Sprache** on Home, to switch between **English**, **Français** and **Deutsch** for the current session. Switching preserves the active service and model selections. Model families retain catalogue labels, including **💸 Claude via AWS**.
 
 The wrapper defaults to English. Use one of the following languages:
 
@@ -180,7 +213,7 @@ wrapper-scionos codex launch --service llm
 
 On `routerlab`, interactive launch first selects **OpenAI GPT-6**, **Open Source**, or **Trial**, then opens Codex with that family's temporary verified catalogue. The native `/model` selector changes models within the selected family. Preferred family defaults are `gpt-6.1-sol`, `deepseek-v4.1-flash`, and `deepseek-v4.1-flash-trial`; if a family’s preferred model is unavailable, interactive mode requires an explicit choice from its available models, even when only one remains. Non-interactive mode fails with instructions to provide `--model <id>`. An explicit unavailable model always fails.
 
-Without a selected family, the RouterLab launch default is **`gpt-6.1-sol`**. The RouterLab LLM default remains **`gpt-5.6-sol`**, and its home-menu entry opens Codex directly. Explicit models and these service defaults must be discovered and authorized. Use `--strategy claude-gpt|open-source|trial` to select a RouterLab family from the command line, or `--model` for an exact model.
+Without a selected family, the RouterLab launch default is **`gpt-6.1-sol`**. The RouterLab LLM default remains **`gpt-5.6-sol`**, the structured console now prepares its family and model; the linear menu retains its direct launch. Explicit models and these service defaults must be discovered and authorized. Use `--strategy claude-gpt|open-source|trial` to select a RouterLab family from the command line, or `--model` for an exact model.
 
 | Service | Allowlist |
 | --- | --- |
@@ -231,6 +264,8 @@ In memory, the wrapper holds the service token while it runs. Claude Code and Op
 
 ## Verified compatibility
 
+The historical results below describe 7.3.0. See the [8.0.0 development validation record](./docs/release-8.0.0-validation.md) for this branch’s checks.
+
 On Windows with Node 24.19.0, Claude Code 2.1.296 passed 13 routing scenarios; Codex 0.144.1 and 0.157.0 passed Responses streaming and native model/list; OpenCode 1.18.30 and 2.0.27 passed exact model, HTTP path, authentication, streaming and a native read-tool cycle against simulated providers. OpenCode 2 uses native `--standalone` so its private server receives the ephemeral proxy configuration. Its shared background service is incompatible with this per-launch integration.
 
 [GitHub CI passed all 37 jobs](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), including these Claude/OpenCode versions and Codex 0.144.1 on Windows, macOS and Linux, plus real Keychain checks on macOS. The exact Node configurations and runner versions are recorded in the validation report.
@@ -268,7 +303,7 @@ The real-client smoke tests use loopback-only fake services and do not contact R
 
 ```bash
 npm pack
-npx --yes --package ./wrapper-scionos-7.3.0.tgz wrapper-scionos
+npx --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
 ```
 
 ## License

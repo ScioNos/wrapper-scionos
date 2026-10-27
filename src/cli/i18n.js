@@ -1,4 +1,6 @@
 export const SUPPORTED_LANGUAGES = Object.freeze(['en', 'fr', 'de']);
+export const LANGUAGE_LABELS = Object.freeze({ en: 'English', fr: 'Français', de: 'Deutsch' });
+export const LANGUAGE_MENU_TITLE = 'Language / Langue / Sprache';
 
 const TRANSLATIONS = Object.freeze({
   en: Object.freeze({

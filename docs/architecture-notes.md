@@ -4,11 +4,25 @@
 
 The package is split into client adapters under src/apps, CLI parsing and commands under src/cli, transport and process code under src/platform, RouterLab normalization under src/routerlab, and service-scoped credential storage under src/security.
 
-The command registry and common option definitions are the source for parser behavior, generated help, and CLI tests. Interactive navigation is driven by one route registry with explicit parents, a shared home action, and breadcrumbs; command handlers do not own menu loops. Each command/action owns an allowlist of options and positional arguments. Usage errors are separated from runtime failures with exit codes 2 and 1. Machine output is a single success/error envelope; interactive launchers reject JSON.
+The command registry and common option definitions are the source for parser behavior, generated help, and CLI tests. The structured console separates its controller, public view model, terminal renderer and prompt. The linear fallback retains its route registry with explicit parents and breadcrumbs; command handlers do not own menu loops. Each command/action owns an allowlist of options and positional arguments. Usage errors are separated from runtime failures with exit codes 2 and 1. Machine output is a single success/error envelope; interactive launchers reject JSON.
 
 The wrapper UI supports English, French, and German through `--lang`/`--language` or `SCIONOS_LANG`/`SCIONOS_LANGUAGE`, with English as the compatibility default. Localization covers the wrapper menus, route prompts, service notice, and keyboard help; native client output remains under the control of the launched client. The full help line is used on the home route and a compact line on submenus. The LLM service alone displays a neutral availability notice because its model catalog can vary; `routerlab` does not display that notice.
 
 The `strategies` command uses verified model availability when a token can be resolved. From an interactive invocation without a stored or environment token, it intentionally lists strategy definitions without availability checks; `--no-prompt` remains fail-closed when token resolution fails.
+
+## Structured terminal console (8.0.0)
+
+The renderer emits the displayed frame and its cell-coordinate hit targets together, including responsive navigation, language control, choices, checkboxes and page buttons. A single input adapter removes mouse packets before passing keyboard bytes to Inquirer. It follows [xterm mouse tracking](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html): button reporting (1000) and SGR cell coordinates (1006), with legacy X10 packets accepted. Release, motion, non-left clicks and modified packets do not activate choices. The streaming decoder bounds packet size and quarantines malformed or incomplete mouse input so packet digits cannot become shortcuts. Wheel movement clamps at list ends; read-only summaries and journals remain scrollable. Modal dialogs expose only their own hit targets.
+
+Mouse capture requires TTY input/output, is disabled for TERM=dumb/linux or SCIONOS_MOUSE=0, and needs no desktop service. SSH use depends on the local terminal forwarding mouse reports. Prompt cancellation, EOF, input errors and interrupts disable capture; all keyboard controls remain usable. Before a foreground client, the prompt releases input, mouse reporting and the alternate screen. On Windows a duplicated stdin handle remains paused across clients: its OS reads stop using the same readStop/state sequence as Node's stdin bootstrap, preventing it from consuming client keystrokes. Only final shutdown closes that duplicate; inherited stdin stays available. Returning from a native client resumes the handle and reinstates the console.
+
+The no-command interactive entry point selects the structured console when stdin/stdout are TTYs, TERM is not dumb, the width is at least 60 columns and the height at least 18 rows. The sidebar appears from 100 columns; narrower terminals use top navigation. The terminal renderer measures display width, strips control characters from labels and paginates choices. Other entry modes use the existing linear menu and direct commands.
+
+Local executable/version and credential-presence inspection runs in a worker, posting only sanitized snapshots. It does not fetch the remote model catalogue. There is no background network polling. Launch preparation uses the existing client validators and publishes only catalogue/selection data. Its execution capability is held outside the public view model; execution resolves credentials and verifies discovery again before allocating proxies/catalogues and spawning a client. A prompt-supplied ephemeral token may remain in the private capability, while stored/environment tokens are resolved again. Inquirer has exclusive keyboard ownership; the console is disposed and its alternate screen released before a native client starts, then restored on return.
+
+The console owns managed Desktop proxy sessions independently of the foreground native client. Profile health and proxy liveness are separate. Start/stop, family editing and official restoration use the existing verified-route builder, profile locks and rollback. Only console-owned servers are stopped on exit. External port conflicts are reported without terminating another process. The direct proxy command still waits for shutdown signals with its existing exit codes.
+
+Launch choices are written atomically to ~/.wrapper-scionos/ui-state.json only after the child emits spawn. The version-1 format contains separate service/client selections and a last-client pointer. A whitelist excludes credentials, paths, journals, validation results and arbitrary input fields. Preferences affect only the interactive console, not direct CLI defaults. Unreadable or unwritable preferences produce a recoverable notice. Existing token storage and service precedence remain unchanged.
 
 ## Local transport security
 
@@ -82,9 +96,19 @@ The RouterLab destination invariant is scoped to model traffic configured by the
 
 `codex status` and `codex restore` retain detection and cleanup for persistent configuration and catalog files created by older releases. The current launch path never writes persistent Codex configuration. It creates only a per-launch catalog in the operating system's temporary directory and removes it after the child exits or startup fails. A known backup may be restored automatically, but a current `config.toml` without that backup is never deleted; legacy wrapper detection then reports `manualCleanupRequired`. The dedicated legacy model catalog remains independently removable.
 
-An interactive non-zero Codex exit or startup exception is reported and returns to the main menu without retaining the child exit code. A successful interactive session closes the wrapper, while direct launches preserve the Codex exit code.
+An interactive non-zero Codex exit or startup exception is reported and returns to the main menu without retaining the child exit code. Successful and interrupted interactive sessions also return home; direct launches preserve the Codex exit code.
 
 ## Native Responses transport
+
+### Codex App ownership
+
+`src/apps/codex-app.js` reuses Codex model discovery and family validation, but checks the App's own embedded engine (minimum 0.164.0). Windows detection resolves the installed package identity rather than persisting its versioned path; macOS uses its application bundle. Linux is unsupported. The App uses direct Responses and a separate `scionos_routerlab` or `scionos_llm` provider, with only the selected family's discovered model catalogue.
+
+`codex-app-toml.js` parses TOML 1.0 with `toml-eslint-parser@0.10.0`, compatible with all supported Node versions. It applies source-range edits to the three root connection keys and appends owned provider fragments. It never serializes the entire AST. `codex-app-config.js` manages exclusive ownership, dated backups, private prepared/active/restoring write-ahead journal states, hash checks and atomic replacement. Repeated changes reuse the original reference. Restoration validates the whole owned group before any write, preserving unrelated user edits; conflicts retain the current file and journal for explicit recovery. A completed restore interrupted before journal deletion is recognized by its target hash.
+
+The copied standalone credential helper imports only built-in Node dependencies and reads the existing secure store. The provider uses native `[model_providers.<id>.auth]` command authentication with no token or `env_key` in TOML. Runtime assets are independent of the checkout/npm install, contain no token, and are retained while a running application may use them. The documented Windows mechanism is described in [OpenAI's gateway configuration](https://learn.chatgpt.com/docs/enterprise/connect-to-a-gateway#configure-the-windows-app).
+
+Both interactive menus remain available after opening the App. The direct `codex-app launch` command stays alive until interruption so it can restore at shutdown. Interactive shutdown offers normal closure, leave-open restoration, or cancellation. SIGTERM restores without prompting or closing the App. Closing is a normal OS request, never a process-tree kill. An open App can retain loaded connection settings until restarted; the shared TOML is restored independently. `codex restore` remains the legacy CLI cleanup command; `codex-app restore` handles only the new journal-owned settings.
 
 Codex receives `wire_api="responses"` and calls the fixed RouterLab `/v1` endpoint directly. The wrapper neither observes nor transforms Responses requests or errors. RouterLab owns model-specific compatibility, authorization, retention, and any model change made through Codex after startup.
 
@@ -111,3 +135,5 @@ Interactive Desktop startup computes a create/reuse/replace plan. The banner-sel
 ## Release 7.3.0 validation
 
 The [validation record](./release-7.3.0-validation.md) records local Windows runs, all 37 successful CI jobs on Windows/macOS/Linux, real macOS Keychain and the distinction between profile/proxy tests and application tests. A discovered/allowlisted identifier is not a live-model compatibility result. Test inference uses fake credentials and loopback providers exclusively. Native policy settings are retained by the adapters; this is not an end-to-end validation of every native MCP, sandbox or session feature.
+
+The [8.0.0 development validation record](./release-8.0.0-validation.md) separates current working-tree checks from the historical 7.3.0 CI evidence.

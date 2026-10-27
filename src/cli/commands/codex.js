@@ -91,6 +91,19 @@ export async function launchCodexForService(options, dependencies = {}) {
     );
   }
   const availableFamilies = availableCodexModelFamilies(service.value, modelResult.models);
+  if (options.prepareOnly) {
+    return {
+      models: availableModels,
+      tokenSource: resolvedToken.source,
+      families: availableFamilies,
+      defaultModel: defaultCodexModelForService(service.value),
+      execute: (selection, hooks = {}) => launchCodexForService({
+        ...options, prepareOnly: false, noPrompt: true,
+        strategy: selection.family, model: selection.model,
+        updateProcessExitCode: false, ...hooks,
+      }, { ...dependencies, ...(resolvedToken.source === 'prompt' ? { resolveTokenWithSource: async () => resolvedToken } : {}) }),
+    };
+  }
   if (!options.model && !options.noPrompt && !options.strategy && availableFamilies.length === 0) {
     throw codexModelDiscoveryError(
       { reason: 'models_unavailable', message: 'No Codex model family is currently available' },
@@ -183,6 +196,7 @@ export async function launchCodexForService(options, dependencies = {}) {
       codexArgs: [...codexArgs, ...forwarded],
       codex,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
+      ...(options.onSpawn ? { onSpawn: options.onSpawn } : {}),
     });
   } catch (error) {
     launchError = error;

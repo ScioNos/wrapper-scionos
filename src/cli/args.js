@@ -10,7 +10,7 @@ export const COMMON_OPTION_DEFINITIONS = [
   { flags: ['--lang', '--language'], value: '<en|fr|de>', description: 'Select the wrapper interface language.' },
   { flags: ['--strategy'], value: '<value>', description: 'Select a model-routing strategy.' },
   { flags: ['--subagent-model'], value: '<id>', description: 'Select a supported Claude Code subagent model.' },
-  { flags: ['--model'], value: '<value>', description: 'Select the initial Codex or OpenCode model.' },
+  { flags: ['--model'], value: '<value>', description: 'Select the initial Codex CLI, Codex App or OpenCode model.' },
   { flags: ['--token'], value: '<value>', description: 'Override the service token for supported commands (not Claude Code). DEPRECATED: visible in process listings and shell history; prefer --token-stdin.' },
   { flags: ['--token-stdin'], description: 'Read the service token from stdin (safer than --token).' },
   { flags: ['--host'], value: '<loopback>', description: 'Bind a local proxy to a loopback address.' },

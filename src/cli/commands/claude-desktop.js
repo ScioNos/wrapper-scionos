@@ -101,8 +101,18 @@ export async function applyClaudeDesktopProxyProfile(options, dependencies = opt
 }
 
 export async function runClaudeDesktopProxy(options, dependencies = options.desktopDependencies ?? {}) {
+  const session = await startManagedClaudeDesktopProxy(options, dependencies);
+  console.log('Press Ctrl+C to stop.');
+  return waitForProxyShutdown(session.server, {
+    ...(options.shutdownOptions ?? {}),
+    returnToMenuOnSigint: Boolean(options.returnToMenuOnSigint),
+  });
+}
+
+export async function startManagedClaudeDesktopProxy(options, dependencies = options.desktopDependencies ?? {}) {
+  const logger = dependencies.logger ?? console;
   const interactivePlan = options.interactiveDesktopPlan ?? null;
-  let credential = interactivePlan?.credential ?? readClaudeDesktopProxyCredential();
+  let credential = interactivePlan?.credential ?? readClaudeDesktopProxyCredential(dependencies.paths);
   let config;
   let rewriteProfile;
 
@@ -135,7 +145,7 @@ export async function runClaudeDesktopProxy(options, dependencies = options.desk
   }
 
   if (credential?.legacyMetadata) {
-    console.error('WARN Migrating the verified Claude Desktop proxy profile from metadata schema v1 to v2.');
+    logger.error('WARN Migrating the verified Claude Desktop proxy profile from metadata schema v1 to v2.');
   }
 
   const service = resolveValidatedDesktopService(config.serviceValue);
@@ -177,11 +187,12 @@ export async function runClaudeDesktopProxy(options, dependencies = options.desk
         port: config.port,
         gatewayToken,
         dryRun: false,
+        ...(dependencies.paths ? { paths: dependencies.paths } : {}),
       });
       credential = readClaudeDesktopProxyCredential(applied.paths);
-      console.log('Configured Claude Desktop local mapping profile at ' + applied.paths.profilePath);
+      logger.log('Configured Claude Desktop local mapping profile at ' + applied.paths.profilePath);
       if (catalogChanged && previousRoutes.length > 0) {
-        logCatalogChanges(previousRoutes, routes);
+        logCatalogChanges(previousRoutes, routes, logger);
       }
     }
   } catch (error) {
@@ -189,20 +200,27 @@ export async function runClaudeDesktopProxy(options, dependencies = options.desk
     throw error;
   }
 
-  console.log('Claude Desktop local mapping proxy listening on ' + result.baseUrl);
-  console.log('Service: ' + service.value);
-  console.log('Strategies: ' + (config.strategyValues ?? [config.strategyValue]).join(', '));
-  console.log('Verified routes: ' + result.routes.length);
-  console.log('Press Ctrl+C to stop.');
-  return waitForProxyShutdown(result.server, {
-    ...(options.shutdownOptions ?? {}),
-    returnToMenuOnSigint: Boolean(options.returnToMenuOnSigint),
-  });
+  logger.log('Claude Desktop local mapping proxy listening on ' + result.baseUrl);
+  logger.log('Service: ' + service.value);
+  logger.log('Strategies: ' + (config.strategyValues ?? [config.strategyValue]).join(', '));
+  logger.log('Verified routes: ' + result.routes.length);
+  let stopping;
+  return {
+    server: result.server, baseUrl: result.baseUrl, routes: result.routes,
+    get active() { return result.server.listening; },
+    stop() {
+      stopping ??= closeStartedProxy(result.server, true);
+      return stopping;
+    },
+  };
 }
 
-function closeStartedProxy(server) {
+function closeStartedProxy(server, force = false) {
   if (!server?.listening) return Promise.resolve();
-  return new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+    if (force) server.closeAllConnections?.();
+  });
 }
 export function storedProxyConfig(credential, options) {
   const meta = credential.metadata ?? credential.legacyMetadata;
@@ -264,18 +282,18 @@ function sameRouteCatalog(left, right) {
   return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
 }
 
-function logCatalogChanges(previousRoutes, nextRoutes) {
+function logCatalogChanges(previousRoutes, nextRoutes, logger = console) {
   const previous = new Map(previousRoutes.map((route) => [route.routeId, route.upstreamModel]));
   const next = new Map(nextRoutes.map((route) => [route.routeId, route.upstreamModel]));
   for (const routeId of [...next.keys()]
     .filter((routeId) => !previous.has(routeId) || previous.get(routeId) !== next.get(routeId))
     .sort()) {
-    console.log(`Catalog route added: ${routeId}`);
+    logger.log(`Catalog route added: ${routeId}`);
   }
   for (const routeId of [...previous.keys()]
     .filter((routeId) => !next.has(routeId) || previous.get(routeId) !== next.get(routeId))
     .sort()) {
-    console.log(`Catalog route removed: ${routeId}`);
+    logger.log(`Catalog route removed: ${routeId}`);
   }
 }
 
@@ -384,7 +402,7 @@ function requestedInteractiveProxyConfig(options, credential) {
   return {
     serviceValue: service.value,
     strategyValue: strategyExplicit ? options.strategy : defaultDesktopStrategy(service.value),
-    strategyValues: strategyExplicit ? null : resolveDesktopMappingStrategies(service.value),
+    strategyValues: options.strategyValues ?? (strategyExplicit ? null : resolveDesktopMappingStrategies(service.value)),
     host: options.providedOptions?.has('host')
       ? options.host.replace(/^\[|\]$/g, '')
       : credential?.host ?? options.host,

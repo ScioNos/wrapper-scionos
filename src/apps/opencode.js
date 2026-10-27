@@ -32,11 +32,13 @@ export function launchOpenCode({
   openCodeArgs = [],
   env = process.env,
   updateProcessExitCode = true,
+  onSpawn = null,
 } = {}) {
   const resolvedOpenCode = openCode ?? assertOpenCodeCliAvailable();
   return runInteractiveCli(resolvedOpenCode.cliPath, buildOpenCodeRuntimeArgs(openCodeArgs, resolvedOpenCode.version), {
     env,
     updateProcessExitCode,
+    ...(onSpawn ? { onSpawn } : {}),
   });
 }
 

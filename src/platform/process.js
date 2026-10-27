@@ -7,6 +7,7 @@ export async function runInteractiveCli(command, args = [], {
   signalGraceMs = 5000,
   signalSource = process,
   updateProcessExitCode = true,
+  onSpawn = null,
 } = {}) {
   const invocation = buildInteractiveCliInvocation(command, args);
   const child = spawn(invocation.command, invocation.args, {
@@ -34,9 +35,10 @@ export async function runInteractiveCli(command, args = [], {
   try {
     try {
       exitCode = await new Promise((resolve, reject) => {
+        if (onSpawn) child.once('spawn', onSpawn);
         child.once('error', reject);
         child.once('exit', (code, signal) => {
-          if (typeof code === 'number') resolve(code);
+          if (typeof code === 'number') resolve(code === 0xC000013A || code === -1073741510 ? 130 : code);
           else resolve(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1);
         });
       });

@@ -14,5 +14,6 @@ export async function handleClaudeCode(options, version = null, claudeArgs = opt
     claudeArgs,
     version,
     allowBack: options.allowBack ?? false,
+    ...(options.updateProcessExitCode === false ? { updateProcessExitCode: false } : {}),
   });
 }

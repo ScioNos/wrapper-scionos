@@ -122,6 +122,7 @@ export async function launchCodex({
   codexArgs = [],
   codex = null,
   updateProcessExitCode = true,
+  onSpawn = null,
 } = {}) {
   const resolvedCodex = codex ?? assertCodexCliAvailable();
   return runInteractiveCli(resolvedCodex.cliPath, codexArgs, {
@@ -130,6 +131,7 @@ export async function launchCodex({
       ...(apiKey ? buildCodexAuth(apiKey) : {}),
     },
     updateProcessExitCode,
+    ...(onSpawn ? { onSpawn } : {}),
   });
 }
 

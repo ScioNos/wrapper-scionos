@@ -16,7 +16,8 @@ import {
   useState,
 } from '@inquirer/core';
 import chalk from 'chalk';
-import { getHelpText, translate, translateMenuItem, translateRoute } from './i18n.js';
+import { getHelpText, LANGUAGE_LABELS, LANGUAGE_MENU_TITLE, translate, translateMenuItem, translateRoute } from './i18n.js';
+import { uiText } from './console/i18n.js';
 
 const HOME_ROUTE_ID = 'home';
 export const MENU_BACK_VALUE = 'back';
@@ -48,7 +49,7 @@ export const MAIN_MENU_ITEMS = [
   {
     key: '2',
     value: 'claude-desktop',
-    label: 'Claude Desktop / Cowork',
+    label: 'Claude Desktop',
     description: 'Configure and run the local Desktop / Cowork mapping.',
   },
   {
@@ -65,15 +66,26 @@ export const MAIN_MENU_ITEMS = [
   },
   {
     key: '5',
+    value: 'claude-cowork', label: 'Claude Cowork', description: 'Manage the shared Claude Desktop / Cowork profile.',
+  },
+  {
+    key: '6',
+    value: 'codex-app', label: 'Codex App', description: 'Open Codex App with a restorable gateway configuration.',
+  },
+  {
+    key: '7',
     value: 'auth',
     label: 'Account & access',
     description: 'Manage and validate your RouterLab token.',
   },
   {
-    key: '6',
+    key: '8',
     value: 'tools',
     label: 'Tools & diagnostics',
     description: 'Inspect strategies or troubleshoot this installation.',
+  },
+  {
+    key: 'l', value: 'language', label: LANGUAGE_MENU_TITLE, description: 'English · Français · Deutsch',
   },
   {
     key: '0',
@@ -159,6 +171,10 @@ export const TOOLS_MENU_ITEMS = [
 export const MENU_ROUTES = Object.freeze({
   [HOME_ROUTE_ID]: Object.freeze({ id: HOME_ROUTE_ID, parent: null, title: 'ScioNos Wrapper', message: 'Choose where you want to go:', items: MAIN_MENU_ITEMS }),
   desktop: Object.freeze({ id: 'desktop', parent: HOME_ROUTE_ID, title: 'Claude Desktop / Cowork', message: 'Choose a Claude Desktop / Cowork action:', items: CLAUDE_DESKTOP_MENU_ITEMS }),
+  codexApp: Object.freeze({ id: 'codexApp', parent: HOME_ROUTE_ID, title: 'Codex App', message: 'Codex App', items: [
+    { key: '1', value: 'launch', label: 'Open Codex App' }, { key: '2', value: 'status', label: 'Status' },
+    { key: '3', value: 'restore', label: 'Restore previous settings' }, HOME_MENU_BACK_ITEM,
+  ] }),
   account: Object.freeze({ id: 'account', parent: HOME_ROUTE_ID, title: 'Account & access', message: 'Choose an account action:', items: AUTH_MENU_ITEMS }),
   tools: Object.freeze({ id: 'tools', parent: HOME_ROUTE_ID, title: 'Tools & diagnostics', message: 'Choose a tool:', items: TOOLS_MENU_ITEMS }),
 });
@@ -168,7 +184,7 @@ export function getLocalizedMenuRoutes(language = 'en') {
   for (const [routeId, route] of Object.entries(MENU_ROUTES)) {
     routes[routeId] = {
       ...route,
-      title: translateRoute(language, routeId),
+      title: routeId === 'codexApp' ? 'Codex App' : translateRoute(language, routeId),
       message: translate(language, routeId === 'home'
         ? 'chooseDestination'
         : routeId === 'desktop'
@@ -177,6 +193,9 @@ export function getLocalizedMenuRoutes(language = 'en') {
             ? 'chooseAccountAction'
             : 'chooseTool'),
       items: route.items.map((item) => {
+        if (routeId === 'home' && item.value === 'language') return { ...item, label: `${LANGUAGE_MENU_TITLE} : ${LANGUAGE_LABELS[language]}` };
+        if (routeId === 'codexApp') return { ...item, label: uiText(language, { launch: 'appConfigure', status: 'status', restore: 'appRestore', back: 'home' }[item.value]) };
+        if (routeId === 'home' && ['claude-desktop', 'claude-cowork', 'codex-app'].includes(item.value)) return { ...item, label: item.label, description: uiText(language, item.value === 'codex-app' ? 'appSettings' : 'desktop') };
         const text = translateMenuItem(language, routeId, item.value);
         return text ? { ...item, label: text[0], description: text[1] } : { ...item };
       }),
@@ -185,7 +204,7 @@ export function getLocalizedMenuRoutes(language = 'en') {
   return routes;
 }
 
-const ROUTE_TARGETS = Object.freeze({ 'claude-desktop': 'desktop', auth: 'account', tools: 'tools' });
+const ROUTE_TARGETS = Object.freeze({ 'claude-desktop': 'desktop', 'claude-cowork': 'desktop', 'codex-app': 'codexApp', auth: 'account', tools: 'tools' });
 
 export function resolveNavigation(routeId, action) {
   const route = MENU_ROUTES[routeId];
@@ -355,7 +374,7 @@ export async function askMenu(title, items, options = {}) {
   try {
     while (true) {
       console.log(formatMenu(title, items, options));
-      const answer = await rl.question('Select an option: ');
+      const answer = await rl.question('Select an option: ', { signal: options.signal });
       const resolved = resolveMenuInput(items, answer);
       if (resolved) {
         return resolved.value;
@@ -374,7 +393,7 @@ export async function askSelect(configOrMessage, items = [], options = {}) {
   return keyedSelect({
     ...config,
     choices: (config.choices ?? []).map(formatSelectChoice),
-  });
+  }, { signal: config.signal });
 }
 
 const keyedSelect = createPrompt((config, done) => {
@@ -506,19 +525,19 @@ function normalizePromptChoices(choices) {
   });
 }
 
-export async function askText(question, defaultValue = null) {
+export async function askText(question, defaultValue = null, options = {}) {
   const rl = createInterface({ input, output });
   try {
     const suffix = defaultValue ? ` [${defaultValue}]` : '';
-    const answer = await rl.question(`${question}${suffix}: `);
+    const answer = await rl.question(`${question}${suffix}: `, { signal: options.signal });
     return answer.trim() || defaultValue;
   } finally {
     rl.close();
   }
 }
 
-export async function askYesNo(question, defaultValue = false) {
-  const answer = await askText(`${question} ${defaultValue ? '[Y/n]' : '[y/N]'}`);
+export async function askYesNo(question, defaultValue = false, options = {}) {
+  const answer = await askText(`${question} ${defaultValue ? '[Y/n]' : '[y/N]'}`, null, options);
   if (!answer) {
     return defaultValue;
   }

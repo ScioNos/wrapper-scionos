@@ -1,8 +1,8 @@
 import { createRequire } from 'node:module';
 import { CliUsageError, COMMON_OPTION_DEFINITIONS, emitOptionDeprecations, isRecognizedWrapperOption, optionConsumesNextArgument, parseOptions } from './args.js';
 import { warnDeprecationOnce } from './deprecations.js';
-import { getLocalizedMenuRoutes, askMenu, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
-import { translate } from './i18n.js';
+import { getLocalizedMenuRoutes, applyMenuControl, askMenu, askSelect, askYesNo, formatBreadcrumb, formatServiceHealthAlert, resolveNavigation } from './menu.js';
+import { LANGUAGE_LABELS, LANGUAGE_MENU_TITLE, SUPPORTED_LANGUAGES, translate } from './i18n.js';
 import { requireServiceConfig } from '../routerlab/services.js';
 import { findStrategy, getClaudeCodeSubagentModels, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { print } from './commands/output.js';
@@ -14,9 +14,14 @@ import {
   planInteractiveClaudeDesktopStart,
 } from './commands/claude-desktop.js';
 import { handleCodex, launchCodexForService } from './commands/codex.js';
+import { handleCodexApp } from './commands/codex-app.js';
+import { createLinearAppSession } from './console/linear-app.js';
 import { launchOpenCodeForService } from './commands/opencode.js';
 import { handleDoctor } from './commands/doctor.js';
 import { handleStrategies } from './commands/strategies.js';
+import { supportsStructuredConsole } from './console/prompt.js';
+import { runStructuredConsole } from './console/controller.js';
+import { uiText } from './console/i18n.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json');
@@ -50,6 +55,11 @@ export const COMMAND_DEFINITIONS = [
     name: 'codex', usage: 'wrapper-scionos codex launch|template|restore|status',
     description: 'Launch Codex CLI directly with RouterLab', defaultAction: 'launch',
     handler: ({ action, options }) => handleCodex(action, options),
+  },
+  {
+    name: 'codex-app', usage: 'wrapper-scionos codex-app status|launch|restore',
+    description: 'Open Codex App with a temporary, restorable gateway configuration', defaultAction: 'status',
+    handler: ({ action, options }) => handleCodexApp(action, options),
   },
   {
     name: 'opencode', aliases: ['open-code'], usage: 'wrapper-scionos opencode [args]',
@@ -164,6 +174,11 @@ const COMMAND_OPTIONS = {
     restore: ['yes', 'dryRun', 'json'],
     status: ['json'],
   },
+  'codex-app': {
+    status: ['service', 'json'],
+    launch: ['service', 'strategy', 'model', 'noPrompt', 'yes', 'dryRun', 'json'],
+    restore: ['service', 'yes', 'dryRun', 'json'],
+  },
   opencode: {
     '': ['service', 'strategy', 'model', 'token', 'tokenFromStdin', 'noPrompt'],
   },
@@ -271,6 +286,9 @@ function showHelp(options = {}) {
     '',
     'Global options may appear before or after a command. Arguments after -- are passed through for Claude Code, Codex launch, and OpenCode; other commands reject them.',
     'Claude Desktop: use apply-proxy; direct profiles are refused because they expose the RouterLab token.',
+    'Interactive: structured terminal console; native sessions return to home. Small or redirected terminals use the linear menu.',
+    'Codex App (Windows/macOS): auth login first; launch --dry-run previews, launch --yes activates until interruption; restore --yes recovers an abandoned session. Linux is unsupported.',
+    uiText(options.language, 'keys'),
     '',
   ].join('\n');
   if (options.json) print({ help }, { ...options, command: 'help' });
@@ -295,8 +313,13 @@ function formatOptionHelp() {
 }
 
 export async function handleInteractiveMenu(options, overrides = {}) {
+  options = { ...options };
+  if (!overrides.askMenu && supportsStructuredConsole()) {
+    return runStructuredConsole(options, { version: pkg.version, ...overrides.consoleDependencies });
+  }
   const runtime = {
     askMenu,
+    askSelect,
     handleClaudeCode,
     launchCodexForService,
     launchOpenCodeForService,
@@ -307,58 +330,87 @@ export async function handleInteractiveMenu(options, overrides = {}) {
     ...overrides,
   };
   const service = requireServiceConfig(options.service);
-  const language = options.language ?? 'en';
-  const localizedRoutes = getLocalizedMenuRoutes(language);
+  let language = options.language ?? 'en';
+  let localizedRoutes = getLocalizedMenuRoutes(language);
+  const app = createLinearAppSession(options, runtime, overrides.linearAppDependencies);
   const clientActions = {
     'claude-code': () => runInteractiveClaudeCode(runtime, options),
     codex: () => runInteractiveRoutedClient('Codex CLI', runtime.launchCodexForService, runtime, options, service),
     opencode: () => runInteractiveRoutedClient('OpenCode', runtime.launchOpenCodeForService, runtime, options, service),
   };
   let routeId = 'home';
-  while (true) {
-    const route = localizedRoutes[routeId];
-    const action = await runtime.askMenu(formatBreadcrumb(routeId, language, localizedRoutes), route.items, {
-      interactiveSelect: true,
-      version: routeId === 'home' ? pkg.version : null,
-      language,
-      helpMode: routeId === 'home' ? 'home' : 'compact',
-      message: `${translate(language, 'serviceActive', { service: service.label })}\n\n${route.message}`,
-    });
-    const next = resolveNavigation(routeId, action);
-    if (next.kind === 'exit') return;
-    if (next.kind === 'navigate') {
-      routeId = next.routeId;
-      continue;
-    }
-    const clientAction = clientActions[action];
-    if (clientAction) {
-      const result = await clientAction();
-      if (result?.kind === 'back') {
+  try {
+    while (true) {
+      try {
+        const route = localizedRoutes[routeId];
+        const action = await app.menu(formatBreadcrumb(routeId, language, localizedRoutes), route.items, {
+          interactiveSelect: true,
+          version: routeId === 'home' ? pkg.version : null,
+          language,
+          helpMode: routeId === 'home' ? 'home' : 'compact',
+          message: `${translate(language, 'serviceActive', { service: service.label })}\n\n${route.message}`,
+        });
+        const next = resolveNavigation(routeId, action);
+        if (next.kind === 'exit') { if (await app.exit()) return; continue; }
+        if (next.kind === 'navigate') {
+          routeId = next.routeId;
+          continue;
+        }
+        if (action === 'language') {
+          const selected = applyMenuControl(await runtime.askSelect(LANGUAGE_MENU_TITLE,
+            SUPPORTED_LANGUAGES.map(value => ({ value, name: LANGUAGE_LABELS[value] })),
+            { language, signal: app.signal(), helpMode: 'compact' }));
+          if (SUPPORTED_LANGUAGES.includes(selected)) {
+            language = selected; options.language = selected; localizedRoutes = getLocalizedMenuRoutes(language);
+          }
+          continue;
+        }
+        const clientAction = clientActions[action];
+        if (clientAction) {
+          const result = await app.native(clientAction);
+          if (result?.kind === 'terminate') { process.exitCode = 143; return; }
+          if (result?.kind === 'back') {
+            routeId = 'home';
+            continue;
+          }
+          return;
+        }
+        if (routeId === 'codexApp') {
+          const result = await app.action(action);
+          if (result?.exit && await app.exit({ interrupted: result.interrupted })) return;
+        } else if (routeId === 'desktop') {
+          const result = await runtime.handleInteractiveDesktopAction(action, options);
+          if (result?.kind === 'terminate') return;
+        } else if (routeId === 'account') {
+          await runtime.handleAuth(action, { ...options, service: service.value, signal: app.signal() });
+        } else if (routeId === 'tools') {
+          if (action === 'strategies') await runtime.handleStrategies(options);
+          if (action === 'doctor') await runtime.handleDoctor(options);
+        }
+      } catch (error) {
+        if (app.terminating()) return;
+        if (!['ExitPromptError', 'AbortPromptError', 'AbortError', 'MenuExitError'].includes(error.name)) throw error;
+        if (await app.exit({ interrupted: error.name !== 'MenuExitError' })) return;
         routeId = 'home';
-        continue;
       }
-      return;
     }
-    if (routeId === 'desktop') {
-      const result = await runtime.handleInteractiveDesktopAction(action, options);
-      if (result?.kind === 'terminate') return;
-    } else if (routeId === 'account') {
-      await runtime.handleAuth(action, { ...options, service: service.value });
-    } else if (routeId === 'tools') {
-      if (action === 'strategies') await runtime.handleStrategies(options);
-      if (action === 'doctor') await runtime.handleDoctor(options);
-    }
-  }
+  } catch (error) { if (!app.terminating()) throw error; }
+  finally { await app.shutdown(); }
 }
 
 async function runInteractiveClaudeCode(runtime, options) {
   try {
     const passthrough = options.passthrough ?? [];
-    const result = await runtime.handleClaudeCode({ ...options, passthrough, allowBack: true }, pkg.version, passthrough);
-    return result?.kind === 'back' ? { kind: 'back' } : { kind: 'terminate' };
+    const result = await runtime.handleClaudeCode({ ...options, passthrough, allowBack: true, updateProcessExitCode: false }, pkg.version, passthrough);
+    if (result?.exitCode === 143) return { kind: 'terminate' };
+    process.exitCode = 0;
+    return { kind: 'back' };
   } catch (error) {
     if (error?.name === 'MenuBackError') return { kind: 'back' };
-    throw error;
+    if (error?.name === 'MenuExitError') throw error;
+    console.error(`ERROR Claude Code could not start: ${error.message}`);
+    process.exitCode = 0;
+    return { kind: 'back' };
   }
 }
 
@@ -370,7 +422,8 @@ async function runInteractiveRoutedClient(label, launch, runtime, options, servi
       interactiveMenu: true,
       updateProcessExitCode: false,
     });
-    if (exitCode === undefined || exitCode === 0) return { kind: 'terminate' };
+    if (exitCode === 143) return { kind: 'terminate' };
+    if (exitCode === undefined || exitCode === 0) { process.exitCode = 0; return { kind: 'back' }; }
     console.error(`ERROR ${label} exited with code ${exitCode}. Returning to ScioNos Wrapper.`);
   } catch (error) {
     if (error?.name === 'MenuBackError') return { kind: 'back' };

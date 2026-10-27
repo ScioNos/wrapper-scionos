@@ -129,7 +129,7 @@ export const STRATEGIES = [
     name: 'Claude via AWS',
     minimumClaudeCodeVersion: '2.1.284',
     description: 'Sets Claude Code model environment variables to AWS-backed Claude variants.',
-    selectionName: '☁️ Claude via AWS',
+    selectionName: '💸 Claude via AWS',
     selectionDescription: 'Opus => AWS Claude Opus 5.5, Sonnet => AWS Claude Sonnet 5.5, Haiku and subagents => AWS Claude Haiku 4.5.',
     requiredModels: AWS_CLAUDE_MODELS,
     environment: createModelEnvironment({

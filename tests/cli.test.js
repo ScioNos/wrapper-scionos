@@ -8,12 +8,15 @@ import { getLocalizedMenuRoutes, AUTH_MENU_ITEMS, CLAUDE_DESKTOP_MENU_ITEMS, MAI
 
 test('default menu exposes the supported coding clients', () => {
   const labels = MAIN_MENU_ITEMS.map((item) => item.label);
-  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop / Cowork', 'Codex CLI', 'OpenCode CLI', 'Account & access', 'Tools & diagnostics', 'Exit']);
+  assert.deepEqual(labels, ['Claude Code', 'Claude Desktop', 'Codex CLI', 'OpenCode CLI', 'Claude Cowork', 'Codex App', 'Account & access', 'Tools & diagnostics', 'Language / Langue / Sprache', 'Exit']);
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'l').value, 'language');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '1').value, 'claude-code');
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '3').value, 'codex');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'auth');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '6').value, 'tools');
-  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop / Cowork').value, 'claude-desktop');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '5').value, 'claude-cowork');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '6').value, 'codex-app');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '7').value, 'auth');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, '8').value, 'tools');
+  assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Claude Desktop').value, 'claude-desktop');
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Code/);
   assert.match(formatMenu('ScioNos Wrapper', MAIN_MENU_ITEMS), /Claude Desktop/);
   assert.equal(resolveMenuChoice(MAIN_MENU_ITEMS, 'Codex CLI').value, 'codex');
@@ -76,9 +79,10 @@ test('empty menus render safely', () => {
 
 test('interactive Claude Code menu route preserves explicit passthrough arguments', async () => {
   const forwarded = ['--print', 'hello'];
+  const actions = ['claude-code', 'quit'];
   let received = null;
   await handleInteractiveMenu({ ...parseOptions(['--', ...forwarded]), passthrough: forwarded }, {
-    askMenu: async () => 'claude-code',
+    askMenu: async () => actions.shift(),
     handleClaudeCode: async (options, _version, args) => {
       received = { options, args };
       return { kind: 'launched' };
@@ -160,7 +164,9 @@ test('every submenu ends with the same route back to the home screen', () => {
 });
 
 test('the interactive navigation model has predictable parents and actions', () => {
-  assert.deepEqual(Object.keys(MENU_ROUTES), ['home', 'desktop', 'account', 'tools']);
+  assert.deepEqual(Object.keys(MENU_ROUTES), ['home', 'desktop', 'codexApp', 'account', 'tools']);
+  assert.deepEqual(resolveNavigation('home', 'claude-cowork'), { kind: 'navigate', routeId: 'desktop' });
+  assert.deepEqual(resolveNavigation('home', 'codex-app'), { kind: 'navigate', routeId: 'codexApp' });
   assert.deepEqual(resolveNavigation('home', 'claude-desktop'), { kind: 'navigate', routeId: 'desktop' });
   assert.deepEqual(resolveNavigation('home', 'auth'), { kind: 'navigate', routeId: 'account' });
   assert.deepEqual(resolveNavigation('desktop', 'back'), { kind: 'navigate', routeId: 'home' });
@@ -171,6 +177,31 @@ test('the interactive navigation model has predictable parents and actions', () 
   assert.deepEqual(resolveNavigation('tools', 'back'), { kind: 'navigate', routeId: 'home' });
   assert.equal(formatBreadcrumb('home'), 'ScioNos Wrapper');
   assert.equal(formatBreadcrumb('desktop'), 'ScioNos Wrapper  ›  Claude Desktop / Cowork');
+});
+
+test('linear language selection refreshes menus and launch language while preserving the selected service', async () => {
+  const options = parseOptions(['--service', 'llm', '--lang', 'en']);
+  const actions = ['language', 'claude-code', 'language', 'quit'];
+  const languages = ['fr', 'back'];
+  const observed = [];
+  await handleInteractiveMenu(options, {
+    askMenu: async (title, items, config) => {
+      const action = actions.shift();
+      if (observed.length) {
+        assert.equal(config.language, 'fr');
+        assert.match(items.find(item => item.value === 'language').label, /Français/);
+      }
+      return action;
+    },
+    askSelect: async (title, choices) => {
+      assert.equal(title, 'Language / Langue / Sprache');
+      assert.deepEqual(choices.map(choice => choice.name), ['English', 'Français', 'Deutsch']);
+      return languages.shift();
+    },
+    handleClaudeCode: async config => { observed.push(config.language); assert.equal(config.service, 'llm'); return { exitCode: 0 }; },
+  });
+  assert.deepEqual(observed, ['fr']);
+  assert.equal(options.language, 'en', 'Menu changes must not mutate caller options.');
 });
 
 test('menu controls use declared keys and support text aliases', () => {
@@ -268,7 +299,7 @@ test('interactive menu launches Codex directly with the selected service', async
       await handleInteractiveMenu(parseOptions(serviceCase.args), {
         askMenu: async (_title, _items, menuOptions) => {
           messages.push(menuOptions.message);
-          return 'codex';
+          return messages.length === 1 ? 'codex' : 'quit';
         },
         launchCodexForService: async (options) => {
           launched += 1;
@@ -279,7 +310,7 @@ test('interactive menu launches Codex directly with the selected service', async
         },
       });
       assert.equal(launched, 1);
-      assert.equal(messages.length, 1);
+      assert.equal(messages.length, 2);
       assert.match(messages[0], new RegExp(`Active service: ${serviceCase.label}`));
     });
   }
@@ -323,7 +354,7 @@ test('interactive Codex failures report the error and return to the home menu', 
 });
 
 test('interactive menu launches OpenCode with the selected service', async () => {
-  const actions = ['opencode'];
+  const actions = ['opencode', 'quit'];
   let launched = 0;
   await handleInteractiveMenu(parseOptions(['--service', 'llm']), {
     askMenu: async () => actions.shift(),
@@ -336,6 +367,26 @@ test('interactive menu launches OpenCode with the selected service', async () =>
   });
   assert.equal(launched, 1);
   assert.equal(actions.length, 0);
+});
+
+test('linear menu exits on native SIGTERM and returns home on SIGINT for all clients', async () => {
+  const previousExitCode = process.exitCode;
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    for (const client of ['claude-code', 'codex', 'opencode']) for (const code of [130, 143]) {
+      const actions = [client, 'quit'];
+      const result = client === 'claude-code' ? { kind: 'launched', exitCode: code } : code;
+      await handleInteractiveMenu(parseOptions([]), {
+        askMenu: async () => actions.shift(),
+        handleClaudeCode: async () => result,
+        launchCodexForService: async () => result,
+        launchOpenCodeForService: async () => result,
+      });
+      assert.equal(actions.length, code === 143 ? 1 : 0);
+      assert.equal(process.exitCode, code === 143 ? 143 : 0);
+    }
+  } finally { process.exitCode = previousExitCode; console.error = originalError; }
 });
 
 test('auth menu uses the command-selected service', () => {

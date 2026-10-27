@@ -82,6 +82,19 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
   }
 
   const availableFamilies = availableOpenCodeModelFamilies(service.value, modelResult.models, options.strategy);
+  if (options.prepareOnly) {
+    return {
+      models: availableModels,
+      tokenSource: resolvedToken.source,
+      families: availableFamilies,
+      defaultModel: defaultOpenCodeModelForService(service.value),
+      execute: (selection, hooks = {}) => launchOpenCodeForService({
+        ...options, prepareOnly: false, noPrompt: true,
+        strategy: selection.family, model: selection.model,
+        updateProcessExitCode: false, ...hooks,
+      }, { ...dependencies, ...(resolvedToken.source === 'prompt' ? { resolveTokenWithSource: async () => resolvedToken } : {}) }),
+    };
+  }
   if (!options.model && !options.noPrompt && availableFamilies.length === 0) {
     throw openCodeModelDiscoveryError({
       reason: 'models_unavailable',
@@ -157,6 +170,7 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
       openCodeArgs,
       env,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
+      ...(options.onSpawn ? { onSpawn: options.onSpawn } : {}),
     });
   } catch (error) {
     launchError = error;

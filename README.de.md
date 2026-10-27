@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%5E22.13.0%20%7C%7C%20%3E%3D23.5.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Lizenz](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Ein gemeinsamer Launcher für fünf Werkzeuge: Claude Code CLI, Claude Cowork, Claude Desktop, Codex CLI und OpenCode CLI — geroutet über den ausgewählten RouterLab-Dienst.
+Ein gemeinsamer Launcher für sechs Werkzeuge: Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Claude Cowork und Codex App, geroutet über den ausgewählten RouterLab-Dienst.
 
 ## Warum wrapper-scioNos?
 
@@ -16,9 +16,9 @@ Behalten Sie Ihren bevorzugten Coding-Client und wählen Sie eine RouterLab-Mode
 npx wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
-**Aktuelle Version: `7.3.0`**
+**Beta: [`8.0.0-beta.1`](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1) — Strukturierte Terminalkonsole.**
 
-[Versionshinweise v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0)
+Letzte stabile Version: [Versionshinweise v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0). Das Beta-Paket steht als Download in der GitHub-Vorabversion bereit.
 
 [English](./README.md) · [Français](./README.fr.md) · [Changelog](./CHANGELOG.md)
 
@@ -31,6 +31,7 @@ npx wrapper-scionos claude-code --service routerlab --strategy aws
 | Claude Cowork | Über die Claude-Desktop-Integration | Gemeinsame Desktop-Routen |
 | Codex CLI | Direkter Responses-Endpunkt | RouterLab-Familie, danach native `/model`-Liste |
 | OpenCode CLI | Authentifizierter OpenAI-kompatibler Proxy | Familie, danach exaktes Modell |
+| Codex App | Direkter Responses-Endpunkt mit wiederherstellbaren temporären Einstellungen | Familie und Modell aus dem geprüften Codex-Katalog |
 
 Der Dienst wird vor dem Öffnen des Menüs einmal ausgewählt und bleibt während der Sitzung unverändert. Der Wrapper prüft den Token, entdeckt den aktuellen Modellkatalog und beendet den Start kontrolliert, wenn kein autorisiertes Modell verfügbar ist.
 
@@ -40,6 +41,7 @@ Der Dienst wird vor dem Öffnen des Menüs einmal ausgewählt und bleibt währen
 - Ein Token für den ausgewählten RouterLab-Dienst.
 - Claude Code `>=2.1.220`; RouterLab Claude Native benötigt `>=2.1.293` und AWS Claude `>=2.1.284`. Release-Prüfungen verwenden `2.1.296`.
 - Codex CLI `>=0.144.1`.
+- Codex App unter Windows oder macOS mit eingebetteter Engine `>=0.164.0`; Linux wird nicht unterstützt. Lokal mit App `26.1021.3705.0` und Engine `0.164.0-alpha.11.1` geprüft.
 - OpenCode `>=1.18.30`; Windows-Prüfungen validieren `opencode-ai@1.18.30` und `@opencode/cli@2.0.27`.
 - Windows, macOS oder `claude-desktop-debian` unter Linux für Claude-Desktop-Profile.
 
@@ -69,34 +71,65 @@ Für `--service llm` zeigt der Wrapper einen neutralen Hinweis, weil der Modellk
 
 Für `routerlab` wird dieser Hinweis nicht angezeigt.
 
-## Interaktives Menü
+## Strukturierte Terminalkonsole
 
-Das Hauptmenü ist auf allen Plattformen gleich:
+Die Konsole bietet **Start**, **Starten**, **Desktop-Anwendungen**, **Konto und Zugang** und **Diagnose**. Ab 100 Spalten steht die Navigation seitlich, zwischen 60 und 99 Spalten oben. Fenster mit weniger als 60 Spalten oder 18 Zeilen, `TERM=dumb` und umgeleitete Ausgaben verwenden das lineare Menü.
 
-```text
-1. Claude Code
-2. Claude Desktop / Cowork
-3. Codex CLI
-4. OpenCode CLI
-5. Account & access
-6. Tools & diagnostics
-0. Exit
+```bash
+npm start -- --lang de
+node index.js --lang de
+# In PowerShell, falls npm.ps1 Argumente verschluckt:
+npm.cmd start -- --lang de
 ```
+
+Die Startseite zeigt lokal erkannte Clients und unterscheidet **Token gespeichert** von **Zugang geprüft**. Die lokale Erkennung läuft im Hintergrund. Die Navigation ruft den Dienst nicht wiederholt auf; Zugang und Modelle werden vor jedem Start erneut geprüft.
 
 | Eingabe | Aktion |
 | --- | --- |
-| `↑` / `↓` | Auswahl bewegen, mit Umlauf |
-| `Enter` | Auswahl bestätigen |
-| Ziffer | Angezeigten Shortcut wählen |
-| Bezeichnung, Wert oder Modell-ID | Passende Auswahl wählen |
-| `0`, `b`, `back` | Zurück; `0` beendet das Hauptmenü |
-| `q`, `quit`, `exit` | Wrapper jederzeit beenden |
-| `Esc` | Zurück oder im Hauptmenü beenden |
-| `Ctrl+C` | Abbruch mit Exit-Code `130` |
+| Linksklick | Werkzeug, Navigation, Auswahl, Kontrollkästchen oder Schaltfläche aktivieren |
+| Mausrad / `[‹]` und `[›]` | Listen durchlaufen und Seiten wechseln |
+| `L` oder Sprache in der Kopfzeile | Englisch, Französisch oder Deutsch wählen |
+| `Tab` | Zwischen Navigation und Inhalt wechseln |
+| `↑` / `↓` | Verfügbare Einträge mit Seitennavigation auswählen |
+| `Enter` | Auswahl aktivieren |
+| `Leertaste` | Einstellung oder Desktop-Modellfamilie umschalten |
+| `1`, `2`, `3`, `4`, `5`, `6` auf der Startseite | Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Claude Cowork, Codex App |
+| `Q` oder `0` | Konsole beenden |
+| `Esc` | Auswahl abbrechen oder zur Startseite zurückkehren |
+| `Ctrl+C` | Konsole beenden (`130`); im nativen Client dessen Sitzung unterbrechen und zur Startseite zurückkehren |
 
-Die vollständige Tastaturhilfe erscheint im Hauptmenü; Untermenüs verwenden eine kurze Version. Nach dem Start eines nativen Clients bleiben Tastatur und Ausgabe vollständig unter dessen Kontrolle.
+Die Maus wird in kompatiblen Terminals automatisch aktiviert, auch über SSH zu einem VPS, wenn das lokale Terminal Mausereignisse weiterleitet. Die Tastatur bleibt jederzeit nutzbar. Mit `SCIONOS_MOUSE=0` wird die Mauserfassung deaktiviert und die normale Textauswahl des Terminals wieder möglich. Bei `TERM=dumb` und `TERM=linux` bleibt die Mauserfassung aus.
+
+Eine seitenweise Übersicht zeigt vor der Startbestätigung die vollständige Konfiguration. Während eines nativen Clients gibt die Konsole das Terminal frei und deaktiviert ihre Mauserfassung. Nach Erfolg, Fehler oder Unterbrechung kehrt sie zur Startseite zurück. Direkte Befehle behalten ihre Exit-Codes. Das lineare Menü behält seine bisherigen Ziffern- und Texteingaben.
+
+**Diese Konfiguration speichern** ist standardmäßig aktiviert. Nach dem tatsächlichen Start des Clients werden Einstellungen unter `~/.wrapper-scionos/ui-state.json` getrennt nach Dienst und Client gespeichert. Die Datei enthält keine Tokens, Protokolle oder Zugangsprüfungen. Eine nicht verfügbare gespeicherte Auswahl muss ausdrücklich ersetzt werden. Ohne Häkchen bleibt die vorher gespeicherte Konfiguration erhalten.
+
+Desktop-Anwendungen trennt das gemeinsame Claude-Desktop-/Cowork-Profil vom Proxy dieser Konsole. Der Proxy bleibt beim Navigieren aktiv. Stoppen behält das Profil; die bestätigte Wiederherstellung des offiziellen Modus entfernt es. Vorhandene Profile mit mehreren Familien bleiben erhalten. Beim Beenden stoppt die Konsole ihre eigenen Proxies. Codex App hat eigene Aktionen und Zustände.
+
+### Codex App und Schutz der TOML-Konfiguration
+
+Speichern Sie zuerst den Token unter **Konto und Zugang** oder mit `node index.js auth login --service routerlab`. Wählen Sie **6 — Codex App**, Familie und Modell und bestätigen Sie die Übersicht. Die Konsole bleibt während der App-Nutzung bedienbar. Eine bereits geöffnete App müssen Sie selbst neu starten, damit die neue Verbindung geladen wird.
+
+```bash
+node index.js codex-app status --json
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --dry-run --no-prompt --json
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --yes --no-prompt
+# Der Startbefehl bleibt aktiv. Strg+C stellt die bisherigen Einstellungen wieder her.
+node index.js codex-app restore --dry-run --json
+node index.js codex-app restore --yes
+```
+
+`codex-app` ohne Aktion zeigt den Status. Ein Launch-Dry-Run erzeugt keine Dateien und öffnet die App nicht; Zugang und Modellerkennung benötigen weiterhin eine Verbindung. Direkte Starts ohne Dialog verlangen `--yes`. Restore ohne `--yes` zeigt nur eine Vorschau. JSON-Ausgabe für Launch verlangt `--dry-run`; andere Befehle behalten ihre JSON-Hülle und Exit-Codes.
+
+Geändert werden nur `model`, `model_provider`, `model_catalog_json` und der reservierte Anbieter `scionos_routerlab` oder `scionos_llm`. Andere Einstellungen, MCP-Server, Kommentare, Reihenfolge, UTF-8-BOM und Zeilenenden bleiben erhalten. Ein bereits vorhandener, nicht von dieser Sitzung verwalteter reservierter Anbieter wird abgelehnt. Die erste Aktivierung erstellt eine datierte Sicherung und ein privates Journal unter `~/.wrapper-scionos/codex-app/`. Sitzungssperre und atomare Schreibvorgänge erkennen konkurrierende Änderungen. Ungültiges TOML wird abgelehnt.
+
+Beim interaktiven Beenden können Sie eine normale App-Schließung mit anschließender Wiederherstellung anfordern, bei geöffneter App wiederherstellen oder das Beenden abbrechen. Die App wird nie zwangsweise beendet. SIGTERM und nichtinteraktive Ausgänge stellen ohne App-Schließung wieder her. Eine geöffnete App kann die geladene Verbindung bis zum nächsten Neustart behalten. Eigene Änderungen an verwalteten Einstellungen blockieren die gesamte Wiederherstellung und bewahren die aktuelle Datei; unabhängige persönliche Änderungen bleiben erhalten. Nach einem Absturz prüfen Sie den Status und verwenden ausdrücklich `codex-app restore --dry-run` und anschließend `codex-app restore --yes` oder Desktop-Anwendungen. Die Sicherung wird nie blind über Ihre Konfiguration kopiert.
+
+Der Token bleibt im vorhandenen sicheren Speicher. Ein dauerhaft installierter, unabhängiger Helfer liest ihn aus dem App-Prozess ohne RouterLab-Terminalvariablen. TOML, Katalog, Journal und Einstellungen enthalten keinen Token. Helfer und Katalog bleiben erhalten, solange eine geöffnete App sie benötigen könnte. App-Einstellungen bleiben je Dienst von Codex CLI getrennt. Responses wird direkt verwendet; [OpenAI dokumentiert die Befehlsauthentifizierung für die Windows-App](https://learn.chatgpt.com/docs/enterprise/connect-to-a-gateway#configure-the-windows-app). Native Prüfungen verwenden ein temporäres `CODEX_HOME`; Ihre echte Konfiguration wird erst über die ausdrückliche Konsolenaktion oder `launch --yes` aktiviert.
 
 ### Sprache der Oberfläche
+
+Die aktive Sprache steht in der Kopfzeile. Mit **L** oder **Language / Langue / Sprache** auf der Startseite wechseln Sie während der Sitzung zwischen **English**, **Français** und **Deutsch**. Dienst und Modellauswahl bleiben erhalten. Modellfamilien verwenden ihre Katalogbezeichnungen, einschließlich **💸 Claude via AWS**.
 
 Standardmäßig ist die Wrapper-Oberfläche englisch:
 
@@ -168,7 +201,7 @@ wrapper-scionos codex launch --service llm
 
 Auf `routerlab` wählen Sie beim interaktiven Start zuerst **OpenAI GPT-6**, **Open Source** oder **Trial**. Danach startet Codex mit dem temporären geprüften Katalog dieser Familie. Der native `/model`-Selektor wechselt Modelle innerhalb der gewählten Familie. Die bevorzugten Modelle sind `gpt-6.1-sol`, `deepseek-v4.1-flash` und `deepseek-v4.1-flash-trial`; fehlt das bevorzugte Modell, verlangt der interaktive Modus eine explizite Auswahl aus den verfügbaren Modellen, auch bei nur einem Modell. Nicht interaktiv wird der Start mit einem Hinweis auf `--model <id>` abgebrochen. Ein nicht verfügbares explizites Modell führt immer zu einem Fehler.
 
-Ohne gewählte Familie ist der RouterLab-Standard **`gpt-6.1-sol`**. Der Dienst `llm` behält **`gpt-5.6-sol`**, und sein Hauptmenüeintrag startet Codex direkt. Explizite Modelle und diese Dienststandards müssen entdeckt und autorisiert sein. Mit `--strategy claude-gpt|open-source|trial` wählen Sie eine RouterLab-Familie in der Befehlszeile, mit `--model` ein genaues Modell.
+Ohne gewählte Familie ist der RouterLab-Standard **`gpt-6.1-sol`**. Der Dienst `llm` behält **`gpt-5.6-sol`**, die strukturierte Konsole bereitet jetzt Familie und Modell vor; das lineare Menü behält den direkten Start. Explizite Modelle und diese Dienststandards müssen entdeckt und autorisiert sein. Mit `--strategy claude-gpt|open-source|trial` wählen Sie eine RouterLab-Familie in der Befehlszeile, mit `--model` ein genaues Modell.
 
 | Dienst | Allowlist |
 | --- | --- |
@@ -218,6 +251,8 @@ Während der Ausführung hält der Wrapper den Dienst-Token im Speicher. Claude 
 
 ## Geprüfte Kompatibilität
 
+Die folgenden historischen Ergebnisse betreffen 7.3.0. Prüfungen dieses Branches stehen im [Entwicklungsbericht 8.0.0](./docs/release-8.0.0-validation.md).
+
 Unter Windows mit Node 24.19.0 bestand Claude Code 2.1.296 13 Routing-Szenarien; Codex 0.144.1 und 0.157.0 bestanden Responses-Streaming und natives model/list; OpenCode 1.18.30 und 2.0.27 bestanden exaktes Modell, HTTP-Pfade, Authentifizierung, Streaming und einen nativen read-Werkzeugzyklus mit simulierten Anbietern. OpenCode 2 verwendet den nativen Modus `--standalone`, damit sein privater Server die temporäre Proxy-Konfiguration erhält. Sein gemeinsam genutzter Hintergrunddienst ist mit dieser Integration pro Start inkompatibel.
 
 [Alle 37 GitHub-CI-Jobs bestanden](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), einschließlich dieser Claude-/OpenCode-Versionen und Codex 0.144.1 unter Windows, macOS und Linux sowie echter Keychain-Prüfungen unter macOS. Der Bericht nennt die genauen Node-Konfigurationen und Runner-Versionen.
@@ -256,7 +291,7 @@ Ein lokales, noch nicht veröffentlichtes Paket testen:
 
 ```bash
 npm pack
-npx --yes --package ./wrapper-scionos-7.3.0.tgz wrapper-scionos
+npx --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
 ```
 
 ## Lizenz

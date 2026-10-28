@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Refused legacy Codex backup restoration over personal or unrecognized configuration. Dry-run/status report conflicts; recognized legacy files are retained byte-for-byte in a separate recovery copy before replacement.
+- Propagated console launch cancellation through Claude Code, Codex and OpenCode revalidation, resource allocation and process startup. Cancellation after allocation cleans up resources; SIGTERM cannot start a child after shutdown was requested.
+- Kept header-only upstream failures outside the response pipeline until body data arrives, preserving JSON 504 timeout errors instead of resetting the client connection.
+- Applied an overall deadline to direct model discovery and released unfinished discovery response bodies, including redirects, authentication failures and server errors.
+- Preserved environment-first authentication when a lower-priority secure-store read fails, while retaining stored-first failure behavior.
+- Recovered unchanged Claude Desktop locks whose PID no longer exists, preserving live and malformed locks.
+- Preserved disabled choices and their explanations in the linear strategy selector.
+
 ## 8.0.0-beta.1 - 2026-10-27
 
 ### Changed

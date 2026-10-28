@@ -8,8 +8,11 @@ export async function runInteractiveCli(command, args = [], {
   signalSource = process,
   updateProcessExitCode = true,
   onSpawn = null,
+  signal = null,
 } = {}) {
+  signal?.throwIfAborted();
   const invocation = buildInteractiveCliInvocation(command, args);
+  signal?.throwIfAborted();
   const child = spawn(invocation.command, invocation.args, {
     stdio: 'inherit',
     env,
@@ -28,6 +31,7 @@ export async function runInteractiveCli(command, args = [], {
   };
   const onSigint = () => forwardSignal('SIGINT');
   const onSigterm = () => forwardSignal('SIGTERM');
+  const onAbort = () => forwardSignal(signal.reason?.signal === 'SIGTERM' ? 'SIGTERM' : 'SIGINT');
   signalSource.on('SIGINT', onSigint);
   signalSource.on('SIGTERM', onSigterm);
 
@@ -41,6 +45,8 @@ export async function runInteractiveCli(command, args = [], {
           if (typeof code === 'number') resolve(code === 0xC000013A || code === -1073741510 ? 130 : code);
           else resolve(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1);
         });
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) onAbort();
       });
     } catch (error) {
       if (!receivedSignal) throw error;
@@ -51,6 +57,7 @@ export async function runInteractiveCli(command, args = [], {
     if (forceTimer) clearTimeout(forceTimer);
     signalSource.off('SIGINT', onSigint);
     signalSource.off('SIGTERM', onSigterm);
+    signal?.removeEventListener('abort', onAbort);
   }
 
   if (updateProcessExitCode) {

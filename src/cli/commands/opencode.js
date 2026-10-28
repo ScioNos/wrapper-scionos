@@ -36,6 +36,7 @@ const DEFAULT_OPEN_CODE_DEPENDENCIES = Object.freeze({
 });
 
 export async function launchOpenCodeForService(options, dependencies = {}) {
+  options.signal?.throwIfAborted();
   const deps = { ...DEFAULT_OPEN_CODE_DEPENDENCIES, ...dependencies };
   const openCodeArgs = validateOpenCodeForwardedArgs(options.passthrough ?? []);
   const openCode = deps.assertOpenCodeCliAvailable();
@@ -55,15 +56,19 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
     : await deps.resolveTokenWithSource({ serviceValue: service.value, noPrompt: options.noPrompt });
 
   let modelResult;
+  options.signal?.throwIfAborted();
   try {
     modelResult = await deps.fetchModels(resolvedToken.token, {
       serviceValue: service.value,
       baseUrl: service.baseUrl,
       timeoutMs: 10000,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (error) {
+    options.signal?.throwIfAborted();
     throw openCodeModelDiscoveryError({ reason: 'network_error', message: error.message }, service);
   }
+  options.signal?.throwIfAborted();
   if (!modelResult.valid) {
     if (modelResult.reason === 'auth_failed') {
       throw openCodeAuthenticationError(modelResult, service, resolvedToken);
@@ -141,12 +146,14 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
   let proxy = null;
   let launchError = null;
   try {
+    options.signal?.throwIfAborted();
     proxy = await deps.startLongRunningLlmProxy({
       targetBaseUrl: service.baseUrl,
       routerlabToken: resolvedToken.token,
       upstreamAuth: 'openai',
       allowedModels: selectedFamily ? selectionModels : availableModels,
     });
+    options.signal?.throwIfAborted();
     const env = buildOpenCodeEnvironment({
       sourceEnv: process.env,
       proxyBaseUrl: proxy.baseUrl,
@@ -170,6 +177,7 @@ export async function launchOpenCodeForService(options, dependencies = {}) {
       openCodeArgs,
       env,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(options.onSpawn ? { onSpawn: options.onSpawn } : {}),
     });
   } catch (error) {

@@ -273,6 +273,9 @@ export async function forwardLongRunningLlmRequest(req, res, {
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
       signal: controller.signal,
     });
+    // Until the first body bytes arrive, keep the downstream outside pipeline:
+    // pipeline destroys its destination on error, preventing a JSON 504.
+    await waitForUpstreamBody(upstream);
     upstream.on('data', receivedChunk);
     await writeLongRunningHttpResponse(res, upstream, responseHeaders);
   } catch (error) {
@@ -446,6 +449,26 @@ async function requestLongRunningHttp(url, { method, headers, body, signal }) {
     const upstreamReq = transport.request(url, { method, headers, signal }, resolve);
     upstreamReq.once('error', reject);
     upstreamReq.end(body);
+  });
+}
+
+function waitForUpstreamBody(upstream) {
+  if (upstream.readableLength || upstream.readableEnded) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const finish = (error) => {
+      upstream.off('readable', ready);
+      upstream.off('end', ready);
+      upstream.off('error', failed);
+      upstream.off('close', closed);
+      if (error) reject(error); else resolve();
+    };
+    const ready = () => finish();
+    const failed = (error) => finish(error);
+    const closed = () => finish(upstream.complete ? null : Object.assign(new Error('Upstream closed before its response body.'), { code: 'ERR_STREAM_PREMATURE_CLOSE' }));
+    upstream.once('readable', ready);
+    upstream.once('end', ready);
+    upstream.once('error', failed);
+    upstream.once('close', closed);
   });
 }
 

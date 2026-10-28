@@ -298,6 +298,7 @@ export function formatSelectChoice(item) {
     value: item.value,
     description: item.description,
     short: item.short ?? label,
+    ...(item.disabled !== undefined ? { disabled: item.disabled } : {}),
     ...(item.key !== undefined ? { key: item.key } : {}),
   };
 }

@@ -430,6 +430,24 @@ function withRollback(paths, operation) {
 }
 
 function acquireDesktopMutationLock(lockPath) {
+  // Older releases wrote only the PID. Reclaim only a valid, unchanged lock
+  // whose owner is demonstrably gone; malformed or inaccessible locks stay closed.
+  try {
+    const snapshot = fs.statSync(lockPath);
+    const contents = fs.readFileSync(lockPath, 'utf8');
+    const pid = /^\d+$/.test(contents) ? Number(contents) : NaN;
+    if (Number.isSafeInteger(pid) && pid > 0) {
+      let dead = false;
+      try { process.kill(pid, 0); } catch (error) { dead = error.code === 'ESRCH'; }
+      if (dead) {
+        const current = fs.statSync(lockPath);
+        if (current.ino === snapshot.ino && current.dev === snapshot.dev
+          && current.mtimeMs === snapshot.mtimeMs && fs.readFileSync(lockPath, 'utf8') === contents) {
+          fs.unlinkSync(lockPath);
+        }
+      }
+    }
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
   let descriptor = null;
   try {
     descriptor = fs.openSync(lockPath, 'wx', PRIVATE_FILE_MODE);

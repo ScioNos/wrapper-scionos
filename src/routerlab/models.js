@@ -165,21 +165,24 @@ export async function fetchModels(apiKey, options = {}) {
     baseUrl = resolveServiceBaseUrl(serviceValue),
     anthropicVersion = DEFAULT_ANTHROPIC_VERSION,
     timeoutMs = 30000,
+    signal,
   } = options;
 
+  signal?.throwIfAborted();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
+  let response;
   try {
-    const response = await fetch(`${normalizedBaseUrl}/v1/models`, {
+    response = await fetch(`${normalizedBaseUrl}/v1/models`, {
       method: 'GET',
       redirect: 'manual',
       headers: {
         'x-api-key': apiKey,
         'anthropic-version': anthropicVersion,
       },
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
     });
 
     if (response.status >= 300 && response.status < 400) {
@@ -229,12 +232,16 @@ export async function fetchModels(apiKey, options = {}) {
       message: `Server responded with ${response.status} ${response.statusText}`.trim(),
     };
   } catch (error) {
+    signal?.throwIfAborted();
     if (error.name === 'AbortError') {
       return { valid: false, reason: 'timeout', message: `Request timed out after ${Math.round(timeoutMs / 1000)}s` };
     }
     return { valid: false, reason: 'network_error', message: error.message };
   } finally {
     clearTimeout(timeoutId);
+    // Also release non-2xx bodies: those branches deliberately do not read them.
+    controller.abort();
+    try { if (!response?.bodyUsed) await response?.body?.cancel?.(); } catch { /* Preserve the discovery result. */ }
   }
 }
 
@@ -263,6 +270,8 @@ async function readBoundedModelResponse(response) {
     } catch (error) {
       if (error?.code === 'ERR_MODEL_RESPONSE_TOO_LARGE') await reader.cancel().catch(() => {});
       throw error;
+    } finally {
+      reader.releaseLock();
     }
   } else if (response.body && typeof response.body[Symbol.asyncIterator] === 'function') {
     for await (const chunk of response.body) addChunk(chunk);
@@ -278,109 +287,124 @@ export async function fetchModelsDirect(apiKey, options = {}) {
     baseUrl = resolveServiceBaseUrl(serviceValue),
     anthropicVersion = DEFAULT_ANTHROPIC_VERSION,
     timeoutMs = 30000,
+    signal,
   } = options;
+  signal?.throwIfAborted();
   const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
   const url = new URL(`${normalizedBaseUrl}/v1/models`);
   const transport = url.protocol === 'http:' ? http : https;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = (result) => {
+    let request;
+    let incoming;
+    let timeoutId;
+    const finish = (result, error) => {
       if (settled) return;
       settled = true;
-      resolve(result);
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', abort);
+      if (!incoming?.complete) {
+        incoming?.destroy();
+        request?.destroy();
+      }
+      if (error) reject(error); else resolve(result);
     };
-    const request = transport.request(url, {
-      method: 'GET',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': anthropicVersion,
-      },
-    }, (response) => {
-      const status = response.statusCode ?? 0;
-      if (status >= 300 && status < 400) {
-        response.resume();
-        finish({
-          valid: false,
-          reason: 'redirect_not_allowed',
-          status,
-          message: 'Model discovery redirects are not allowed',
-        });
-        return;
-      }
-      if (status === 401 || status === 403) {
-        response.resume();
-        finish({ valid: false, reason: 'auth_failed', status });
-        return;
-      }
-      if (status < 200 || status >= 300) {
-        response.resume();
-        finish({
-          valid: false,
-          reason: 'server_error',
-          status,
-          statusText: response.statusMessage,
-          message: `Server responded with ${status} ${response.statusMessage ?? ''}`.trim(),
-        });
-        return;
-      }
-
-      const chunks = [];
-      let size = 0;
-      response.on('data', (chunk) => {
-        if (settled) return;
-        size += chunk.length;
-        if (size > MAX_MODEL_DISCOVERY_BYTES) {
-          response.destroy();
+    const abort = () => finish(null, signal.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) { abort(); return; }
+    // A socket inactivity timeout can be reset forever by a trickling body.
+    // Bound the entire discovery, including connection and response reading.
+    timeoutId = setTimeout(() => finish({ valid: false, reason: 'timeout',
+      message: `Request timed out after ${Math.round(timeoutMs / 1000)}s` }), timeoutMs);
+    try {
+      request = transport.request(url, {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': anthropicVersion,
+        },
+      }, (response) => {
+        incoming = response;
+        const status = response.statusCode ?? 0;
+        if (status >= 300 && status < 400) {
           finish({
             valid: false,
-            reason: 'invalid_response',
-            message: 'Model list response exceeds the local size limit',
+            reason: 'redirect_not_allowed',
+            status,
+            message: 'Model discovery redirects are not allowed',
           });
           return;
         }
-        chunks.push(chunk);
+        if (status === 401 || status === 403) {
+          finish({ valid: false, reason: 'auth_failed', status });
+          return;
+        }
+        if (status < 200 || status >= 300) {
+          finish({
+            valid: false,
+            reason: 'server_error',
+            status,
+            statusText: response.statusMessage,
+            message: `Server responded with ${status} ${response.statusMessage ?? ''}`.trim(),
+          });
+          return;
+        }
+
+        const chunks = [];
+        let size = 0;
+        response.on('data', (chunk) => {
+          if (settled) return;
+          size += chunk.length;
+          if (size > MAX_MODEL_DISCOVERY_BYTES) {
+            response.destroy();
+            finish({
+              valid: false,
+              reason: 'invalid_response',
+              message: 'Model list response exceeds the local size limit',
+            });
+            return;
+          }
+          chunks.push(chunk);
+        });
+        response.once('error', (error) => finish({
+          valid: false,
+          reason: 'network_error',
+          message: error.message,
+        }));
+        response.once('end', () => {
+          if (settled) return;
+          let payload;
+          try {
+            payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          } catch {
+            finish({ valid: false, reason: 'invalid_response', message: 'Model list response is not valid JSON' });
+            return;
+          }
+          const modelMetadata = extractModelMetadata(payload);
+          const models = modelMetadata.map((model) => model.id);
+          if (models.length === 0) {
+            finish({
+              valid: false,
+              reason: 'models_unavailable',
+              message: 'Model list response did not include any model ids',
+              models,
+              modelMetadata,
+            });
+            return;
+          }
+          finish({ valid: true, models, modelMetadata, modelsVerified: true });
+        });
       });
-      response.once('error', (error) => finish({
+      request.once('error', (error) => finish({
         valid: false,
-        reason: 'network_error',
+        reason: error.code === 'ETIMEDOUT' ? 'timeout' : 'network_error',
         message: error.message,
       }));
-      response.once('end', () => {
-        if (settled) return;
-        let payload;
-        try {
-          payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        } catch {
-          finish({ valid: false, reason: 'invalid_response', message: 'Model list response is not valid JSON' });
-          return;
-        }
-        const modelMetadata = extractModelMetadata(payload);
-        const models = modelMetadata.map((model) => model.id);
-        if (models.length === 0) {
-          finish({
-            valid: false,
-            reason: 'models_unavailable',
-            message: 'Model list response did not include any model ids',
-            models,
-            modelMetadata,
-          });
-          return;
-        }
-        finish({ valid: true, models, modelMetadata, modelsVerified: true });
-      });
-    });
-    request.setTimeout(timeoutMs, () => {
-      const error = new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`);
-      error.code = 'ETIMEDOUT';
-      request.destroy(error);
-    });
-    request.once('error', (error) => finish({
-      valid: false,
-      reason: error.code === 'ETIMEDOUT' ? 'timeout' : 'network_error',
-      message: error.message,
-    }));
-    request.end();
+      request.end();
+    } catch (error) {
+      finish({ valid: false, reason: 'network_error', message: error.message });
+    }
   });
 }
 

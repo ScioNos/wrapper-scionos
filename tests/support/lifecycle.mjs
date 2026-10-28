@@ -4,6 +4,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { buildInteractiveCliInvocation, terminateChildTree } from '../../src/platform/process.js';
 
+const childCloseStates = new WeakMap();
+
 export async function removeTestDirectory(directory, root = os.tmpdir()) {
   const absolute = path.resolve(directory);
   const assertChild = (parent, target) => {
@@ -42,20 +44,41 @@ export async function closeTestServer(server) {
 
 export function spawnTestProcess(command, args, options = {}) {
   const invocation = buildInteractiveCliInvocation(command, args);
-  return spawn(invocation.command, invocation.args, {
+  const child = spawn(invocation.command, invocation.args, {
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     detached: process.platform !== 'win32', ...options, ...(invocation.spawnOptions ?? {}),
   });
+  // Record close before returning: cleanup may start after it has already fired.
+  childCloseStates.set(child, false);
+  child.once('close', () => childCloseStates.set(child, true));
+  return child;
 }
 
 export async function waitForTestChild(child, timeoutMs = 5000) {
-  if (child.exitCode !== null && child.stdout?.readableEnded && child.stderr?.readableEnded) return;
+  const closeObserved = childCloseStates.get(child);
+  if (closeObserved === true) return;
+  // Callers using spawn directly have no recorded event. A signal is also an
+  // exit, but output pipes must be closed (descendants can keep them open).
+  if (closeObserved === undefined
+    && (child.exitCode !== null || child.signalCode != null)
+    && [child.stdout, child.stderr].every(stream => !stream || stream.closed)) return;
   await new Promise((resolve, reject) => {
-    const done = () => { clearTimeout(timer); child.off('close', done); resolve(); };
+    const done = () => {
+      childCloseStates.set(child, true);
+      clearTimeout(timer); child.off('close', done); resolve();
+    };
     const timer = setTimeout(() => {
       child.off('close', done);
+      const streamState = stream => stream ? {
+        readableEnded: stream.readableEnded, closed: stream.closed, destroyed: stream.destroyed,
+      } : null;
+      const cleanupState = {
+        pid: child.pid ?? null, exitCode: child.exitCode, signalCode: child.signalCode,
+        closeObserved: childCloseStates.get(child) === true,
+        stdout: streamState(child.stdout), stderr: streamState(child.stderr),
+      };
       child.stdout?.destroy(); child.stderr?.destroy(); child.stdin?.destroy();
-      reject(new Error('Process tree did not close within cleanup deadline'));
+      reject(Object.assign(new Error(`Child process close was not observed within cleanup deadline (${timeoutMs}ms).\nChild state: ${JSON.stringify(cleanupState)}`), { cleanupState }));
     }, timeoutMs);
     child.once('close', done);
   });

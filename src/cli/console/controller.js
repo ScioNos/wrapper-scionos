@@ -90,7 +90,7 @@ export async function runStructuredConsole(options, dependencies = {}) {
   let termination = 0;
   let promptAbort;
   let entered = false;
-  let appLaunchAbort;
+  let launchAbort;
   const t = (key) => uiText(state.language, key);
   const update = () => events.emit('change');
   const enter = () => { if (output.isTTY && !entered) { output.write('\x1b[?1049h\x1b[H\x1b[2J\x1b[?25l'); entered = true; } };
@@ -99,10 +99,17 @@ export async function runStructuredConsole(options, dependencies = {}) {
   const logger = { log, error: log };
   const resetFocus = () => { state.focus = { pane: 'content', index: 0 }; };
   const onInterrupt = () => {
-    if (appLaunchAbort) { termination = 130; exiting = true; appLaunchAbort.abort(); }
+    if (launchAbort) {
+      if (state.client === 'codex-app') { termination = 130; exiting = true; }
+      launchAbort.abort(Object.assign(new Error('Launch interrupted.'), { name: 'AbortError', signal: 'SIGINT' }));
+    }
     else if (!childActive) { termination = 130; exiting = !services.hasAppSession?.(); promptAbort?.abort(); }
   };
-  const onTerminate = () => { termination = 143; exiting = true; appLaunchAbort?.abort(); promptAbort?.abort(); };
+  const onTerminate = () => {
+    termination = 143; exiting = true;
+    launchAbort?.abort(Object.assign(new Error('Launch terminated.'), { name: 'AbortError', signal: 'SIGTERM' }));
+    promptAbort?.abort();
+  };
   signals.on('SIGINT', onInterrupt);
   signals.on('SIGTERM', onTerminate);
 
@@ -263,20 +270,22 @@ export async function runStructuredConsole(options, dependencies = {}) {
   }
 
   async function launch() {
+    if (exiting) return;
     if (!canLaunch(state) || !prepared.has(state.client)) { state.notice = t('selectFirst'); return; }
     const client = state.client;
     const selection = { ...state.selections[client] };
     const remember = state.remember;
     // Desktop activation never takes terminal input. Keep this console's TTY
     // attached; only a foreground CLI needs the native terminal handoff.
-    if (client !== 'codex-app') {
-      leave();
-      await inputManager.release();
-    }
     childActive = true;
-    if (client === 'codex-app') appLaunchAbort = new AbortController();
+    launchAbort = new AbortController();
     try {
-      const execute = () => prepared.get(client)(selection, { language: state.language, ...(appLaunchAbort ? { signal: appLaunchAbort.signal } : {}), onSpawn() {
+      if (client !== 'codex-app') {
+        leave();
+        await inputManager.release();
+      }
+      launchAbort.signal.throwIfAborted();
+      const execute = () => prepared.get(client)(selection, { language: state.language, signal: launchAbort.signal, onSpawn() {
         if (!remember) return;
         state.preferences = rememberSelection(state.preferences, state.service, client, selection);
         const saved = save(state.preferences);
@@ -287,13 +296,14 @@ export async function runStructuredConsole(options, dependencies = {}) {
       if (client === 'codex-app') { refreshApp(); state.notice = t(result?.requiresRestart ? 'appRestart' : 'appOpened'); }
       else state.notice = `${t(code === 130 ? 'interrupted' : code === 0 ? 'launched' : 'failed')} : ${CLIENT_LABELS[client]} (${code})`;
     } catch (error) {
+      if (launchAbort.signal.aborted && !error.cleanupError) { state.notice = t('interrupted'); return; }
       prepared.delete(client);
       delete state.catalogues[client];
       state.accessStatus[client] = 'accessFailed';
       throw error;
     } finally {
       childActive = false;
-      appLaunchAbort = null;
+      launchAbort = null;
       state.page = 'home';
       resetFocus();
       processState.exitCode = termination;

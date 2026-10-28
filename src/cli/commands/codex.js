@@ -43,6 +43,7 @@ const DEFAULT_CODEX_DEPENDENCIES = Object.freeze({
 });
 
 export async function launchCodexForService(options, dependencies = {}) {
+  options.signal?.throwIfAborted();
   const deps = { ...DEFAULT_CODEX_DEPENDENCIES, ...dependencies };
   const forwarded = validateCodexForwardedArgs(options.forwarded ?? []);
   const codex = deps.assertCodexCliAvailable();
@@ -64,18 +65,22 @@ export async function launchCodexForService(options, dependencies = {}) {
   warnStoredCodexTokenPrecedence(options, resolvedToken, service);
 
   let modelResult;
+  options.signal?.throwIfAborted();
   try {
     modelResult = await deps.fetchModels(resolvedToken.token, {
       serviceValue: service.value,
       baseUrl: service.baseUrl,
       timeoutMs: 10000,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (error) {
+    options.signal?.throwIfAborted();
     throw codexModelDiscoveryError(
       { reason: 'network_error', message: error.message },
       service,
     );
   }
+  options.signal?.throwIfAborted();
   if (!modelResult.valid) {
     if (modelResult.reason === 'auth_failed') {
       throw codexAuthenticationError(modelResult, service, resolvedToken);
@@ -179,6 +184,7 @@ export async function launchCodexForService(options, dependencies = {}) {
       }
     }
   }
+  options.signal?.throwIfAborted();
   const catalog = deps.writeCodexRuntimeModelCatalog({
     models: selectedFamily ? selectionModels : availableModels,
     modelMetadata: modelResult.modelMetadata ?? [],
@@ -191,11 +197,13 @@ export async function launchCodexForService(options, dependencies = {}) {
       model,
       modelCatalogPath: catalog.path,
     });
+    options.signal?.throwIfAborted();
     return await deps.launchCodex({
       apiKey: resolvedToken.token,
       codexArgs: [...codexArgs, ...forwarded],
       codex,
       updateProcessExitCode: options.updateProcessExitCode ?? true,
+      ...(options.signal ? { signal: options.signal } : {}),
       ...(options.onSpawn ? { onSpawn: options.onSpawn } : {}),
     });
   } catch (error) {

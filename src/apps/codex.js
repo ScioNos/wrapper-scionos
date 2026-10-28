@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { parseTOML, getStaticTOMLValue } from 'toml-eslint-parser';
 import { detectCodexCli, MINIMUM_CODEX_VERSION } from '../platform/detect.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { removeTemporaryDirectorySync } from '../platform/temp-directory.js';
@@ -123,7 +125,9 @@ export async function launchCodex({
   codex = null,
   updateProcessExitCode = true,
   onSpawn = null,
+  signal = null,
 } = {}) {
+  signal?.throwIfAborted();
   const resolvedCodex = codex ?? assertCodexCliAvailable();
   return runInteractiveCli(resolvedCodex.cliPath, codexArgs, {
     env: {
@@ -131,6 +135,7 @@ export async function launchCodex({
       ...(apiKey ? buildCodexAuth(apiKey) : {}),
     },
     updateProcessExitCode,
+    ...(signal ? { signal } : {}),
     ...(onSpawn ? { onSpawn } : {}),
   });
 }
@@ -303,6 +308,24 @@ function hasRouterlabEndpoint(config) {
   return Boolean(config && /^\s*base_url\s*=\s*["']https:\/\/(?:api|llm-api)\.routerlab\.ch\/v1\/?["']\s*(?:#.*)?$/m.test(config));
 }
 
+function isRestorableLegacyConfig(config, paths) {
+  if (!isWrapperCodexConfig(config)) return false;
+  try {
+    const value = getStaticTOMLValue(parseTOML(config, { tomlVersion: '1.0.0' }));
+    const provider = value.model_providers?.custom;
+    if (typeof value.model !== 'string' || typeof provider?.name !== 'string') return false;
+    if (Object.hasOwn(value, 'model_catalog_json')) {
+      if (typeof value.model_catalog_json !== 'string'
+        || path.resolve(value.model_catalog_json) !== path.resolve(paths.modelCatalogPath)) return false;
+      delete value.model_catalog_json;
+    }
+    const expected = getStaticTOMLValue(parseTOML(buildCodexThirdPartyConfig({
+      providerName: provider.name, baseUrl: provider.base_url, model: value.model,
+    }), { tomlVersion: '1.0.0' }));
+    return isDeepStrictEqual(value, expected);
+  } catch { return false; }
+}
+
 
 function readText(filePath) {
   try {
@@ -315,10 +338,17 @@ function readText(filePath) {
   }
 }
 
-function writeTextAtomic(filePath, value) {
+function writeTextAtomic(filePath, value, { expected } = {}) {
   const tmp = `${filePath}.${randomUUID()}.tmp`;
-  fs.writeFileSync(tmp, value, 'utf8');
-  fs.renameSync(tmp, filePath);
+  try {
+    fs.writeFileSync(tmp, value, { encoding: 'utf8', mode: 0o600, flag: 'wx', flush: true });
+    if (expected !== undefined && readText(filePath) !== expected) {
+      throw Object.assign(new Error('Codex configuration changed before restoration; the legacy backup was preserved.'), { code: 'config_conflict' });
+    }
+    fs.renameSync(tmp, filePath);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
 }
 
 // Legacy functions for compatibility
@@ -360,13 +390,15 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
   const wrapperConfig = isWrapperCodexConfig(currentConfig);
   const catalogExists = fs.existsSync(resolvedPaths.modelCatalogPath);
   const backupExists = backupConfig !== null;
-  const manualCleanupRequired = Boolean(wrapperConfig && !backupExists);
+  const restoreConflict = backupExists && currentConfig !== null && !isRestorableLegacyConfig(currentConfig, resolvedPaths);
+  const manualCleanupRequired = restoreConflict || Boolean(wrapperConfig && !backupExists);
 
   if (dryRun) {
     return {
       dryRun: true,
       paths: resolvedPaths,
-      canRestore: Boolean(backupExists || catalogExists),
+      canRestore: !restoreConflict && Boolean(backupExists || catalogExists),
+      restoreConflict,
       backupExists,
       wrapperConfig,
       modelCatalogExists: catalogExists,
@@ -375,8 +407,19 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
     };
   }
 
+  if (restoreConflict) {
+    throw Object.assign(new Error('The current Codex configuration contains personal or unrecognized settings. No files were changed. Compare it with the legacy backup and restore manually.'), { code: 'config_conflict' });
+  }
+  let preservedConfigPath;
   if (backupExists) {
-    writeTextAtomic(resolvedPaths.configPath, `${backupConfig}\n`);
+    if (currentConfig !== null) {
+      preservedConfigPath = `${resolvedPaths.configPath}.wrapper-scionos-before-restore-${randomUUID()}.toml`;
+      fs.writeFileSync(preservedConfigPath, fs.readFileSync(resolvedPaths.configPath), { mode: 0o600, flag: 'wx', flush: true });
+      if (readText(resolvedPaths.configPath) !== currentConfig) {
+        throw Object.assign(new Error('Codex configuration changed before restoration; the legacy backup was preserved.'), { code: 'config_conflict' });
+      }
+    }
+    writeTextAtomic(resolvedPaths.configPath, `${backupConfig}\n`, { expected: currentConfig });
     fs.rmSync(resolvedPaths.backupPath, { force: true });
   }
 
@@ -388,6 +431,7 @@ export function restoreCodexConfig({ paths = getCodexPaths(), dryRun = true } = 
     dryRun: false,
     paths: resolvedPaths,
     restoredFromBackup: backupExists,
+    ...(preservedConfigPath ? { preservedConfigPath } : {}),
     removedWrapperConfig: Boolean(wrapperConfig && backupExists),
     removedModelCatalog: catalogExists,
     preservedConfig: Boolean(currentConfig && !backupExists),
@@ -403,6 +447,7 @@ export function readCodexStatus(paths = getCodexPaths()) {
   const config = readText(resolvedPaths.configPath);
   const backupExists = fs.existsSync(resolvedPaths.backupPath);
   const wrapperConfig = isWrapperCodexConfig(config);
+  const restoreConflict = backupExists && config !== null && !isRestorableLegacyConfig(config, resolvedPaths);
   return {
     paths: resolvedPaths,
     configExists: fs.existsSync(resolvedPaths.configPath),
@@ -410,7 +455,8 @@ export function readCodexStatus(paths = getCodexPaths()) {
     authExists: fs.existsSync(resolvedPaths.authPath),
     modelCatalogExists: fs.existsSync(resolvedPaths.modelCatalogPath),
     wrapperConfig,
+    restoreConflict,
     routerlabEndpoint: hasRouterlabEndpoint(config),
-    manualCleanupRequired: Boolean(wrapperConfig && !backupExists),
+    manualCleanupRequired: restoreConflict || Boolean(wrapperConfig && !backupExists),
   };
 }

@@ -113,7 +113,14 @@ export async function resolveTokenWithSource(
 ) {
   const service = requireServiceConfig(serviceValue);
   const envToken = resolveServiceEnvTokenFn(service.value, process.env);
-  const storedToken = getStoredTokenFn(service.value);
+  let storedToken;
+  try { storedToken = getStoredTokenFn(service.value); }
+  catch (error) {
+    // A diagnostic read of a lower-priority source must not disable the
+    // selected environment credential. Stored-first launches still fail closed.
+    if (preferStored || !envToken.token) throw error;
+    storedToken = null;
+  }
   const resolved = selectTokenCandidate({
     envToken: envToken.token,
     envSource: envToken.source ?? 'env',
@@ -381,9 +388,10 @@ export async function chooseSubagentModel({
 }
 
 export async function launchClaudeCode(
-  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, language = 'en', claudeArgs, version = null, allowBack = false, prepareOnly = false, quiet = false, updateProcessExitCode = true, onSpawn = null },
+  { serviceValue, strategyValue, subagentModel = null, token: tokenOverride = null, noPrompt, language = 'en', claudeArgs, version = null, allowBack = false, prepareOnly = false, quiet = false, updateProcessExitCode = true, onSpawn = null, signal = null },
   dependencies = {},
 ) {
+  signal?.throwIfAborted();
   const {
     chooseSubagentModelFn = chooseSubagentModel,
     chooseStrategyFn = chooseStrategy,
@@ -430,7 +438,9 @@ export async function launchClaudeCode(
   if (!tokenFormat.valid) {
     throw new Error(tokenFormat.message);
   }
-  const validation = await fetchModelsFn(token, { serviceValue: service.value, baseUrl: service.baseUrl });
+  signal?.throwIfAborted();
+  const validation = await fetchModelsFn(token, { serviceValue: service.value, baseUrl: service.baseUrl, ...(signal ? { signal } : {}) });
+  signal?.throwIfAborted();
   if (!validation.valid && validation.reason === 'auth_failed') {
     throw claudeCodeAuthenticationError(validation, service, resolvedToken);
   }
@@ -505,12 +515,14 @@ export async function launchClaudeCode(
 
   let proxy = null;
   try {
+    signal?.throwIfAborted();
     proxy = await startLongRunningLlmProxyFn({
       targetBaseUrl: service.baseUrl,
       routerlabToken: token,
       upstreamAuth: 'anthropic',
       allowedModels: modelIds,
     });
+    signal?.throwIfAborted();
     const proxiedService = { ...service, baseUrl: proxy.baseUrl };
     const env = buildClaudeCodeEnvironment(proxy.gatewayToken, proxiedService, selectedStrategy, {
       subagentModel: selectedSubagentModel,
@@ -529,6 +541,7 @@ export async function launchClaudeCode(
 
     const exitCode = await runInteractiveCliFn(claude.cliPath, claudeArgs, {
       env,
+      ...(signal ? { signal } : {}),
       ...(!updateProcessExitCode ? { updateProcessExitCode: false } : {}),
       ...(onSpawn ? { onSpawn } : {}),
     });

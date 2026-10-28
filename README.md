@@ -13,7 +13,7 @@ Keep your preferred coding client and choose a RouterLab model family for your w
 
 ```bash
 # Select the AWS Claude family
-npx wrapper-scionos claude-code --service routerlab --strategy aws
+wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
 **Beta: [`8.0.0-beta.1`](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1) — Structured terminal console.**
@@ -39,15 +39,35 @@ The service is selected once, before the menu opens, and remains fixed for the s
 
 - Node.js `24.x`.
 - A token for the selected RouterLab service.
-- Claude Code `>=2.1.220`; RouterLab Claude Native requires `>=2.1.293` and AWS Claude requires `>=2.1.284`. Release checks use `2.1.296`.
+- Claude Code `>=2.1.220`; RouterLab Claude Native requires `>=2.1.293` and AWS Claude requires `>=2.1.284`. CI checks use `2.1.296`; the 28 October Windows check used `2.1.309`.
 - Codex CLI `>=0.144.1` for Codex launches.
-- Codex App on Windows or macOS with embedded engine `>=0.164.0`; Linux is unsupported. Locally checked with App `26.1021.3705.0` and engine `0.164.0-alpha.11.1`.
+- Codex App on Windows or macOS with embedded engine `>=0.164.0`; Linux is unsupported. Locally checked on 28 October with App `26.1023.6123.0` and engine `0.165.0-alpha.1.2`.
 - OpenCode `>=1.18.30`; Windows checks validate `opencode-ai@1.18.30` and `@opencode/cli@2.0.27`.
 - Windows, macOS, or `claude-desktop-debian` on Linux for Claude Desktop profiles.
 
 ## Quick start
 
-Run without a global installation:
+### Beta 8.0.0-beta.1
+
+This README describes the current `8.0.0` branch. The released beta archive was built from `a77500f`; later fixes listed under [Unreleased](./CHANGELOG.md#unreleased) require the current checkout. To run that checkout, use `npm ci` then `npm start` from the repository root.
+
+Download [wrapper-scionos-8.0.0-beta.1.tgz](https://github.com/ScioNos/wrapper-scionos/releases/download/v8.0.0-beta.1/wrapper-scionos-8.0.0-beta.1.tgz) into a directory of your choice, then open a terminal there. This beta is distributed through GitHub and is not published on npm. Run the downloaded archive without a global installation; `--prefix .` makes npx resolve it from this directory:
+
+```bash
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos --service llm
+```
+
+Or install that beta archive globally:
+
+```bash
+npm install -g ./wrapper-scionos-8.0.0-beta.1.tgz
+wrapper-scionos --service routerlab
+```
+
+### Stable release from npm
+
+The following commands use npm's stable `latest` release, currently 7.3.0:
 
 ```bash
 npx wrapper-scionos
@@ -66,7 +86,7 @@ The product name is **wrapper-scioNos**. Its npm package and primary command are
 For `--service llm`, the wrapper displays this neutral notice because the service catalogue may vary:
 
 ```text
-ℹ LLM service active — available models may vary
+ℹ Active LLM service — available models may vary
 ```
 
 The notice is not displayed for `routerlab`.
@@ -131,7 +151,7 @@ The token stays in the existing secure store. A durable, independent credential 
 
 The active language is visible in the header. Press **L**, or choose **Language / Langue / Sprache** on Home, to switch between **English**, **Français** and **Deutsch** for the current session. Switching preserves the active service and model selections. Model families retain catalogue labels, including **💸 Claude via AWS**.
 
-The wrapper defaults to English. Use one of the following languages:
+The wrapper uses a supported system locale when available and otherwise falls back to English. Choose a language explicitly:
 
 ```bash
 wrapper-scionos --lang en
@@ -139,7 +159,7 @@ wrapper-scionos --lang fr
 wrapper-scionos --lang de
 ```
 
-`--language` is an alias for `--lang`. The same setting can be provided through `SCIONOS_LANG` or `SCIONOS_LANGUAGE`. This localizes wrapper menus and prompts; it does not translate native client output.
+`--language` is an alias for `--lang`. Without an explicit option, the first defined variable among `SCIONOS_LANG`, `SCIONOS_LANGUAGE`, `LC_ALL` and `LANG`, in that order, determines the language. Locale forms such as `fr_CH.UTF-8` select their supported language; an absent or unrecognized environment value falls back to English. This localizes wrapper menus and prompts; it does not translate native client output.
 
 ## Main commands
 
@@ -196,7 +216,7 @@ The wrapper uses the intersection of the service allowlist and the verified `GET
 | `claude-gpt` | `gpt-6-astra` | `gpt-5.6-luna` | `gpt-5.6-terra` | `gpt-5.6-sol` |
 | `divers` | `deepseek-v4.1-flash` | `gemini-3.8-flash` | `glm-5.3` | `glm-5.3-flash` |
 
-The `llm` sub-agent picker also supports `claude-haiku-4-5`, `aws-claude-haiku-4-5`, `gpt-5.6-luna`, `deepseek-v4.1-flash` and `glm-5.3-flash` when discovered and authorized.
+The `llm` sub-agent picker supports `claude-haiku-4-5`, `glm-5.3-flash`, `deepseek-v4.1-flash` and `gpt-5.6-luna` when discovered and authorized.
 
 For `routerlab`, Claude Code offers Claude Native, AWS Claude, OpenAI GPT, Open Source and Trial strategies. Claude Native uses `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`, with Haiku 5.5 as its default subagent. This strategy requires Claude Code `>=2.1.293`; CI validates with `2.1.296`. OpenAI GPT uses `gpt-6-astra` for Fable, `gpt-6.1-sol` for Opus and Sonnet, and `gpt-6-luna` for Haiku and the default subagent. Open Source includes `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` and `qwen3.8-max`; its default role mapping uses DeepSeek for Fable, GLM Flash for Haiku, GLM for Sonnet, Qwen for Opus and Kimi for subagents. Trial includes `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial` and `MiniMax-M3-trial`; Claude Code fixes its subagent to `deepseek-v4.1-flash-trial`.
 
@@ -213,7 +233,7 @@ wrapper-scionos codex launch --service llm
 
 On `routerlab`, interactive launch first selects **OpenAI GPT-6**, **Open Source**, or **Trial**, then opens Codex with that family's temporary verified catalogue. The native `/model` selector changes models within the selected family. Preferred family defaults are `gpt-6.1-sol`, `deepseek-v4.1-flash`, and `deepseek-v4.1-flash-trial`; if a family’s preferred model is unavailable, interactive mode requires an explicit choice from its available models, even when only one remains. Non-interactive mode fails with instructions to provide `--model <id>`. An explicit unavailable model always fails.
 
-Without a selected family, the RouterLab launch default is **`gpt-6.1-sol`**. The RouterLab LLM default remains **`gpt-5.6-sol`**, the structured console now prepares its family and model; the linear menu retains its direct launch. Explicit models and these service defaults must be discovered and authorized. Use `--strategy claude-gpt|open-source|trial` to select a RouterLab family from the command line, or `--model` for an exact model.
+Without a selected family, the RouterLab launch default is **`gpt-6.1-sol`**. The RouterLab LLM default remains **`gpt-5.6-sol`**. The structured console prepares its family and model; the linear menu retains its direct launch. Explicit models and these service defaults must be discovered and authorized. Use `--strategy claude-gpt|open-source|trial` to select a RouterLab family from the command line, or `--model` for an exact model.
 
 | Service | Allowlist |
 | --- | --- |
@@ -256,7 +276,7 @@ Inbound client headers still have 30 seconds and the complete request body 120 s
 
 ## Persistent profiles and secrets
 
-Desktop and Cowork share one managed Desktop profile and proxy. Applying it persistently writes the gateway URL, random local credential, model routes and Cowork egress host to the Claude-3p profile and its `_meta.json`; stopping the proxy leaves that profile applied. Restart the proxy to use it again, or run `wrapper-scionos claude-desktop restore --yes` to restore the official profile. Status and dry-run preview the state. Profile/proxy tests do not prove operation inside the Desktop or Cowork application.
+Desktop and Cowork share one managed Desktop profile and proxy. Applying it persistently writes the gateway URL, random local credential, model routes and Cowork egress host to the Claude-3p profile and its `_meta.json`; stopping the proxy leaves that profile applied. Restart the proxy to use it again, or run `wrapper-scionos claude-desktop restore-official --yes` to restore the official profile. Status and dry-run preview the state. Profile/proxy tests do not prove operation inside the Desktop or Cowork application.
 
 At rest, saved service tokens use Windows DPAPI, macOS Keychain or Linux Secret Service. Linux requires `secret-tool`; there is no plaintext storage fallback. On macOS, new entries use native Security APIs through `osascript`, with the secret on stdin and interactive access disabled. Existing entries that trust `security` retain their access rules and use that executable for reading and updates; updates receive a hex-encoded value through a single stdin batch command. Each system operation is limited to 15 seconds, and every write is verified by reading it back. Real macOS checks passed for new entries, UTF-8 updates, both older namespaces and deletion; see the validation record.
 
@@ -293,17 +313,18 @@ npm run test:claude-real
 npm run test:codex-real
 npm run test:opencode-real
 npm run test:keychain-real # macOS
+npm run test:codex-app-real # installed App on Windows/macOS
 npm audit
 npm pack --dry-run
 ```
 
-`npm run release:check` runs unit tests, coverage, entry modes, all three real clients, the Keychain check, audit and package inspection. Keychain is skipped outside macOS; that skip does not certify the macOS release gate.
+`npm run release:check` runs unit tests, coverage, entry modes, all three real CLI clients, the Keychain check, the embedded Codex App engine check, audit and package inspection. Keychain is skipped outside macOS. The App check skips unsupported platforms and hosts without the App. These skips do not validate the corresponding platform or engine compatibility.
 
 The real-client smoke tests use loopback-only fake services and do not contact RouterLab. Coverage thresholds are 85% for lines/functions and 80% for branches. For a local unpublished package:
 
 ```bash
 npm pack
-npx --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
 ```
 
 ## License

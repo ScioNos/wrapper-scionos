@@ -2,7 +2,7 @@
 
 This guide covers breaking changes in the Codex integration for wrapper-scionos 5.0.
 
-> Historical note: this guide documents the 5.0 migration, including the model defaults and prompts used at that time. Version 7.3.0 retains direct Codex transport and the temporary verified catalog. On RouterLab, interactive launch now selects OpenAI GPT-6, Open Source, or Trial before opening Codex; the native `/model` selector is limited to that family's verified models. The service defaults are now `gpt-6.1-sol` for RouterLab and `gpt-5.6-sol` for LLM. See the [current README](../README.md#codex-cli) for current launch behavior and options.
+> Historical guide: this document describes the 5.0 migration, including the model defaults, prompts and legacy restore behavior used at that time. For `8.0.0-beta.1` development, see the [current Codex CLI instructions](../README.md#codex-cli) and the [Codex App instructions](../README.md#codex-app-and-toml-preservation). The current CLI restore path refuses conflicts with personal configuration; see the [architecture notes](./architecture-notes.md#codex-lifecycle).
 
 ## Overview
 
@@ -116,7 +116,7 @@ Or pin your `package.json`:
 ```json
 {
   "dependencies": {
-    "wrapper-scionos": "^4.2.1"
+    "wrapper-scionos": "4.2.1"
   }
 }
 ```

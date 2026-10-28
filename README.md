@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/wrapper-scionos?logo=npm&label=npm)](https://www.npmjs.com/package/wrapper-scionos)
 [![GitHub release](https://img.shields.io/github/v/release/ScioNos/wrapper-scionos?display_name=tag&sort=semver&label=release)](https://github.com/ScioNos/wrapper-scionos/releases)
-[![Node.js](https://img.shields.io/badge/node-%5E22.13.0%20%7C%7C%20%3E%3D23.5.0-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-24.x-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 One launcher for six tools: Claude Code, Claude Desktop, Codex CLI, OpenCode CLI, Claude Cowork and Codex App, routed through the selected RouterLab service.
@@ -37,7 +37,7 @@ The service is selected once, before the menu opens, and remains fixed for the s
 
 ## Requirements
 
-- Node.js `^22.13.0` or `>=23.5.0`.
+- Node.js `24.x`.
 - A token for the selected RouterLab service.
 - Claude Code `>=2.1.220`; RouterLab Claude Native requires `>=2.1.293` and AWS Claude requires `>=2.1.284`. Release checks use `2.1.296`.
 - Codex CLI `>=0.144.1` for Codex launches.

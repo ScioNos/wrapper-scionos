@@ -77,12 +77,17 @@ test('CLI validates loopback hosts, numeric ports, origins, and removed Codex tr
   }
 });
 
-test('v4 runtime version requirements follow the published ranges', () => {
+test('runtime version requirements accept only Node 24.x', () => {
   assert.equal(isSupportedNodeVersion('22.12.0'), false);
-  assert.equal(isSupportedNodeVersion('22.13.0'), true);
+  assert.equal(isSupportedNodeVersion('22.13.0'), false);
   assert.equal(isSupportedNodeVersion('23.4.0'), false);
-  assert.equal(isSupportedNodeVersion('23.5.0'), true);
+  assert.equal(isSupportedNodeVersion('23.5.0'), false);
   assert.equal(isSupportedNodeVersion('24.0.0'), true);
+  assert.equal(isSupportedNodeVersion('24.22.1'), true);
+  assert.equal(isSupportedNodeVersion('v24.22.1'), true);
+  assert.equal(isSupportedNodeVersion('25.0.0'), false);
+  assert.equal(isSupportedNodeVersion('26.0.0'), false);
+  assert.equal(isSupportedNodeVersion('invalid'), false);
   assert.equal(isCodexVersionSupported('codex-cli 0.144.0'), false);
   assert.equal(isCodexVersionSupported('codex-cli 0.144.1'), true);
   assert.equal(isCodexVersionSupported('codex 1.0.0'), true);
@@ -318,8 +323,8 @@ test('deprecations emit once on stderr and runtime assertions reject unsupported
     console.error = originalError;
   }
   assert.equal(lines.length, 1);
-  assert.throws(() => assertSupportedNodeVersion('22.12.0'), /required/);
-  assert.doesNotThrow(() => assertSupportedNodeVersion('22.13.0'));
+  assert.throws(() => assertSupportedNodeVersion('22.12.0'), /Node\.js 24\.x is required/);
+  assert.doesNotThrow(() => assertSupportedNodeVersion('24.0.0'));
 });
 
 test('request body limit rejects oversized local proxy payloads', async () => {

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Standardized the project on Node.js 24.x in package metadata, runtime checks, local version selection, documentation and the Windows/macOS/Linux CI matrix.
+
 ### Fixed
 
 - Refused legacy Codex backup restoration over personal or unrecognized configuration. Dry-run/status report conflicts; recognized legacy files are retained byte-for-byte in a separate recovery copy before replacement.

@@ -16,9 +16,9 @@ Conservez votre client de programmation préféré et choisissez une famille de 
 wrapper-scionos claude-code --service routerlab --strategy aws
 ```
 
-**Bêta : [`8.0.0-beta.1`](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1) — Console structurée.**
+**Version stable : [`8.0.0`](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0) — Console structurée et modèles RouterLab actualisés.**
 
-Dernière version stable : [Notes de release v7.3.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v7.3.0) · [npm 7.3.0](https://www.npmjs.com/package/wrapper-scionos/v/7.3.0). Le paquet bêta est téléchargeable dans les fichiers de la préversion GitHub.
+[Notes de release v8.0.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0) · [Bilan de validation](./docs/release-8.0.0-validation.md). L’archive validée accompagne la release GitHub ; le propriétaire du paquet gère séparément sa publication npm.
 
 [English](./README.md) · [Deutsch](./README.de.md) · [Journal des changements](./CHANGELOG.md)
 
@@ -47,27 +47,27 @@ Le service est sélectionné une seule fois, avant l’ouverture du menu, puis r
 
 ## Démarrage rapide
 
-### Bêta 8.0.0-beta.1
+### Version 8.0.0 depuis GitHub
 
-Ce README décrit la branche `8.0.0` actuelle. L’archive bêta publiée provient de `a77500f` ; les corrections ultérieures de la section [Unreleased](./CHANGELOG.md#unreleased) nécessitent les sources actuelles. Pour les exécuter, lancez `npm ci` puis `npm start` à la racine du dépôt.
+Ce README décrit la version stable `8.0.0`, avec les modèles actualisés et les corrections du [journal des changements](./CHANGELOG.md). Pour exécuter les sources, sélectionnez le tag `v8.0.0`, puis lancez `npm ci` et `npm start` à la racine du dépôt.
 
-Téléchargez [wrapper-scionos-8.0.0-beta.1.tgz](https://github.com/ScioNos/wrapper-scionos/releases/download/v8.0.0-beta.1/wrapper-scionos-8.0.0-beta.1.tgz) dans le dossier de votre choix, puis ouvrez-y un terminal. Cette bêta est distribuée sur GitHub et n’est pas publiée sur npm. Lancez l’archive téléchargée sans installation globale ; `--prefix .` demande à npx de la rechercher dans ce dossier :
+Téléchargez [wrapper-scionos-8.0.0.tgz](https://github.com/ScioNos/wrapper-scionos/releases/download/v8.0.0/wrapper-scionos-8.0.0.tgz) dans le dossier de votre choix, puis ouvrez-y un terminal. Lancez cette version exacte sans installation globale ; `--prefix .` demande à npx de rechercher l’archive téléchargée dans ce dossier :
 
 ```bash
-npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
-npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos --service llm
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos --service llm
 ```
 
-Ou installez cette archive bêta globalement :
+Ou installez cette archive de release globalement :
 
 ```bash
-npm install -g ./wrapper-scionos-8.0.0-beta.1.tgz
+npm install -g ./wrapper-scionos-8.0.0.tgz
 wrapper-scionos --service routerlab
 ```
 
 ### Version stable sur npm
 
-Les commandes suivantes utilisent la version stable `latest` de npm, actuellement la 7.3.0 :
+Les commandes suivantes utilisent la version actuellement publiée sous le tag npm `latest`. Le propriétaire gère séparément les publications npm ; utilisez l’archive GitHub ci-dessus pour installer `8.0.0` avant sa disponibilité sur npm :
 
 ```bash
 npx wrapper-scionos
@@ -221,9 +221,9 @@ Le wrapper utilise l’intersection entre la liste autorisée du service et la r
 
 Le sélecteur de sous-agent `llm` prend en charge `claude-haiku-4-5`, `glm-5.3-flash`, `deepseek-v4.1-flash` et `gpt-5.6-luna` lorsque ces modèles sont découverts et autorisés.
 
-Pour `routerlab`, les familles principales sont Claude, AWS Claude, OpenAI GPT, Open Source et Trial. Claude Native utilise `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` et `claude-haiku-5-5`, avec Haiku 5.5 comme sous-agent par défaut. Cette stratégie exige Claude Code `>=2.1.293`; la CI vérifie la version `2.1.296`. OpenAI GPT utilise `gpt-6-astra` pour Fable, `gpt-6.1-sol` pour Opus et Sonnet, et `gpt-6-luna` pour Haiku et le sous-agent par défaut. Open Source comprend `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` et `qwen3.8-max`. Trial comprend `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial` et `MiniMax-M3-trial`; son sous-agent Claude Code est fixé à `deepseek-v4.1-flash-trial`.
+Pour `routerlab`, les familles principales sont Claude, AWS Claude, OpenAI GPT, Open Source et Trial. Claude Native utilise `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` et `claude-haiku-5-5`, avec Haiku 5.5 comme sous-agent par défaut. Cette stratégie exige Claude Code `>=2.1.293`; la CI vérifie la version `2.1.296`. OpenAI GPT utilise `gpt-6-astra` pour Fable, `gpt-6.1-sol` pour Opus, `gpt-6.1-terra` pour Sonnet, et `gpt-6-luna` pour Haiku et le sous-agent par défaut. Open Source comprend `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` et `qwen3.8-max`. Trial comprend `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial` et `MiniMax-M3-trial`; son sous-agent Claude Code est fixé à `deepseek-v4.1-flash-trial`.
 
-Claude via AWS utilise `aws-claude-opus-5-5`, `aws-claude-sonnet-5-5` et `aws-claude-haiku-4-5`. Son sous-agent par défaut reste AWS Haiku 4.5. Cette stratégie exige Claude Code `>=2.1.284`.
+Claude via AWS utilise `aws-claude-opus-5-5`, `aws-claude-sonnet-5-5` et `aws-claude-haiku-5.5`. Son sous-agent par défaut est AWS Haiku 5.5. Cette stratégie exige Claude Code `>=2.1.284`.
 
 ### Codex CLI
 
@@ -240,7 +240,7 @@ Sans famille sélectionnée, le défaut RouterLab est **`gpt-6.1-sol`**. Le serv
 
 | Service | Liste autorisée |
 | --- | --- |
-| `routerlab` | `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial`, `MiniMax-M3-trial` |
+| `routerlab` | `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial`, `MiniMax-M3-trial` |
 | `llm` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash` |
 
 Le catalogue est temporaire, ne contient aucun credential et est supprimé à la fin du processus enfant. Les options obsolètes `--direct`, `--proxy` et `--transport` ne sont plus prises en charge : l’accès direct est désormais le seul transport Codex.
@@ -287,13 +287,13 @@ Pendant son exécution, le wrapper détient le token du service en mémoire. Cla
 
 ## Compatibilité vérifiée
 
-Ces résultats historiques concernent la 7.3.0. Voir le [bilan de développement 8.0.0](./docs/release-8.0.0-validation.md) pour les vérifications de cette branche.
+Ces résultats historiques concernent la 7.3.0. Voir le [bilan de release 8.0.0](./docs/release-8.0.0-validation.md) pour les vérifications actuelles et la recette confirmée par le propriétaire.
 
 Sous Windows avec Node 24.19.0, Claude Code 2.1.296 passe 13 scénarios de routage ; Codex 0.144.1 et 0.157.0 passent le streaming Responses et model/list natif ; OpenCode 1.18.30 et 2.0.27 passent le modèle exact, les chemins HTTP, l’authentification, le streaming et un cycle natif de l’outil read contre des fournisseurs simulés. OpenCode 2 utilise son mode natif `--standalone` pour transmettre la configuration proxy temporaire à son serveur privé. Son service partagé persistant est incompatible avec cette intégration par lancement.
 
 [Les 37 jobs GitHub CI ont réussi](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), avec ces versions de Claude/OpenCode et Codex 0.144.1 sur Windows, macOS et Linux, ainsi que Keychain réel sur macOS. Le bilan précise les configurations Node et les versions des runners.
 
-Un modèle découvert et autorisé peut être sélectionné ; cela ne prouve pas son inférence réelle ni ses outils chez RouterLab. L’inférence RouterLab de production et les applications réelles Desktop/Cowork restent non testées. Les tarifs, économies, lieux d’hébergement et conditions d’abonnement exigent des preuves RouterLab séparées. Le [bilan 7.3.0](./docs/release-7.3.0-validation.md) précise la portée et les essais applicatifs restants.
+Un modèle découvert et autorisé peut être sélectionné ; cela ne prouve pas son inférence réelle ni ses outils chez RouterLab. Ces tests automatisés historiques n’exerçaient pas l’inférence RouterLab de production ni les applications réelles Desktop/Cowork. Les tarifs, économies, lieux d’hébergement et conditions d’abonnement exigent des preuves RouterLab séparées. Le [bilan 7.3.0](./docs/release-7.3.0-validation.md) précise la portée historique ; le [bilan 8.0.0](./docs/release-8.0.0-validation.md) décrit la recette de la release actuelle.
 
 ## Garanties de sécurité
 
@@ -329,7 +329,7 @@ Pour tester un paquet local non publié :
 
 ```bash
 npm pack
-npx --prefix . --yes --package ./wrapper-scionos-8.0.0-beta.1.tgz wrapper-scionos
+npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos
 ```
 
 ## Licence

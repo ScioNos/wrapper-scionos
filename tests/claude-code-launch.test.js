@@ -38,7 +38,7 @@ test('Trial launches only its new model mapping and fixes its subagent to the Tr
 
 for (const scenario of [
   { strategy: 'default', name: 'Claude Native', version: '2.1.292', minimum: '2.1.293', models: ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] },
-  { strategy: 'aws', name: 'Claude via AWS', version: '2.1.283', minimum: '2.1.284', models: ['aws-claude-haiku-4-5', 'aws-claude-sonnet-5-5', 'aws-claude-opus-5-5'] },
+  { strategy: 'aws', name: 'Claude via AWS', version: '2.1.283', minimum: '2.1.284', models: ['aws-claude-haiku-5.5', 'aws-claude-sonnet-5-5', 'aws-claude-opus-5-5'] },
 ]) {
 test(`${scenario.name} requires a compatible client before creating a proxy or launching`, async () => {
   let starts = 0;
@@ -79,7 +79,7 @@ test('Claude Code targets the official service and receives the generated local 
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async (_token, options) => {
         calls.discovery = options;
-        return { valid: true, models: ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol'] };
+        return { valid: true, models: ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol', 'gpt-6.1-terra'] };
       },
       chooseStrategyFn: async () => 'claude-gpt',
       startLongRunningLlmProxyFn: async (options) => {
@@ -102,13 +102,13 @@ test('Claude Code targets the official service and receives the generated local 
     assert.equal(calls.discovery.baseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.targetBaseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.upstreamAuth, 'anthropic');
-    assert.deepEqual(calls.proxy.allowedModels, ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol']);
+    assert.deepEqual(calls.proxy.allowedModels, ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol', 'gpt-6.1-terra']);
     assert.equal(calls.child.env.ANTHROPIC_BASE_URL, 'http://127.0.0.1:43123');
     assert.equal(calls.child.env.ANTHROPIC_AUTH_TOKEN, 'generated-local-token');
     assert.equal(calls.child.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
     assert.equal(calls.child.env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'gpt-6-astra');
     assert.equal(calls.child.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'gpt-6.1-sol');
-    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'gpt-6.1-sol');
+    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'gpt-6.1-terra');
     assert.equal(calls.child.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'gpt-6-luna');
     assert.equal(calls.child.env.CLAUDE_CODE_SUBAGENT_MODEL, 'gpt-6-luna');
     assert.deepEqual(calls.child.args, ['--print']);
@@ -292,7 +292,7 @@ test('Claude Code preserves a child failure when proxy cleanup also fails', asyn
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async () => ({
         valid: true,
-        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
+        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
       }),
       startLongRunningLlmProxyFn: async () => ({
         baseUrl: 'http://127.0.0.1:43123',
@@ -327,7 +327,7 @@ test('Claude Code preserves a successful launch when proxy cleanup fails', async
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async () => ({
         valid: true,
-        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'],
+        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
       }),
       chooseStrategyFn: async () => 'claude-gpt',
       startLongRunningLlmProxyFn: async () => ({

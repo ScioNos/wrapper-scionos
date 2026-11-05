@@ -427,7 +427,7 @@ test('Claude Code rejects GLM 5.3 as a RouterLab subagent before launch', async 
   await assert.rejects(
     () => main(['claude-code', '--service', 'routerlab', '--subagent-model', 'glm-5.3']),
     (error) => error.exitCode === 2
-      && /--subagent-model must be one of: claude-haiku-5-5, aws-claude-haiku-4-5, gpt-6-luna, deepseek-v4\.1-flash\./.test(error.message),
+      && /--subagent-model must be one of: claude-haiku-5-5, aws-claude-haiku-5\.5, gpt-6-luna, deepseek-v4\.1-flash\./.test(error.message),
   );
 });
 

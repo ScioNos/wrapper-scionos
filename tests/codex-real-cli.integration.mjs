@@ -14,8 +14,8 @@ import { detectCodexCli, detectCli } from '../src/platform/detect.js';
 import { terminateChildTree } from '../src/platform/process.js';
 
 const MODEL = 'gpt-6.1-sol';
-const CATALOG_MODELS = [MODEL, 'deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
-const CATALOG_LABELS = ['GPT 6.1 Sol', 'DeepSeek V4.1 Flash Trial', 'GLM 5.3 Flash Trial', 'Qwen 3.8 Flash Trial', 'GPT 6 Luna Trial', 'MiniMax M3 Trial'];
+const CATALOG_MODELS = [MODEL, 'gpt-6-astra', 'gpt-6.1-terra', 'gpt-6-luna', 'deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
+const CATALOG_LABELS = ['GPT 6.1 Sol', 'GPT 6 Astra', 'GPT 6.1 Terra', 'GPT 6 Luna', 'DeepSeek V4.1 Flash Trial', 'GLM 5.3 Flash Trial', 'Qwen 3.8 Flash Trial', 'GPT 6 Luna Trial', 'MiniMax M3 Trial'];
 const LOCAL_API_KEY = 'local-codex-smoke-token-with-enough-length';
 
 test('installed Codex uses the temporary RouterLab catalog and direct Responses transport', {

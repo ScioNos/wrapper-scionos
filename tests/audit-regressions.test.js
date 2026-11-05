@@ -22,7 +22,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platfo
 import { removeTestDirectory, closeTestServer } from './support/lifecycle.mjs';
 
 const TOKEN = 'audit-fixture-token-with-enough-length';
-const AWS = ['aws-claude-opus-5-5', 'aws-claude-sonnet-5-5', 'aws-claude-haiku-4-5'];
+const AWS = ['aws-claude-opus-5-5', 'aws-claude-sonnet-5-5', 'aws-claude-haiku-5.5'];
 const legacyConfig = () => buildCodexThirdPartyConfig({ baseUrl: 'https://api.routerlab.ch/v1' });
 function temporary(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scionos-audit-'));

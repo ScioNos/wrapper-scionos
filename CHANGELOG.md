@@ -2,10 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 8.0.0 - 2026-11-05
+
+### Added
+
+- Promoted the structured terminal console to the stable release: six client entries, English/French/German navigation, keyboard and mouse controls, responsive rendering, and return to Home after native client execution.
+- Added stable Codex App integration on Windows/macOS with verified family catalogues, secure-store command authentication, preserved TOML settings, owned-session recovery and restoration on exit.
+- Included per-service/client launch preferences, separate preparation and execution, and managed Claude Desktop/Cowork proxy sessions from the 8.0.0 beta.
 
 ### Changed
 
+- Added `gpt-6.1-terra` to the shared RouterLab OpenAI catalogue used by Codex CLI and Claude, with Astra/Sol/Terra/Luna ordering, a Desktop route and label, and Terra as Claude's Sonnet route. Codex retains `gpt-6.1-sol` as its default.
+- Updated RouterLab AWS Haiku and its Claude Code default/selectable subagent to `aws-claude-haiku-5.5`, including Claude Desktop model routing and labels.
 - Standardized the project on Node.js 24.x in package metadata, runtime checks, local version selection, documentation and the Windows/macOS/Linux CI matrix.
 
 ### Fixed

@@ -67,7 +67,7 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-fable-5-1'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-haiku-5-5'), true);
-    assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-4-5' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-5.5' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-6-luna'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3-flash' && !model.supports1m), true);

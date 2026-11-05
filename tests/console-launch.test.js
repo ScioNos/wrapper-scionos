@@ -44,7 +44,7 @@ test('Claude preparation exposes no credentials, starts no proxy, and revalidate
   assert.equal(result.exitCode, 130); assert.equal(starts, 1); assert.equal(stops, 1);
   assert.equal(spawns, 1); assert.equal(fetches, 2); assert.equal(resolutions, 2);
   dependencies.fetchModelsFn = async () => ({ valid: false, reason: 'auth_failed', status: 401 });
-  await assert.rejects(prepared.execute({ family: 'aws', subagent: 'aws-claude-haiku-4-5' }), /401/);
+  await assert.rejects(prepared.execute({ family: 'aws', subagent: 'aws-claude-haiku-5.5' }), /401/);
   assert.equal(starts, 1);
 });
 

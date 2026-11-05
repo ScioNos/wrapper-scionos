@@ -1,6 +1,35 @@
-# Version 8.0.0 development validation
+# Version 8.0.0 release validation
 
-This record separates validation of source commit `f0a4e1efbf7b761c28981410be93293a4f1f5a1f` on branch `8.0.0` on 28 October 2026 from the earlier 26 October snapshot. The [GitHub beta](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1) was published on 27 October from `a77500f`, including its package archive; it is not published on npm. Later source fixes are listed under [Unreleased](../CHANGELOG.md#unreleased). The [7.3.0 record](./release-7.3.0-validation.md) remains historical evidence for that release.
+This record covers stable release [8.0.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0), prepared on 5 November 2026, and preserves the dated development evidence below. Changes since the [GitHub beta](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0-beta.1), built from `a77500f` on 27 October, are included in the stable [changelog](../CHANGELOG.md). The [7.3.0 record](./release-7.3.0-validation.md) remains historical evidence for that release.
+
+## Stable release acceptance — 5 November 2026
+
+The release promotes the structured console and six client integrations to `8.0.0`, retains Node.js 24.x, and includes the post-beta lifecycle, restoration and transport fixes. RouterLab AWS Haiku now uses the exact identifier `aws-claude-haiku-5.5`. The shared RouterLab OpenAI catalogue is ordered Astra, Sol, Terra, Luna (`gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`); Claude maps Sonnet to Terra, and Codex CLI/App and OpenCode retain Sol as their preferred OpenAI/default model. RouterLab LLM model definitions are unchanged.
+
+The maintainer confirmed in the 5 November release discussion that the previously identified real-service, GUI application and terminal acceptance work was complete. This is maintainer-reported acceptance, separate from the isolated automated checks below; those checks do not contact production RouterLab inference or change personal application configuration.
+
+Publication uses a GitHub stable release with the validated npm archive and SHA-256 checksum. The package owner handles npm publication separately. The final release commit must pass the Node 24 Windows/macOS/Linux CI matrix before the stable tag is published; the GitHub release links the exact CI run.
+
+### Automated release checks
+
+Environment: Windows x64, Node.js 24.22.1 and npm 12.2.0. The checks below use fake credentials, loopback providers and temporary application configuration.
+
+| Check | Result |
+| --- | --- |
+| `npm run release:check` | Passed end to end with the isolated OpenCode executable override described below |
+| `npm test` | 304 tests: 303 passed, 1 conditional skip, zero failures |
+| `npm run test:coverage` | Passed all thresholds; 93.96% lines, 86.45% branches and 92.27% functions |
+| `npm run test:entry-modes` | Four isolated installed/npx entry-mode checks passed with the 8.0.0 package |
+| `npm run test:claude-real` | 14 routing scenarios passed, including AWS Haiku 5.5 and OpenAI Sonnet routing to Terra |
+| `npm run test:codex-real` | Passed with Codex CLI 0.157.0, including native catalogue listing of Astra, Sol, Terra and Luna |
+| `npm run test:opencode-real` | Passed with the official isolated OpenCode 2.0.27 Windows x64 baseline executable, streaming and native read-tool cycle |
+| `npm run test:codex-app-real` | Passed with App 26.1029.7803.0 and engine 0.166.0-alpha.6; isolated home, DPAPI credentials, tool execution and follow-up turn |
+| `npm run test:keychain-real` | Conditional skip on Windows; real macOS Keychain is required by the release CI matrix |
+| `npm audit` | Zero vulnerabilities reported on 5 November |
+| Package and documentation | 62 files; tests, local caches and validation fixtures excluded; package/lockfile versions match 8.0.0; local Markdown links resolve |
+| `git diff --check` | Passed |
+
+The existing global OpenCode commands could not execute their installed Windows binary. Local validation therefore uses `SCIONOS_TEST_OPENCODE_CLI` pointing to the official 2.0.27 platform binary in an isolated temporary installation; the global installation is unchanged. The same native smoke check must also pass for OpenCode 1.18.30 and 2.0.27 on all three CI systems before release publication.
 
 ## Source validation — 28 October 2026
 
@@ -84,7 +113,9 @@ The 26 focused console/mouse tests pass under Debian WSL with the official Node.
 
 An attempted full Linux suite from the Windows-mounted workspace was not a passing cross-platform result: it reported 241 passed, six failures, one cancellation and two skips before all tests could finish. Five failures concern Unix permissions reported as 0777 on the mounted Windows drive, one App subprocess exceeded its startup deadline, and the v4 diagnostic tests timed out after requesting the locked system keyring. The run ended; no password or keyring unlock is needed for the interface checks. The successful 28 October Node 24 CI run above provides subsequent automated Linux validation; it does not repeat the manual WSL terminal checks.
 
-## Remaining application and terminal checks
+## Application and terminal checklist — historical 28 October snapshot
+
+This checklist records the scope still open on 28 October. The maintainer's subsequent acceptance confirmation is recorded in the 5 November section above.
 
 - Repeat the Node 24 CI matrix when source code changes after the validated commit above.
 - Inspect macOS and remote SSH/VPS terminals at 120x35 and 80x24, including interruption and return from each installed native client. Local Linux WSL child fixtures are covered above.

@@ -58,6 +58,12 @@ export const MODEL_ROUTE_METADATA = {
     codexModel: 'gpt-6.1-sol',
     codexDisplayName: 'GPT 6.1 Sol',
   },
+  'gpt-6.1-terra': {
+    desktopRouteId: 'claude-6.1-terra',
+    label: 'gpt-6.1-terra',
+    codexModel: 'gpt-6.1-terra',
+    codexDisplayName: 'GPT 6.1 Terra',
+  },
   'gpt-6-luna': {
     desktopRouteId: 'claude-6-luna',
     label: 'gpt-6-luna',
@@ -114,6 +120,11 @@ export const MODEL_ROUTE_METADATA = {
   'claude-opus-4-7': {
     desktopRouteId: 'claude-opus-4-8',
     label: 'claude-opus-4-8',
+  },
+  'aws-claude-haiku-5.5': {
+    desktopRouteId: 'aws-claude-haiku-5.5',
+    label: 'aws-claude-haiku-5.5',
+    supports1m: false,
   },
   'aws-claude-haiku-4-5-20251001': {
     desktopRouteId: 'aws-claude-haiku-4-5',
@@ -376,11 +387,13 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-sonnet-4-6',
   'aws-claude-opus-5-5',
   'aws-claude-sonnet-5-5',
+  'aws-claude-haiku-5.5',
   'aws-claude-haiku-4-5',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
   'claude-6-astra',
   'claude-6.1-sol',
+  'claude-6.1-terra',
   'claude-6-luna',
   'claude-5.6-sol',
   'claude-5.6-terra',

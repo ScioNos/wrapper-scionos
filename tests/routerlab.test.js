@@ -141,8 +141,8 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.deepEqual(getClaudeCodeStrategyEnvironment('aws', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'aws-claude-opus-5-5',
     ANTHROPIC_DEFAULT_SONNET_MODEL: 'aws-claude-sonnet-5-5',
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'aws-claude-haiku-4-5',
-    CLAUDE_CODE_SUBAGENT_MODEL: 'aws-claude-haiku-4-5',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'aws-claude-haiku-5.5',
+    CLAUDE_CODE_SUBAGENT_MODEL: 'aws-claude-haiku-5.5',
   });
   assert.deepEqual(getStrategyEnvironment('default', 'routerlab'), {
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
@@ -160,20 +160,20 @@ test('Claude Code strategy mapping is service-aware', () => {
   assert.deepEqual(getStrategyEnvironment('claude-gpt', 'routerlab'), {
     ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-6.1-sol',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-6.1-sol',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-6.1-terra',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-6-luna',
   });
   assert.deepEqual(getClaudeCodeStrategyEnvironment('claude-gpt', 'routerlab'), {
     ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-6.1-sol',
-    ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-6.1-sol',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-6.1-terra',
     ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-6-luna',
     CLAUDE_CODE_SUBAGENT_MODEL: 'gpt-6-luna',
   });
-  assert.equal(assessStrategyLaunch('claude-gpt', ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna'], 'routerlab').ready, true);
+  assert.equal(assessStrategyLaunch('claude-gpt', ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'], 'routerlab').ready, true);
   assert.deepEqual(assessStrategyLaunch('claude-gpt', [
     'gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
-  ], 'routerlab').missingModels, ['gpt-6.1-sol', 'gpt-6-luna']);
+  ], 'routerlab').missingModels, ['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna']);
   assert.deepEqual(getStrategyEnvironment('open-source', 'routerlab'), {
     ANTHROPIC_DEFAULT_FABLE_MODEL: 'deepseek-v4.1-flash',
     ANTHROPIC_DEFAULT_OPUS_MODEL: 'qwen3.8-max',
@@ -281,15 +281,15 @@ test('Claude Code lets both RouterLab and LLM services choose an available subag
   assert.equal(await chooseSubagentModel({
     serviceValue: 'routerlab',
     strategyValue: 'default',
-    modelIds: ['claude-haiku-5-5', 'aws-claude-haiku-4-5'],
+    modelIds: ['claude-haiku-5-5', 'aws-claude-haiku-5.5'],
     selectFn: async ({ choices }) => {
       assert.deepEqual(choices.map((choice) => choice.value), [
         'claude-haiku-5-5',
-        'aws-claude-haiku-4-5',
+        'aws-claude-haiku-5.5',
       ]);
-      return 'aws-claude-haiku-4-5';
+      return 'aws-claude-haiku-5.5';
     },
-  }), 'aws-claude-haiku-4-5');
+  }), 'aws-claude-haiku-5.5');
   assert.equal(await chooseSubagentModel({
     serviceValue: 'llm',
     strategyValue: 'divers',
@@ -393,7 +393,7 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(choices.find((choice) => choice.value === 'default').description, 'Fable => Claude Fable 5.1, Opus => Claude Opus 5.5, Sonnet => Claude Sonnet 5.5, Haiku and subagents => Claude Haiku 5.5.');
   assert.equal(choices.some((choice) => choice.value === 'claude-fable-5'), false);
   assert.equal(choices.find((choice) => choice.value === 'claude-gpt').name, 'OpenAI GPT');
-  assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Fable => GPT 6 Astra, Opus and Sonnet => GPT 6.1 Sol, Haiku and subagents => GPT 6 Luna.');
+  assert.equal(choices.find((choice) => choice.value === 'claude-gpt').description, 'Fable => GPT 6 Astra, Opus => GPT 6.1 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.');
   assert.equal(choices.find((choice) => choice.value === 'open-source').description, 'Fable => DeepSeek V4.1 Flash, Haiku => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Qwen 3.8 Max, subagent => Kimi K3.');
   for (const removedStrategy of ['deepseek', 'kimi-k3', 'minimax-m3', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.7-flash']) {
     assert.equal(choices.some((choice) => choice.value === removedStrategy), false);
@@ -412,7 +412,7 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
   assert.equal(getStrategyDisplayName('qwen3.8-max', 'llm'), 'qwen3.8-max');
 
   assert.equal(assessStrategyLaunch('aws', [
-    'aws-claude-haiku-4-5',
+    'aws-claude-haiku-5.5',
     'aws-claude-sonnet-5-5',
     'aws-claude-opus-5-5',
   ], 'routerlab').ready, true);
@@ -420,7 +420,7 @@ test('Claude Code strategy choices match guided launcher labels and readiness', 
     'aws-claude-sonnet-5-5',
   ], 'routerlab').ready, false);
   assert.deepEqual(assessStrategyLaunch('aws', [
-    'aws-claude-haiku-4-5', 'aws-claude-sonnet-5', 'aws-claude-opus-5',
+    'aws-claude-haiku-5.5', 'aws-claude-sonnet-5', 'aws-claude-opus-5',
   ], 'routerlab').missingModels, ['aws-claude-sonnet-5-5', 'aws-claude-opus-5-5']);
   assert.equal(assessStrategyLaunch('default', [
     'claude-fable-5-1',

@@ -1,6 +1,6 @@
 import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './services.js';
 
-export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-4-5';
+export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-5.5';
 export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
 const OPEN_SOURCE_MODEL_MAP = Object.freeze({
   fable: 'deepseek-v4.1-flash',
@@ -34,7 +34,7 @@ export const TRIAL_MODELS = [
 ];
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-5-5',
-  'aws-claude-haiku-4-5',
+  'aws-claude-haiku-5.5',
   'gpt-6-luna',
   'deepseek-v4.1-flash',
 ];
@@ -60,7 +60,7 @@ export const LLM_CLAUDE_MODELS = [
 ];
 
 export const AWS_CLAUDE_MODELS = [
-  'aws-claude-haiku-4-5',
+  'aws-claude-haiku-5.5',
   'aws-claude-sonnet-5-5',
   'aws-claude-opus-5-5',
 ];
@@ -68,6 +68,7 @@ export const AWS_CLAUDE_MODELS = [
 export const OPENAI_GPT_MODELS = [
   'gpt-6-astra',
   'gpt-6.1-sol',
+  'gpt-6.1-terra',
   'gpt-6-luna',
 ];
 
@@ -130,13 +131,13 @@ export const STRATEGIES = [
     minimumClaudeCodeVersion: '2.1.284',
     description: 'Sets Claude Code model environment variables to AWS-backed Claude variants.',
     selectionName: '💸 Claude via AWS',
-    selectionDescription: 'Opus => AWS Claude Opus 5.5, Sonnet => AWS Claude Sonnet 5.5, Haiku and subagents => AWS Claude Haiku 4.5.',
+    selectionDescription: 'Opus => AWS Claude Opus 5.5, Sonnet => AWS Claude Sonnet 5.5, Haiku and subagents => AWS Claude Haiku 5.5.',
     requiredModels: AWS_CLAUDE_MODELS,
     environment: createModelEnvironment({
       opus: 'aws-claude-opus-5-5',
       sonnet: 'aws-claude-sonnet-5-5',
-      haiku: 'aws-claude-haiku-4-5',
-      subagent: 'aws-claude-haiku-4-5',
+      haiku: 'aws-claude-haiku-5.5',
+      subagent: 'aws-claude-haiku-5.5',
     }),
   },
   {
@@ -155,15 +156,15 @@ export const STRATEGIES = [
   {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
-    description: 'Fable => GPT 6 Astra, Opus and Sonnet => GPT 6.1 Sol, Haiku and subagents => GPT 6 Luna.',
-    selectionDescription: 'Fable => GPT 6 Astra, Opus and Sonnet => GPT 6.1 Sol, Haiku and subagents => GPT 6 Luna.',
+    description: 'Fable => GPT 6 Astra, Opus => GPT 6.1 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
+    selectionDescription: 'Fable => GPT 6 Astra, Opus => GPT 6.1 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
     aliases: ['claude-gpt-5.4'],
     requiredModels: OPENAI_GPT_MODELS,
     environment: {
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
       ...createModelEnvironment({
         opus: 'gpt-6.1-sol',
-        sonnet: 'gpt-6.1-sol',
+        sonnet: 'gpt-6.1-terra',
         haiku: 'gpt-6-luna',
       }),
     },
@@ -171,7 +172,7 @@ export const STRATEGIES = [
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
       ...createModelEnvironment({
         opus: 'gpt-6.1-sol',
-        sonnet: 'gpt-6.1-sol',
+        sonnet: 'gpt-6.1-terra',
         haiku: 'gpt-6-luna',
         subagent: 'gpt-6-luna',
       }),

@@ -62,19 +62,23 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.deepEqual(routes.map((route) => route.routeId), [
     'claude-6-astra',
     'claude-6-luna',
+    'claude-6.1-terra',
     'claude-6.1-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.upstreamModel), [
     'gpt-6-astra',
     'gpt-6-luna',
+    'gpt-6.1-terra',
     'gpt-6.1-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.labelOverride), [
     'gpt-6-astra',
     'gpt-6-luna',
+    'gpt-6.1-terra',
     'gpt-6.1-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.supports1m), [
+    undefined,
     undefined,
     undefined,
     undefined,
@@ -88,7 +92,7 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-gpt-5.4'), 'claude-5.4');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-gpt-5.4-mini'), 'claude-5.4-mini');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-haiku-4-5'), 'claude-haiku-4-5');
-  assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-4-5'), 'aws-claude-haiku-4-5');
+  assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-5.5'), 'aws-claude-haiku-5.5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'aws-claude-sonnet-5-5'), 'aws-claude-sonnet-5-5');
   assert.equal(desktopRouteIdForStrategyModel('opus', 'aws-claude-opus-5-5'), 'aws-claude-opus-5-5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-glm-5.1'), 'claude-lm5.1');
@@ -129,9 +133,10 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-haiku-5-5',
     'aws-claude-opus-5-5',
     'aws-claude-sonnet-5-5',
-    'aws-claude-haiku-4-5',
+    'aws-claude-haiku-5.5',
     'claude-6-astra',
     'claude-6.1-sol',
+    'claude-6.1-terra',
     'claude-6-luna',
     'claude-lm5.3',
     'claude-lm5.3-flash',
@@ -144,7 +149,7 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-haiku-5-5' && route.upstreamModel === 'claude-haiku-5-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-opus-5-5' && route.labelOverride === 'aws-claude-opus-5-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-5-5' && route.labelOverride === 'aws-claude-sonnet-5-5'), true);
-  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-4-5' && route.labelOverride === 'aws-claude-haiku-4-5' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-5.5' && route.labelOverride === 'aws-claude-haiku-5.5' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-6.1-sol' && route.labelOverride === 'gpt-6.1-sol'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'open-source' && route.routeId === 'claude-lm5.3' && route.upstreamModel === 'glm-5.3' && route.labelOverride === 'glm-5.3' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-lm5.3-flash' && route.upstreamModel === 'glm-5.3-flash' && route.labelOverride === 'glm-5.3-flash' && !Object.hasOwn(route, 'supports1m')), true);

@@ -18,7 +18,7 @@ import { removeTestDirectory } from './support/lifecycle.mjs';
 import { createConsoleInput } from '../src/cli/console/input.js';
 
 const EMPTY = () => normalizePreferences(null);
-const CODE_MODEL = 'aws-claude-haiku-4-5';
+const CODE_MODEL = 'aws-claude-haiku-5.5';
 const catalogue = (client = 'claude-code') => client === 'claude-code' ? {
   models: [CODE_MODEL], tokenSource: 'secure-storage',
   families: [{ value: 'aws', name: 'AWS Claude', defaultSubagent: CODE_MODEL },
@@ -197,7 +197,7 @@ test('availability never substitutes a missing saved model, subagent or family',
   state.page = 'launch';
   state.selections['claude-code'] = { family: 'claude-gpt', subagent: 'gpt-6-luna' };
   const mapping = buildConsoleView(state).summary.join('\n');
-  assert.match(mapping, /Opus: gpt-6.1-sol/); assert.match(mapping, /Sonnet: gpt-6.1-sol/);
+  assert.match(mapping, /Opus: gpt-6.1-sol/); assert.match(mapping, /Sonnet: gpt-6.1-terra/);
   assert.match(mapping, /sous-agent: gpt-6-luna/);
   state.inspection.token = { error: 'storageFailed' }; assert.match(tokenLabel(state), /inaccessible/);
   state.inspection.token = { env: true }; assert.match(tokenLabel(state), /environnement/);

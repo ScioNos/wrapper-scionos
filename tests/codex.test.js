@@ -26,6 +26,7 @@ test('Codex allowlists stay service-scoped', () => {
   assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, [
     'gpt-6-astra',
     'gpt-6.1-sol',
+    'gpt-6.1-terra',
     'gpt-6-luna',
     'deepseek-v4.1-flash',
     'glm-5.3',
@@ -103,11 +104,12 @@ test('Codex runtime catalog configures the GLM 5.3 models for the native picker'
 
 test('Codex runtime catalog configures the added RouterLab models for the native picker', () => {
   const catalog = buildCodexModelCatalog({
-    models: ['gpt-6-astra', 'deepseek-v4.1-flash', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.8-flash'],
+    models: ['gpt-6-astra', 'gpt-6.1-terra', 'deepseek-v4.1-flash', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.8-flash'],
   });
 
   assert.deepEqual(catalog.models.map((entry) => entry.slug), [
     'gpt-6-astra',
+    'gpt-6.1-terra',
     'deepseek-v4.1-flash',
     'qwen3.8-max',
     'glm-5.3-flash',
@@ -116,6 +118,7 @@ test('Codex runtime catalog configures the added RouterLab models for the native
   ]);
   assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
     'GPT 6 Astra',
+    'GPT 6.1 Terra',
     'DeepSeek V4.1 Flash',
     'Qwen 3.8 Max',
     'GLM 5.3 Flash',

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240" role="img" aria-labelledby="title desc">
+<title id="title">wrapper-scioNos</title>
+<desc id="desc">A local launcher for Claude Code, Codex CLI, OpenCode CLI, Claude Desktop, Claude Cowork and Codex App.</desc>
+<rect x="1" y="1" width="1198" height="238" rx="24" fill="#f2f5fc" stroke="#d6dfee"/>
+<g font-family="Segoe UI,Arial,sans-serif">
+<rect x="40" y="76" width="72" height="72" rx="18" fill="#3158e6"/>
+<path d="M59 97l12 15-12 15m21 0h13" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="136" y="111" fill="#14243e" font-size="42" font-weight="700" letter-spacing="-1.4">wrapper-scioNos</text>
+<text x="138" y="146" fill="#536581" font-size="18">RouterLab</text>
+<path d="M520 112h72q24 0 24 24v9q0 25 24 25h8m-32-34v-11q0-25 24-25h8" fill="none" stroke="#7e95e8" stroke-width="2"/>
+<rect x="660" y="74" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="734" y="105" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">Claude Code</text><rect x="822" y="74" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="896" y="105" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">Codex CLI</text><rect x="984" y="74" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="1058" y="105" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">OpenCode CLI</text><rect x="660" y="144" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="734" y="175" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">Claude Desktop</text><rect x="822" y="144" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="896" y="175" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">Claude Cowork</text><rect x="984" y="144" width="148" height="52" rx="12" fill="#ffffff" stroke="#d6dfee"/><text x="1058" y="175" fill="#14243e" font-size="16" font-weight="600" text-anchor="middle">Codex App</text>
+<circle cx="648" cy="100" r="4" fill="#3158e6"/><circle cx="648" cy="170" r="4" fill="#3158e6"/>
+</g></svg>

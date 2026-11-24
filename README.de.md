@@ -54,7 +54,9 @@ Der Wrapper läuft unter Windows, macOS und Linux. Codex App benötigt Windows o
 npx wrapper-scionos@8.0.0 --service routerlab --lang de
 ```
 
-Bestätigen Sie die Paketinstallation, wenn npm danach fragt. Dieser Befehl startet Version **8.0.0** ohne globale Installation. Mit demselben Befehl öffnen Sie die Konsole bei der nächsten Nutzung erneut.
+Bestätigen Sie die Paketinstallation, wenn npm danach fragt. Dieser Befehl startet das veröffentlichte Paket **8.0.0** ohne globale Installation.
+
+Für **8.1.0** aus diesem Repository führen Sie `npm ci` und anschließend `node index.js --lang de` aus. Die Strategie **Special** für Claude Code auf RouterLab Standard kombiniert GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra und DeepSeek V4.1 Flash. Der Direktstart aus dem Repository erfolgt mit `node index.js claude --strategy special --lang de`. [Referenz zu 8.1.0](./docs/reference.de.md#modellrouting).
 
 ### 2. RouterLab-Konto verbinden
 

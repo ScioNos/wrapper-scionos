@@ -18,7 +18,7 @@ import { removeTestDirectory } from './support/lifecycle.mjs';
 import { createConsoleInput } from '../src/cli/console/input.js';
 
 const EMPTY = () => normalizePreferences(null);
-const CODE_MODEL = 'aws-claude-haiku-5.5';
+const CODE_MODEL = 'aws-claude-haiku-5-5';
 const catalogue = (client = 'claude-code') => client === 'claude-code' ? {
   models: [CODE_MODEL], tokenSource: 'secure-storage',
   families: [{ value: 'aws', name: 'AWS Claude', defaultSubagent: CODE_MODEL },
@@ -26,9 +26,9 @@ const catalogue = (client = 'claude-code') => client === 'claude-code' ? {
     { value: 'default', name: 'Claude Native', disabled: 'not authorized' }],
   subagents: [CODE_MODEL, 'gpt-6-luna'],
 } : {
-  models: ['gpt-6.1-sol', 'kimi-k3'], tokenSource: 'secure-storage', defaultModel: 'gpt-6.1-sol',
-  families: [{ value: 'claude-gpt', name: 'OpenAI GPT', defaultModel: 'gpt-6.1-sol', models: [{ model: 'gpt-6.1-sol' }] },
-    { value: 'open-source', name: 'Open Source', defaultModel: 'missing-preferred', models: [{ model: 'kimi-k3' }] }],
+  models: ['gpt-6.2-sol', 'kimi-k3.1-pro'], tokenSource: 'secure-storage', defaultModel: 'gpt-6.2-sol',
+  families: [{ value: 'claude-gpt', name: 'OpenAI GPT', defaultModel: 'gpt-6.2-sol', models: [{ model: 'gpt-6.2-sol' }] },
+    { value: 'open-source', name: 'Open Source', defaultModel: 'missing-preferred', models: [{ model: 'kimi-k3.1-pro' }] }],
 };
 const makeState = (language = 'fr') => createConsoleState({ service: 'routerlab', language }, EMPTY(), '8.0.0');
 const desktop = () => ({ supported: true, applied: true, healthy: true, service: 'routerlab', profileExists: true,
@@ -126,6 +126,11 @@ test('preferences persist only permitted selections, isolate services, and recov
     assert.equal(savePreferences(saved, file, { mkdirSync() {}, writeFileSync() {}, renameSync() { throw new Error(); }, unlinkSync(value) { calls.push(value); } }).ok, false);
     assert.equal(calls.length, 1);
     assert.deepEqual(normalizePreferences({ version: 1, services: { routerlab: {}, llm: { clients: { codex: { model: 'x' } } } } }).services.llm.clients, {});
+    const previous = normalizePreferences({
+      version: 1,
+      services: { routerlab: { clients: { 'claude-code': { family: 'aws', subagent: 'aws-claude-haiku-5.5' } } } },
+    });
+    assert.equal(previous.services.routerlab.clients['claude-code'].subagent, CODE_MODEL);
   } finally { await removeTestDirectory(directory); }
 });
 
@@ -178,12 +183,12 @@ test('availability never substitutes a missing saved model, subagent or family',
   selectFamily(state, 'open-source');
   assert.equal(state.selections.codex.model, null);
   assert.equal(canLaunch(state), false);
-  state.selections.codex.model = 'kimi-k3';
+  state.selections.codex.model = 'kimi-k3.1-pro';
   assert.equal(canLaunch(state), true);
   state.selections.codex = { family: 'claude-gpt', model: 'removed' };
   assert.equal(initializeSelection(state, 'codex', state.catalogues.codex), false);
   assert.equal(state.selections.codex.model, 'removed');
-  assert.equal(initializeSelection(state, 'codex', state.catalogues.codex, { strategy: 'open-source', model: 'kimi-k3' }), true);
+  assert.equal(initializeSelection(state, 'codex', state.catalogues.codex, { strategy: 'open-source', model: 'kimi-k3.1-pro' }), true);
   state.client = 'claude-code'; state.catalogues['claude-code'] = catalogue();
   state.selections['claude-code'] = { family: 'deleted', subagent: CODE_MODEL };
   assert.equal(initializeSelection(state, 'claude-code', catalogue()), false);
@@ -197,7 +202,7 @@ test('availability never substitutes a missing saved model, subagent or family',
   state.page = 'launch';
   state.selections['claude-code'] = { family: 'claude-gpt', subagent: 'gpt-6-luna' };
   const mapping = buildConsoleView(state).summary.join('\n');
-  assert.match(mapping, /Opus: gpt-6.1-sol/); assert.match(mapping, /Sonnet: gpt-6.1-terra/);
+  assert.match(mapping, /Opus: gpt-6.2-sol/); assert.match(mapping, /Sonnet: gpt-6.1-terra/);
   assert.match(mapping, /sous-agent: gpt-6-luna/);
   state.inspection.token = { error: 'storageFailed' }; assert.match(tokenLabel(state), /inaccessible/);
   state.inspection.token = { env: true }; assert.match(tokenLabel(state), /environnement/);
@@ -228,16 +233,16 @@ test('launch selectors, missing defaults, remembered invalid choices and relaunc
     { action: 'relaunch', value: 'codex' }, (state, { calls }) => {
       assert.match(state.notice, /indisponible/); assert.equal(calls.launched.length, 0);
       return { action: 'chooseModel' };
-    }, { action: 'pick', value: 'kimi-k3' }, { action: 'launch' },
+    }, { action: 'pick', value: 'kimi-k3.1-pro' }, { action: 'launch' },
     { action: 'resume', value: 'codex' }, { action: 'chooseClient' }, { action: 'pick', value: 'opencode' },
     { action: 'chooseFamily' }, { action: 'pick', value: 'open-source' }, (state) => {
       assert.equal(canLaunch(state), false); return { action: 'chooseModel' };
-    }, { action: 'pick', value: 'kimi-k3' }, { action: 'launch' },
+    }, { action: 'pick', value: 'kimi-k3.1-pro' }, { action: 'launch' },
     { action: 'tool', value: 'claude-code' }, { action: 'chooseSubagent' }, { action: 'pick', value: 'gpt-6-luna' },
     { action: 'chooseFamily' }, { action: 'pick', value: 'trial' }, { action: 'back' }, { action: 'quit' },
   ], { preferences: saved });
   assert.equal(result.calls.launched.length, 2);
-  assert.equal(result.calls.launched[0].model, 'kimi-k3');
+  assert.equal(result.calls.launched[0].model, 'kimi-k3.1-pro');
   assert.equal(result.state.page, 'home');
 });
 
@@ -294,7 +299,7 @@ test('errors and SIGTERM restore the terminal and close owned resources', async 
 test('launch review cancels without spawning and signals clean up during login or a client', async () => {
   let result = await fixture([{ action: 'tool', value: 'codex' }, () => ({ action: 'launch' }), (state) => {
     assert.equal(state.dialog.kind, 'launch');
-    assert.match(state.dialog.entries.map(entry => entry.label).join(' '), /gpt-6.1-sol/);
+    assert.match(state.dialog.entries.map(entry => entry.label).join(' '), /gpt-6.2-sol/);
     return { action: 'back' };
   }, { action: 'quit' }]);
   assert.equal(result.calls.launched.length, 0); assert.equal(result.calls.saved.length, 0);
@@ -480,17 +485,17 @@ test('console language selection changes all screens and prepared launches witho
 
 test('App preferences remain separate from CLI choices and render all six tools in three languages', () => {
   let preferences = rememberSelection(EMPTY(), 'routerlab', 'codex', { family: 'claude-gpt', model: 'gpt-6-luna' });
-  preferences = rememberSelection(preferences, 'routerlab', 'codex-app', { family: 'claude-gpt', model: 'gpt-6.1-sol' });
+  preferences = rememberSelection(preferences, 'routerlab', 'codex-app', { family: 'claude-gpt', model: 'gpt-6.2-sol' });
   preferences = rememberSelection(preferences, 'llm', 'codex-app', { family: 'claude', model: 'gpt-5.6-sol' });
   assert.equal(preferences.services.routerlab.clients.codex.model, 'gpt-6-luna');
-  assert.equal(preferences.services.routerlab.clients['codex-app'].model, 'gpt-6.1-sol');
+  assert.equal(preferences.services.routerlab.clients['codex-app'].model, 'gpt-6.2-sol');
   assert.equal(preferences.services.llm.clients['codex-app'].model, 'gpt-5.6-sol');
   for (const language of ['en', 'fr', 'de']) {
     const state = createConsoleState({ service: 'routerlab', language }, preferences, '8.0.0');
     assert.equal(buildConsoleView(state).entries.filter(entry => entry.action === 'tool').length, 6);
     state.page = 'desktop'; state.desktopClient = 'codex-app';
     for (const app of [{ configured: false }, { configured: true, recoveryRequired: true }, { configured: true, restoreConflict: true }]) {
-      state.inspection.codexApp = { ...app, running: true, model: 'gpt-6.1-sol' };
+      state.inspection.codexApp = { ...app, running: true, model: 'gpt-6.2-sol' };
       state.inspection.clients['codex-app'] = { supported: true, installed: true, versionSupported: true };
       const view = buildConsoleView(state);
       assert.equal(view.entries.find(entry => entry.action === 'restoreApp').disabled, !app.configured);

@@ -5,6 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import * as zlib from 'node:zlib';
 import { DEFAULT_ANTHROPIC_VERSION } from '../routerlab/services.js';
+import { canonicalizeAwsHaikuModelId } from '../routerlab/strategies.js';
 import { supportsOneMillionContext } from '../routerlab/strategy-models.js';
 import { normalizeLoopbackHost } from './loopback.js';
 
@@ -158,12 +159,16 @@ export function normalizeAllowedModelRequest(req, bodyText, allowedModels) {
 
 function normalizeAllowedModel(model, allowedModels, allowProviderPrefix = false) {
   if (allowedModels.has(model)) return model;
+  const canonicalModel = canonicalizeAwsHaikuModelId(model);
+  if (canonicalModel !== model && allowedModels.has(canonicalModel)) return canonicalModel;
 
   if (allowProviderPrefix) {
     const separator = model.lastIndexOf('/');
     if (separator > 0) {
       const unprefixedModel = model.slice(separator + 1);
       if (allowedModels.has(unprefixedModel)) return unprefixedModel;
+      const canonicalUnprefixedModel = canonicalizeAwsHaikuModelId(unprefixedModel);
+      if (allowedModels.has(canonicalUnprefixedModel)) return canonicalUnprefixedModel;
     }
   }
 

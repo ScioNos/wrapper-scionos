@@ -23,6 +23,7 @@ export const SERVICES = {
       'claude-gpt',
       'open-source',
       'trial',
+      'special',
     ],
   },
   llm: {

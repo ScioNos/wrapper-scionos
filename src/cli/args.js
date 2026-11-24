@@ -1,4 +1,5 @@
 import { DEFAULT_SERVICE } from '../routerlab/services.js';
+import { canonicalizeAwsHaikuModelId } from '../routerlab/strategies.js';
 import { isLoopbackHost, normalizeLoopbackHost, validateLoopbackPort } from '../platform/loopback.js';
 import { warnDeprecationOnce } from './deprecations.js';
 import { normalizeLanguage, resolveLanguage } from './i18n.js';
@@ -114,8 +115,8 @@ export function parseOptions(argv) {
         options.language = language;
       }
       if (key === '--strategy') options.strategy = value;
-      if (key === '--subagent-model') options.subagentModel = value;
-      if (key === '--model') options.model = value;
+      if (key === '--subagent-model') options.subagentModel = canonicalizeAwsHaikuModelId(value);
+      if (key === '--model') options.model = canonicalizeAwsHaikuModelId(value);
       if (key === '--token') {
         options.token = value;
         options.deprecations.push('token-inline');

@@ -67,11 +67,12 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
     assert.equal(payload.data.some((model) => model.id === 'claude-sonnet-5-5'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-fable-5-1'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-haiku-5-5'), true);
-    assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-5.5' && !model.supports1m), true);
+    assert.equal(payload.data.some((model) => model.id === 'aws-claude-haiku-5-5' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-6-luna'), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3' && !model.supports1m), true);
     assert.equal(payload.data.some((model) => model.id === 'claude-lm5.3-flash' && !model.supports1m), true);
-    assert.equal(payload.data.some((model) => model.id === 'claude-wen3.8-max'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-kim3.1-pro'), true);
+    assert.equal(payload.data.some((model) => model.id === 'claude-wen3.8-max'), false);
     assert.equal(payload.data.some((model) => model.id === 'claude-fable-5-open-source'), true);
     assert.equal(payload.data[0].created_at, 'routerlab-created-at');
     assert.equal(payload.data[0].supports1m, true);
@@ -83,7 +84,7 @@ test('Claude Desktop proxy exposes mapped model list', async () => {
 
 test('Claude Desktop proxy rewrites mapped models through injected transport and rejects missing models locally', async () => {
   const captured = [];
-  const configuredRoutes = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
+  const configuredRoutes = modelRoutesForDesktopMapping('routerlab', ['claude-gpt', 'aws']);
   const { server, routes } = createClaudeDesktopProxy({
     serviceValue: 'routerlab',
     routerlabToken: 'real-routerlab-token',
@@ -122,6 +123,16 @@ test('Claude Desktop proxy rewrites mapped models through injected transport and
     });
     assert.equal(mappedResponse.status, 200);
 
+    const legacyResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${DESKTOP_GATEWAY_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ model: 'aws-claude-haiku-5.5', messages: [] }),
+    });
+    assert.equal(legacyResponse.status, 200);
+
     const emptyResponse = await fetch(`${proxyBaseUrl}/v1/messages`, {
       method: 'POST',
       headers: {
@@ -137,7 +148,8 @@ test('Claude Desktop proxy rewrites mapped models through injected transport and
     assert.equal(captured[0].routerlabToken, 'real-routerlab-token');
     assert.equal(captured[0].targetBaseUrl, 'https://api.routerlab.ch');
     assert.equal(captured[0].url, '/v1/messages');
-    assert.equal(captured.length, 1);
+    assert.equal(captured[1].body.model, 'aws-claude-haiku-5-5');
+    assert.equal(captured.length, 2);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -294,7 +306,7 @@ test('Claude Code proxy enforces the discovered service model allowlist before f
     targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
     routerlabToken: 'routerlab-token-with-enough-length',
     upstreamAuth: 'anthropic',
-    allowedModels: ['allowed-primary', 'allowed-other-strategy'],
+    allowedModels: ['allowed-primary', 'aws-claude-haiku-5-5'],
   });
   const headers = {
     authorization: `Bearer ${proxy.gatewayToken}`,
@@ -313,7 +325,7 @@ test('Claude Code proxy enforces the discovered service model allowlist before f
       method: 'POST',
       headers: { ...headers, 'content-encoding': 'gzip' },
       body: zlib.gzipSync(JSON.stringify({
-        model: 'allowed-other-strategy',
+        model: 'aws-claude-haiku-5.5',
         messages: [],
       })),
     });
@@ -352,7 +364,7 @@ test('Claude Code proxy enforces the discovered service model allowlist before f
 
     assert.deepEqual(captured.map((entry) => entry.body.model), [
       'allowed-primary',
-      'allowed-other-strategy',
+      'aws-claude-haiku-5-5',
       'allowed-primary',
     ]);
     assert.deepEqual(captured.map((entry) => entry.url), [
@@ -367,7 +379,7 @@ test('Claude Code proxy enforces the discovered service model allowlist before f
 });
 
 test('shared long-running proxy preserves generic OpenAI-compatible requests', async () => {
-test('Claude Code Kimi K3 1M model variant is normalized before forwarding', async () => {
+test('Claude Code Kimi K3.1 Pro 1M model variant is normalized before forwarding', async () => {
   const captured = [];
   const upstream = http.createServer((req, res) => {
     let body = '';
@@ -383,7 +395,7 @@ test('Claude Code Kimi K3 1M model variant is normalized before forwarding', asy
     targetBaseUrl: `http://127.0.0.1:${upstream.address().port}`,
     routerlabToken: 'routerlab-token-with-enough-length',
     upstreamAuth: 'anthropic',
-    allowedModels: ['kimi-k3', 'claude-haiku-4-5'],
+    allowedModels: ['kimi-k3.1-pro', 'claude-haiku-4-5'],
   });
   const headers = {
     authorization: `Bearer ${proxy.gatewayToken}`,
@@ -394,7 +406,7 @@ test('Claude Code Kimi K3 1M model variant is normalized before forwarding', asy
     const oneMillion = await fetch(`${proxy.baseUrl}/v1/messages`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ model: 'kimi-k3[1m]', messages: [] }),
+      body: JSON.stringify({ model: 'kimi-k3.1-pro[1m]', messages: [] }),
     });
     assert.equal(oneMillion.status, 200);
 
@@ -403,7 +415,7 @@ test('Claude Code Kimi K3 1M model variant is normalized before forwarding', asy
       headers,
       body: JSON.stringify({
         requests: [
-          { custom_id: 'kimi', params: { model: 'kimi-k3[1m]', messages: [] } },
+          { custom_id: 'kimi', params: { model: 'kimi-k3.1-pro[1m]', messages: [] } },
         ],
       }),
     });
@@ -417,8 +429,8 @@ test('Claude Code Kimi K3 1M model variant is normalized before forwarding', asy
     assert.equal(unsupported.status, 403);
     assert.equal((await unsupported.json()).error.code, 'model_not_allowed');
 
-    assert.deepEqual(captured[0].model, 'kimi-k3');
-    assert.deepEqual(captured[1].requests[0].params.model, 'kimi-k3');
+    assert.deepEqual(captured[0].model, 'kimi-k3.1-pro');
+    assert.deepEqual(captured[1].requests[0].params.model, 'kimi-k3.1-pro');
   } finally {
     await stopLongRunningLlmProxy(proxy, { graceMs: 0 });
     await new Promise((resolve) => upstream.close(resolve));

@@ -42,7 +42,7 @@ function launchDependencies(modelResult, { launchError = null } = {}) {
 
 test('Codex Trial selects the new default and exposes only its five verified models', async () => {
   const models = ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
-  const fixture = launchDependencies({ valid: true, models: ['gpt-6.1-sol', 'glm-5.3', ...models], modelMetadata: [] });
+  const fixture = launchDependencies({ valid: true, models: ['gpt-6.2-sol', 'glm-5.3', ...models], modelMetadata: [] });
   await launchCodexForService({
     service: 'routerlab', strategy: 'trial', token: NATIVE_TEST_TOKEN, noPrompt: true,
   }, fixture.dependencies);
@@ -109,7 +109,7 @@ test('Codex interactive menu launches native model selection without wrapper pro
 test('Codex removes the temporary model catalog when launch fails', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['gpt-6.1-sol'],
+    models: ['gpt-6.2-sol'],
     modelMetadata: [],
   }, {
     launchError: new Error('simulated Codex startup failure'),
@@ -158,7 +158,7 @@ test('Codex rejects routing overrides before CLI detection, token use, or model 
 test('Codex no-prompt launches the default only when discovered', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['kimi-k3', 'gpt-6.1-sol'],
+    models: ['kimi-k3.1-pro', 'gpt-6.2-sol'],
     modelMetadata: [],
   });
   await launchCodexForService({
@@ -166,11 +166,11 @@ test('Codex no-prompt launches the default only when discovered', async () => {
     token: NATIVE_TEST_TOKEN,
     noPrompt: true,
   }, fixture.dependencies);
-  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-6.1-sol"'));
+  assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-6.2-sol"'));
 
   const missingDefault = launchDependencies({
     valid: true,
-    models: ['kimi-k3'],
+    models: ['kimi-k3.1-pro'],
     modelMetadata: [],
   });
   await assert.rejects(
@@ -179,7 +179,7 @@ test('Codex no-prompt launches the default only when discovered', async () => {
       token: NATIVE_TEST_TOKEN,
       noPrompt: true,
     }, missingDefault.dependencies),
-    /gpt-6\.1-sol.*not available/,
+    /gpt-6\.2-sol.*not available/,
   );
   assert.equal(missingDefault.calls.launches.length, 0);
 });
@@ -210,7 +210,7 @@ test('Codex refuses every model discovery failure without launching', async () =
 test('Codex does not silently substitute an unavailable explicit model', async () => {
   const fixture = launchDependencies({
     valid: true,
-    models: ['gpt-5.6-sol', 'kimi-k3'],
+    models: ['gpt-5.6-sol', 'kimi-k3.1-pro'],
     modelMetadata: [],
   });
   await assert.rejects(
@@ -226,33 +226,33 @@ test('Codex does not silently substitute an unavailable explicit model', async (
 });
 
 test('Codex missing family preferred model requires an explicit interactive choice, even for one model', async () => {
-  for (const models of [['gpt-6-astra'], ['gpt-6-astra', 'gpt-6-luna', 'glm-5.3']]) {
+  for (const models of [['gpt-6.2-astra'], ['gpt-6.2-astra', 'gpt-6-luna', 'glm-5.3']]) {
     const fixture = launchDependencies({ valid: true, models });
     let prompts = 0;
     fixture.dependencies.selectModel = async ({ choices }) => {
       prompts++;
       assert.deepEqual(choices.filter(({ value }) => value !== 'back').map(({ value }) => value), models.filter((model) => model.startsWith('gpt-')));
-      return 'gpt-6-astra';
+      return 'gpt-6.2-astra';
     };
     await launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', token: NATIVE_TEST_TOKEN }, fixture.dependencies);
     assert.equal(prompts, 1);
-    assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-6-astra"'));
+    assert.ok(fixture.calls.launches[0].codexArgs.includes('model="gpt-6.2-astra"'));
     assert.deepEqual(fixture.calls.catalog.models.map(({ slug }) => slug), models.filter((model) => model.startsWith('gpt-')));
   }
 });
 
 test('Codex missing family preferred model fails non-interactively with --model guidance', async () => {
-  const fixture = launchDependencies({ valid: true, models: ['gpt-6-astra', 'glm-5.3'] });
-  await assert.rejects(launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', noPrompt: true, token: NATIVE_TEST_TOKEN }, fixture.dependencies), /gpt-6\.1-sol.*unavailable.*--model/);
+  const fixture = launchDependencies({ valid: true, models: ['gpt-6.2-astra', 'glm-5.3'] });
+  await assert.rejects(launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', noPrompt: true, token: NATIVE_TEST_TOKEN }, fixture.dependencies), /gpt-6\.2-sol.*unavailable.*--model/);
   assert.equal(fixture.calls.launches.length, 0);
   await assert.rejects(launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', token: NATIVE_TEST_TOKEN }, { ...fixture.dependencies, isInteractive: () => false }), /--model/);
-  await launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', model: 'gpt-6-astra', noPrompt: true, token: NATIVE_TEST_TOKEN }, fixture.dependencies);
-  assert.deepEqual(fixture.calls.catalog.models.map(({ slug }) => slug), ['gpt-6-astra']);
+  await launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', model: 'gpt-6.2-astra', noPrompt: true, token: NATIVE_TEST_TOKEN }, fixture.dependencies);
+  assert.deepEqual(fixture.calls.catalog.models.map(({ slug }) => slug), ['gpt-6.2-astra']);
 });
 
 test('Codex explicit missing model never opens a replacement picker', async () => {
-  const fixture = launchDependencies({ valid: true, models: ['gpt-6-astra'] });
-  await assert.rejects(launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', model: 'gpt-6.1-sol', token: NATIVE_TEST_TOKEN }, fixture.dependencies), /not available/);
+  const fixture = launchDependencies({ valid: true, models: ['gpt-6.2-astra'] });
+  await assert.rejects(launchCodexForService({ service: 'routerlab', strategy: 'claude-gpt', model: 'gpt-6.2-sol', token: NATIVE_TEST_TOKEN }, fixture.dependencies), /not available/);
   assert.equal(fixture.calls.launches.length, 0);
 });
 
@@ -264,7 +264,7 @@ test('Codex explicitly selected LLM family also limits the native catalog', asyn
 
 test('Codex catalog cleanup failure cannot mask an earlier client failure', async () => {
   const original = new Error('client failed');
-  const fixture = launchDependencies({ valid: true, models: ['gpt-6.1-sol'] }, { launchError: original });
+  const fixture = launchDependencies({ valid: true, models: ['gpt-6.2-sol'] }, { launchError: original });
   fixture.dependencies.writeCodexRuntimeModelCatalog = () => ({ path: 'test-catalog' });
   fixture.dependencies.launchCodex = async () => { throw original; };
   fixture.dependencies.cleanupCodexRuntimeModelCatalog = () => { throw new Error('catalog locked'); };

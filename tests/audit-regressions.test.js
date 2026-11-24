@@ -22,7 +22,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platfo
 import { removeTestDirectory, closeTestServer } from './support/lifecycle.mjs';
 
 const TOKEN = 'audit-fixture-token-with-enough-length';
-const AWS = ['aws-claude-opus-5-5', 'aws-claude-sonnet-5-5', 'aws-claude-haiku-5.5'];
+const AWS = ['aws-claude-opus-5-5', 'aws-claude-sonnet-5-5', 'aws-claude-haiku-5-5'];
 const legacyConfig = () => buildCodexThirdPartyConfig({ baseUrl: 'https://api.routerlab.ch/v1' });
 function temporary(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scionos-audit-'));
@@ -73,7 +73,7 @@ test('A2: SIGTERM during revalidation cannot start any console client', async t 
     let fetches = 0, starts = 0, spawns = 0, catalogs = 0;
     const discover = async (_token, options) => {
       if (++fetches === 2) { assert.ok(options.signal); signals.emit('SIGTERM'); }
-      return { valid: true, models: client === 'claude-code' ? AWS : ['gpt-6.1-sol'] };
+      return { valid: true, models: client === 'claude-code' ? AWS : ['gpt-6.2-sol'] };
     };
     const resolve = async () => ({ token: TOKEN, source: 'secure-storage' });
     const detected = () => ({ installed: true, versionSupported: true, version: '2.1.296', cliPath: process.execPath });

@@ -9,7 +9,7 @@ const integration = createCodexAppIntegration({ service: 'routerlab' }, {
   paths: codexAppPaths({ env: { CODEX_HOME: path.join(directory, 'home') }, root: path.join(directory, 'state') }),
   detect: () => ({ supported: true, installed: true, versionSupported: true, running, engineVersion: '0.164.0' }),
   credential: () => 'scionos-subprocess-test-token-only',
-  fetchModels: async () => ({ valid: true, models: ['gpt-6.1-sol'] }),
+  fetchModels: async () => ({ valid: true, models: ['gpt-6.2-sol'] }),
   open: async () => { running = true; return { opened: true }; }, isRunning: () => running,
 });
 // Windows cannot deliver POSIX SIGTERM with child.kill(). The unreferenced IPC

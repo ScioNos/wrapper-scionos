@@ -200,7 +200,7 @@ function validateCommand(name, action, options) {
     } catch (error) {
       throw usageError(error.message);
     }
-    if (options.strategy && !findStrategy(options.strategy, service.value)) {
+    if (options.strategy && !findStrategy(options.strategy, service.value, { client: name })) {
       throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
     }
     return;
@@ -227,7 +227,7 @@ function validateCommand(name, action, options) {
   } catch (error) {
     throw usageError(error.message);
   }
-  if (allowedOptions.has('strategy') && options.strategy && !findStrategy(options.strategy, service.value)) {
+  if (allowedOptions.has('strategy') && options.strategy && !findStrategy(options.strategy, service.value, { client: name })) {
     throw usageError('Unknown strategy "' + options.strategy + '" for service "' + service.value + '".');
   }
   const positionalCount = actionTable[''] ? 0 : 1;

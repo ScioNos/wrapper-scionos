@@ -2,7 +2,7 @@
 
 This guide covers breaking changes in the Codex integration for wrapper-scionos 5.0.
 
-> Historical guide: this document describes the 5.0 migration, including the model defaults, prompts and legacy restore behavior used at that time. For the current `8.0.0` release, see the [current Codex CLI instructions](./reference.md#codex-cli) and the [Codex App instructions](./reference.md#codex-app-and-toml-preservation). The current CLI restore path refuses conflicts with personal configuration; see the [architecture notes](./architecture-notes.md#codex-lifecycle).
+> This historical guide describes the 5.0 migration, including its model defaults, prompts, and restore behavior. See the [current Codex CLI instructions](./reference.md#codex-cli), the [Codex App instructions](./reference.md#codex-app-and-toml-preservation), and the [architecture notes on restoring Codex configuration](./architecture-notes.md#codex-lifecycle).
 
 ## Overview
 

@@ -10,7 +10,7 @@ import { installCodexAppRuntime } from '../src/platform/codex-app-runtime.js';
 import { runTestProcess, spawnTestProcess, waitForTestChild, removeTestDirectory, closeTestServer } from './support/lifecycle.mjs';
 import { terminateChildTree } from '../src/platform/process.js';
 
-const MODEL = 'gpt-6.1-sol';
+const MODEL = 'gpt-6.2-sol';
 const TOKEN = 'scionos-local-app-test-credential-only';
 
 test('embedded App engine loads the preserved TOML, command auth and catalogue, runs a tool and a follow-up over Responses', { timeout: 60000 }, async t => {

@@ -9,7 +9,7 @@ import { buildOpenCodeEnvironment, buildOpenCodeRuntimeArgs } from '../src/apps/
 import { detectOpenCodeCli, detectCli } from '../src/platform/detect.js';
 import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../src/platform/llm-proxy.js';
 
-const MODEL = 'gpt-6-astra';
+const MODEL = 'gpt-6.2-astra';
 const ROUTERLAB_TOKEN = 'real-routerlab-token-with-enough-length';
 const LOCAL_GATEWAY_TOKEN = 'local-opencode-gateway-token-with-enough-length';
 

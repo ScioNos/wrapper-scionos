@@ -1,4 +1,4 @@
-# Technische Referenz — wrapper-scioNos 8.0.0
+# Technische Referenz — wrapper-scioNos 8.1.0
 
 [Zurück zur Einstiegsanleitung](../README.de.md)
 
@@ -29,7 +29,7 @@ Der Dienst wird vor dem Öffnen des Menüs einmal ausgewählt und bleibt währen
 
 ## Weitere Installationswege
 
-Installieren Sie Version 8.0.0 global und öffnen Sie die Konsole:
+Installieren Sie das veröffentlichte Paket in Version 8.0.0 global und öffnen Sie die Konsole:
 
 ```bash
 npm install -g wrapper-scionos@8.0.0
@@ -42,7 +42,7 @@ Für das GitHub-Archiv laden Sie [wrapper-scionos-8.0.0.tgz](https://github.com/
 npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos --service routerlab --lang de
 ```
 
-Für die Ausführung der Quellen wählen Sie Tag `v8.0.0` und führen `npm ci` sowie `npm start` im Repository-Stammverzeichnis aus. Der Paketbefehl lautet `wrapper-scionos`; `scionos` ist nach der Installation ein gleichwertiger Alias.
+Um Version 8.1.0 aus den Quellen zu testen, führen Sie `npm ci` und `npm start` im Stammverzeichnis des Repositorys aus. Die installierten Befehle `wrapper-scionos` und `scionos` sind gleichwertig.
 
 ## Strukturierte Terminalkonsole
 
@@ -85,8 +85,8 @@ Speichern Sie zuerst den Token unter **Konto und Zugang** oder mit `node index.j
 
 ```bash
 node index.js codex-app status --json
-node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --dry-run --no-prompt --json
-node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.1-sol --yes --no-prompt
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.2-sol --dry-run --no-prompt --json
+node index.js codex-app launch --service routerlab --strategy claude-gpt --model gpt-6.2-sol --yes --no-prompt
 # Der Startbefehl bleibt aktiv. Strg+C stellt die bisherigen Einstellungen wieder her.
 node index.js codex-app restore --dry-run --json
 node index.js codex-app restore --yes
@@ -161,9 +161,11 @@ Der Wrapper verwendet die Schnittmenge aus Dienst-Allowlist und der geprüften A
 | `claude-gpt` | `gpt-6-astra` | `gpt-5.6-luna` | `gpt-5.6-terra` | `gpt-5.6-sol` |
 | `divers` | `deepseek-v4.1-flash` | `gemini-3.8-flash` | `glm-5.3` | `glm-5.3-flash` |
 
-Für `routerlab` gibt es die Familien Claude, AWS Claude, OpenAI GPT, Open Source und Trial. Claude Native verwendet `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` und `claude-haiku-5-5`, mit Haiku 5.5 als Standard-Subagent. Diese Strategie benötigt Claude Code `>=2.1.293`; die CI prüft mit `2.1.296`. OpenAI GPT verwendet `gpt-6-astra` für Fable, `gpt-6.1-sol` für Opus, `gpt-6.1-terra` für Sonnet sowie `gpt-6-luna` für Haiku und den Standard-Subagent. Open Source umfasst `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3` und `qwen3.8-max`. Trial umfasst `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial` und `MiniMax-M3-trial`; sein Claude-Code-Subagent ist fest auf `deepseek-v4.1-flash-trial` eingestellt.
+Für `routerlab` gibt es die Familien Claude, AWS Claude, OpenAI GPT, Open Source und Trial. Claude Native verwendet `claude-fable-5-1`, `claude-opus-5-5`, `claude-sonnet-5-5` und `claude-haiku-5-5`, mit Haiku 5.5 als Standard-Subagent. Diese Strategie benötigt Claude Code `>=2.1.293`; die CI prüft mit `2.1.296`. OpenAI GPT verwendet `gpt-6.2-astra` für Fable, `gpt-6.2-sol` für Opus, `gpt-6.1-terra` für Sonnet sowie `gpt-6-luna` für Haiku und den Standard-Subagent. Open Source verwendet `deepseek-v4.1-flash` für Fable, `glm-5.3` für Sonnet, `glm-5.3-flash` für Haiku und den Standard-Subagent sowie `kimi-k3.1-pro` für Opus. Trial umfasst `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial` und `MiniMax-M3-trial`; sein Claude-Code-Subagent ist fest auf `deepseek-v4.1-flash-trial` eingestellt.
 
-Claude über AWS verwendet `aws-claude-opus-5-5`, `aws-claude-sonnet-5-5` und `aws-claude-haiku-5.5`. Der Standard-Subagent ist AWS Haiku 5.5. Diese Strategie benötigt Claude Code `>=2.1.284`.
+Claude über AWS verwendet `aws-claude-opus-5-5`, `aws-claude-sonnet-5-5` und `aws-claude-haiku-5-5`. Der Standard-Subagent ist AWS Haiku 5.5. Diese Strategie benötigt Claude Code `>=2.1.284`.
+
+Bei RouterLab Standard verwendet die Claude-Code-Strategie **Special** `gpt-6.2-astra` für Fable, `gpt-6.2-sol` für Opus, `gpt-6.1-terra` für Sonnet und `deepseek-v4.1-flash` für Haiku und den Standard-Subagent. Der Direktstart erfolgt mit `wrapper-scionos claude --strategy special`.
 
 ### Codex CLI
 
@@ -172,13 +174,13 @@ wrapper-scionos codex launch --service routerlab
 wrapper-scionos codex launch --service llm
 ```
 
-Auf `routerlab` wählen Sie beim interaktiven Start zuerst **OpenAI GPT-6**, **Open Source** oder **Trial**. Danach startet Codex mit dem temporären geprüften Katalog dieser Familie. Der native `/model`-Selektor wechselt Modelle innerhalb der gewählten Familie. Die bevorzugten Modelle sind `gpt-6.1-sol`, `deepseek-v4.1-flash` und `deepseek-v4.1-flash-trial`; fehlt das bevorzugte Modell, verlangt der interaktive Modus eine explizite Auswahl aus den verfügbaren Modellen, auch bei nur einem Modell. Nicht interaktiv wird der Start mit einem Hinweis auf `--model <id>` abgebrochen. Ein nicht verfügbares explizites Modell führt immer zu einem Fehler.
+Auf `routerlab` wählen Sie beim interaktiven Start zuerst **OpenAI GPT-6**, **Open Source** oder **Trial**. Danach startet Codex mit dem temporären geprüften Katalog dieser Familie. Der native `/model`-Selektor wechselt Modelle innerhalb der gewählten Familie. Die bevorzugten Modelle sind `gpt-6.2-sol`, `deepseek-v4.1-flash` und `deepseek-v4.1-flash-trial`; fehlt das bevorzugte Modell, verlangt der interaktive Modus eine explizite Auswahl aus den verfügbaren Modellen, auch bei nur einem Modell. Nicht interaktiv wird der Start mit einem Hinweis auf `--model <id>` abgebrochen. Ein nicht verfügbares explizites Modell führt immer zu einem Fehler.
 
-Ohne gewählte Familie ist der RouterLab-Standard **`gpt-6.1-sol`**. Der Dienst `llm` behält **`gpt-5.6-sol`**. Die strukturierte Konsole bereitet Familie und Modell vor; das lineare Menü behält den direkten Start. Explizite Modelle und diese Dienststandards müssen entdeckt und autorisiert sein. Mit `--strategy claude-gpt|open-source|trial` wählen Sie eine RouterLab-Familie in der Befehlszeile, mit `--model` ein genaues Modell.
+Ohne gewählte Familie ist der RouterLab-Standard **`gpt-6.2-sol`**. Der Dienst `llm` behält **`gpt-5.6-sol`**. Die strukturierte Konsole bereitet Familie und Modell vor; das lineare Menü behält den direkten Start. Explizite Modelle und diese Dienststandards müssen entdeckt und autorisiert sein. Mit `--strategy claude-gpt|open-source|trial` wählen Sie eine RouterLab-Familie in der Befehlszeile, mit `--model` ein genaues Modell.
 
 | Dienst | Allowlist |
 | --- | --- |
-| `routerlab` | `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `hy4-preview`, `kimi-k3`, `minimax-m3`, `qwen3.8-max`, `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial`, `MiniMax-M3-trial` |
+| `routerlab` | `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6.1-terra`, `gpt-6-luna`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash`, `kimi-k3.1-pro`, `deepseek-v4.1-flash-trial`, `glm-5.3-flash-trial`, `qwen3.8-flash-trial`, `gpt-6-luna-trial`, `MiniMax-M3-trial` |
 | `llm` | `gpt-5.6-sol`, `gpt-6-astra`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gemini-3.8-flash`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.3-flash` |
 
 Der Katalog ist temporär, enthält keine Zugangsdaten und wird nach dem Kindprozess gelöscht. Die veralteten Optionen `--direct`, `--proxy` und `--transport` wurden entfernt, da direkter Zugriff jetzt der einzige Codex-Transport ist.
@@ -191,7 +193,7 @@ wrapper-scionos opencode --service llm --strategy divers --model glm-5.3
 wrapper-scionos opencode --service routerlab --strategy trial --model deepseek-v4.1-flash-trial
 ```
 
-Interaktiv wird zuerst eine Familie und danach das genaue Modell gewählt. OpenCode RouterLab verwendet die Familien Claude Native, AWS Claude, OpenAI GPT, Open Source und Trial; das Standardmodell ist `gpt-6.1-sol`; der Dienst `llm` behält `gpt-5.6-sol`. Trial verwendet `deepseek-v4.1-flash-trial` als festes Claude-Code-Subagent-Modell; OpenCode behandelt es als normales auswählbares Modell. Der Wrapper verwendet einen authentifizierten Loopback-Proxy und injiziert `OPENCODE_CONFIG_CONTENT` nur in den Kindprozess; keine `opencode.json`-Datei und kein RouterLab-Token werden geschrieben.
+Interaktiv wird zuerst eine Familie und danach das genaue Modell gewählt. OpenCode RouterLab verwendet die Familien Claude Native, AWS Claude, OpenAI GPT, Open Source und Trial; das Standardmodell ist `gpt-6.2-sol`; der Dienst `llm` behält `gpt-5.6-sol`. Trial verwendet `deepseek-v4.1-flash-trial` als festes Claude-Code-Subagent-Modell; OpenCode behandelt es als normales auswählbares Modell. Der Wrapper verwendet einen authentifizierten Loopback-Proxy und injiziert `OPENCODE_CONFIG_CONTENT` nur in den Kindprozess; keine `opencode.json`-Datei und kein RouterLab-Token werden geschrieben.
 
 OpenCode aktualisieren:
 
@@ -224,13 +226,13 @@ Während der Ausführung hält der Wrapper den Dienst-Token im Speicher. Claude 
 
 ## Geprüfte Kompatibilität
 
-Die folgenden historischen Ergebnisse betreffen 7.3.0. Aktuelle Release-Prüfungen und die vom Paketinhaber bestätigte Abnahme stehen im [Validierungsbericht 8.0.0](./release-8.0.0-validation.md).
+Die folgenden historischen Ergebnisse betreffen 7.3.0. Der [Validierungsbericht 8.0.0](./release-8.0.0-validation.md) dokumentiert die Prüfungen und die Abnahme dieser Version.
 
 Unter Windows mit Node 24.19.0 bestand Claude Code 2.1.296 13 Routing-Szenarien; Codex 0.144.1 und 0.157.0 bestanden Responses-Streaming und natives model/list; OpenCode 1.18.30 und 2.0.27 bestanden exaktes Modell, HTTP-Pfade, Authentifizierung, Streaming und einen nativen read-Werkzeugzyklus mit simulierten Anbietern. OpenCode 2 verwendet den nativen Modus `--standalone`, damit sein privater Server die temporäre Proxy-Konfiguration erhält. Sein gemeinsam genutzter Hintergrunddienst ist mit dieser Integration pro Start inkompatibel.
 
 [Alle 37 GitHub-CI-Jobs bestanden](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), einschließlich dieser Claude-/OpenCode-Versionen und Codex 0.144.1 unter Windows, macOS und Linux sowie echter Keychain-Prüfungen unter macOS. Der Bericht nennt die genauen Node-Konfigurationen und Runner-Versionen.
 
-Ein entdecktes und autorisiertes Modell ist auswählbar; dies belegt weder reale RouterLab-Inferenz noch dessen Werkzeugkompatibilität. Diese historischen automatisierten Prüfungen erfassten weder RouterLab-Produktionsinferenz noch die echten Desktop-/Cowork-Anwendungen. Preise, Einsparungen, Hosting-Standorte und Abonnements benötigen separate RouterLab-Belege. Der [Validierungsbericht 7.3.0](./release-7.3.0-validation.md) nennt den historischen Umfang; der [Bericht 8.0.0](./release-8.0.0-validation.md) beschreibt die aktuelle Release-Abnahme.
+Ein entdecktes und autorisiertes Modell ist auswählbar. Die historischen automatisierten Prüfungen deckten das Routing zu simulierten Diensten ab. Produktionsinferenz, Werkzeugkompatibilität und die Nutzung in Desktop oder Cowork erfordern eigene Prüfungen. Die Validierungsberichte zu [7.3.0](./release-7.3.0-validation.md) und [8.0.0](./release-8.0.0-validation.md) beschreiben den jeweiligen Prüfumfang.
 
 ## Sicherheitsgarantien
 
@@ -265,7 +267,7 @@ Ein lokales, noch nicht veröffentlichtes Paket testen:
 
 ```bash
 npm pack
-npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos
+npx --prefix . --yes --package ./wrapper-scionos-8.1.0.tgz wrapper-scionos
 ```
 
 ## Lizenz

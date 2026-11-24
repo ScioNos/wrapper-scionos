@@ -24,17 +24,14 @@ function nativeTempDir(t, label) {
 
 test('Codex allowlists stay service-scoped', () => {
   assert.deepEqual(CODEX_ALLOWED_MODELS.routerlab, [
-    'gpt-6-astra',
-    'gpt-6.1-sol',
+    'gpt-6.2-astra',
+    'gpt-6.2-sol',
     'gpt-6.1-terra',
     'gpt-6-luna',
     'deepseek-v4.1-flash',
     'glm-5.3',
     'glm-5.3-flash',
-    'hy4-preview',
-    'kimi-k3',
-    'minimax-m3',
-    'qwen3.8-max',
+    'kimi-k3.1-pro',
     'deepseek-v4.1-flash-trial',
     'glm-5.3-flash-trial',
     'qwen3.8-flash-trial',
@@ -104,11 +101,11 @@ test('Codex runtime catalog configures the GLM 5.3 models for the native picker'
 
 test('Codex runtime catalog configures the added RouterLab models for the native picker', () => {
   const catalog = buildCodexModelCatalog({
-    models: ['gpt-6-astra', 'gpt-6.1-terra', 'deepseek-v4.1-flash', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.8-flash'],
+    models: ['gpt-6.2-astra', 'gpt-6.1-terra', 'deepseek-v4.1-flash', 'qwen3.8-max', 'glm-5.3-flash', 'grok-4.6', 'gemini-3.8-flash'],
   });
 
   assert.deepEqual(catalog.models.map((entry) => entry.slug), [
-    'gpt-6-astra',
+    'gpt-6.2-astra',
     'gpt-6.1-terra',
     'deepseek-v4.1-flash',
     'qwen3.8-max',
@@ -117,7 +114,7 @@ test('Codex runtime catalog configures the added RouterLab models for the native
     'gemini-3.8-flash',
   ]);
   assert.deepEqual(catalog.models.map((entry) => entry.display_name), [
-    'GPT 6 Astra',
+    'GPT 6.2 Astra',
     'GPT 6.1 Terra',
     'DeepSeek V4.1 Flash',
     'Qwen 3.8 Max',
@@ -236,7 +233,7 @@ test('Codex catalog directory is removed when writing the catalog fails', (t) =>
   };
   try {
     assert.throws(
-      () => writeCodexRuntimeModelCatalog({ models: ['gpt-6.1-sol'], tmpDir: dir + path.sep }),
+      () => writeCodexRuntimeModelCatalog({ models: ['gpt-6.2-sol'], tmpDir: dir + path.sep }),
       /synthetic catalog write failure/,
     );
   } finally {

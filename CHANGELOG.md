@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 8.1.0 (unreleased)
+
+### Added
+
+- Add the Special strategy for Claude Code on RouterLab, with GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra, and DeepSeek V4.1 Flash as Haiku and the default subagent.
+
+### Migration
+
+- RouterLab scripts that select `gpt-6-astra`, `gpt-6.1-sol`, or `kimi-k3` explicitly can select `gpt-6.2-astra`, `gpt-6.2-sol`, or `kimi-k3.1-pro` instead. The Open Source family also drops the `hy4-preview`, `minimax-m3`, and `qwen3.8-max` routes.
+
+### Fixed
+
+- Use the canonical RouterLab AWS Haiku identifier, `aws-claude-haiku-5-5`, for Claude Code, Claude Desktop/Cowork, and OpenCode. Existing selections and managed Desktop profiles can still use the previous spelling during upgrade.
+- Update RouterLab's OpenAI GPT family to `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6.1-terra`, and `gpt-6-luna`. Codex CLI/App and OpenCode use GPT 6.2 Sol as their RouterLab default.
+- Update RouterLab's Open Source family to DeepSeek V4.1 Flash, GLM 5.3, GLM 5.3 Flash, and Kimi K3.1 Pro. Claude Code uses GLM 5.3 Flash as the default subagent for this strategy.
+
 ## 8.0.0 - 2026-11-05
 
 ### Added

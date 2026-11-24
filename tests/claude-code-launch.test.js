@@ -9,6 +9,37 @@ const SUPPORTED_CLAUDE = {
   versionSupported: true,
 };
 
+test('Claude Code starts Special with the GPT role mapping and DeepSeek as default subagent', async () => {
+  const models = ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-terra', 'deepseek-v4.1-flash'];
+  const options = {
+    serviceValue: 'routerlab', strategyValue: 'special', token: 'test-token-with-enough-length',
+    noPrompt: true, claudeArgs: [],
+  };
+  let childEnv;
+  const dependencies = {
+    detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
+    fetchModelsFn: async () => ({ valid: true, models }),
+    startLongRunningLlmProxyFn: async ({ allowedModels }) => {
+      assert.deepEqual(allowedModels, models);
+      return { baseUrl: 'http://127.0.0.1:43123', gatewayToken: 'local-test-token' };
+    },
+    runInteractiveCliFn: async (_path, _args, { env }) => { childEnv = env; return 0; },
+    stopLongRunningLlmProxyFn: async () => {},
+  };
+  const prepared = await launchClaudeCode({ ...options, prepareOnly: true }, dependencies);
+  const family = prepared.families.find(({ value }) => value === 'special');
+  assert.equal(family.disabled, false);
+  assert.equal(family.defaultSubagent, 'deepseek-v4.1-flash');
+  assert.ok(prepared.subagents.includes(family.defaultSubagent));
+
+  await launchClaudeCode(options, dependencies);
+  assert.equal(childEnv.ANTHROPIC_DEFAULT_FABLE_MODEL, 'gpt-6.2-astra');
+  assert.equal(childEnv.ANTHROPIC_DEFAULT_OPUS_MODEL, 'gpt-6.2-sol');
+  assert.equal(childEnv.ANTHROPIC_DEFAULT_SONNET_MODEL, 'gpt-6.1-terra');
+  assert.equal(childEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'deepseek-v4.1-flash');
+  assert.equal(childEnv.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4.1-flash');
+});
+
 test('Trial launches only its new model mapping and fixes its subagent to the Trial route', async () => {
   const models = ['deepseek-v4.1-flash-trial', 'glm-5.3-flash-trial', 'qwen3.8-flash-trial', 'gpt-6-luna-trial', 'MiniMax-M3-trial'];
   for (const subagentModel of [null, 'deepseek-v4.1-flash-trial']) {
@@ -38,7 +69,7 @@ test('Trial launches only its new model mapping and fixes its subagent to the Tr
 
 for (const scenario of [
   { strategy: 'default', name: 'Claude Native', version: '2.1.292', minimum: '2.1.293', models: ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] },
-  { strategy: 'aws', name: 'Claude via AWS', version: '2.1.283', minimum: '2.1.284', models: ['aws-claude-haiku-5.5', 'aws-claude-sonnet-5-5', 'aws-claude-opus-5-5'] },
+  { strategy: 'aws', name: 'Claude via AWS', version: '2.1.283', minimum: '2.1.284', models: ['aws-claude-haiku-5-5', 'aws-claude-sonnet-5-5', 'aws-claude-opus-5-5'] },
 ]) {
 test(`${scenario.name} requires a compatible client before creating a proxy or launching`, async () => {
   let starts = 0;
@@ -79,7 +110,7 @@ test('Claude Code targets the official service and receives the generated local 
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async (_token, options) => {
         calls.discovery = options;
-        return { valid: true, models: ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol', 'gpt-6.1-terra'] };
+        return { valid: true, models: ['gpt-6.2-astra', 'gpt-6-luna', 'gpt-6.2-sol', 'gpt-6.1-terra'] };
       },
       chooseStrategyFn: async () => 'claude-gpt',
       startLongRunningLlmProxyFn: async (options) => {
@@ -102,12 +133,12 @@ test('Claude Code targets the official service and receives the generated local 
     assert.equal(calls.discovery.baseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.targetBaseUrl, 'https://api.routerlab.ch');
     assert.equal(calls.proxy.upstreamAuth, 'anthropic');
-    assert.deepEqual(calls.proxy.allowedModels, ['gpt-6-astra', 'gpt-6-luna', 'gpt-6.1-sol', 'gpt-6.1-terra']);
+    assert.deepEqual(calls.proxy.allowedModels, ['gpt-6.2-astra', 'gpt-6-luna', 'gpt-6.2-sol', 'gpt-6.1-terra']);
     assert.equal(calls.child.env.ANTHROPIC_BASE_URL, 'http://127.0.0.1:43123');
     assert.equal(calls.child.env.ANTHROPIC_AUTH_TOKEN, 'generated-local-token');
     assert.equal(calls.child.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST, '1');
-    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'gpt-6-astra');
-    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'gpt-6.1-sol');
+    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_FABLE_MODEL, 'gpt-6.2-astra');
+    assert.equal(calls.child.env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'gpt-6.2-sol');
     assert.equal(calls.child.env.ANTHROPIC_DEFAULT_SONNET_MODEL, 'gpt-6.1-terra');
     assert.equal(calls.child.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'gpt-6-luna');
     assert.equal(calls.child.env.CLAUDE_CODE_SUBAGENT_MODEL, 'gpt-6-luna');
@@ -292,7 +323,7 @@ test('Claude Code preserves a child failure when proxy cleanup also fails', asyn
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async () => ({
         valid: true,
-        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
+        models: ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
       }),
       startLongRunningLlmProxyFn: async () => ({
         baseUrl: 'http://127.0.0.1:43123',
@@ -327,7 +358,7 @@ test('Claude Code preserves a successful launch when proxy cleanup fails', async
       detectClaudeCodeFn: () => SUPPORTED_CLAUDE,
       fetchModelsFn: async () => ({
         valid: true,
-        models: ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
+        models: ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-luna'],
       }),
       chooseStrategyFn: async () => 'claude-gpt',
       startLongRunningLlmProxyFn: async () => ({

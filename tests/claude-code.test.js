@@ -334,7 +334,7 @@ test('interactive Claude strategy selection covers separators, Back, and selecte
   await assert.rejects(
     () => chooseStrategy({
       serviceValue: 'routerlab',
-      modelIds: ['gpt-6-astra'],
+      modelIds: ['gpt-6.2-astra'],
       selectFn: async () => assert.fail('all-disabled choices must not prompt'),
     }),
     /No launchable strategy/,

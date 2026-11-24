@@ -204,16 +204,16 @@ test('a mouse-only console journey selects models, cancels a review and restores
   let rendered = ''; output.on('data', value => { rendered += value; });
   let launches = 0; let saves = 0;
   const queue = [
-    ['tool', 'codex'], ['chooseFamily'], ['pick', 'open-source'], ['chooseModel'], ['pick', 'kimi-k3'],
+    ['tool', 'codex'], ['chooseFamily'], ['pick', 'open-source'], ['chooseModel'], ['pick', 'kimi-k3.1-pro'],
     ['chooseLanguage'], ['pick', 'de'], ['remember'], ['launch'], ['back'], ['launch'], ['confirm'],
     ['navigate', 'desktop'], ['chooseDesktopApp'], ['pick', 'cowork'], ['navigate', 'home'], ['quit'],
   ];
   const services = {
-    prepare: async () => ({ models: ['gpt-6.1-sol', 'kimi-k3'], defaultModel: 'gpt-6.1-sol',
-      families: [{ value: 'claude-gpt', name: 'GPT', defaultModel: 'gpt-6.1-sol', models: [{ model: 'gpt-6.1-sol' }] },
-        { value: 'open-source', name: 'Open Source', defaultModel: 'kimi-k3', models: [{ model: 'kimi-k3' }] }],
+    prepare: async () => ({ models: ['gpt-6.2-sol', 'kimi-k3.1-pro'], defaultModel: 'gpt-6.2-sol',
+      families: [{ value: 'claude-gpt', name: 'GPT', defaultModel: 'gpt-6.2-sol', models: [{ model: 'gpt-6.2-sol' }] },
+        { value: 'open-source', name: 'Open Source', defaultModel: 'kimi-k3.1-pro', models: [{ model: 'kimi-k3.1-pro' }] }],
       execute: async (selection, hooks) => {
-        launches++; assert.deepEqual(selection, { family: 'open-source', model: 'kimi-k3' });
+        launches++; assert.deepEqual(selection, { family: 'open-source', model: 'kimi-k3.1-pro' });
         assert.equal(hooks.language, 'de'); assert.equal(input.listenerCount('data'), 0);
         assert.ok(rendered.lastIndexOf(MOUSE_DISABLE) > rendered.lastIndexOf(MOUSE_ENABLE));
         hooks.onSpawn(); return 130;

@@ -1,4 +1,14 @@
-import { getClaudeCodeStrategyEnvironment, getRequiredModels, getServiceStrategies, getStrategyEnvironment } from './strategies.js';
+import {
+  AWS_HAIKU_MODEL_ID,
+  KIMI_K31_PRO_MODEL,
+  LEGACY_AWS_HAIKU_MODEL_ID,
+  ROUTERLAB_GPT_ASTRA_MODEL,
+  ROUTERLAB_GPT_SOL_MODEL,
+  getClaudeCodeStrategyEnvironment,
+  getRequiredModels,
+  getServiceStrategies,
+  getStrategyEnvironment,
+} from './strategies.js';
 
 export const STRATEGY_MODEL_KEYS = [
   ['fable', 'ANTHROPIC_DEFAULT_FABLE_MODEL'],
@@ -46,6 +56,18 @@ const DESKTOP_ROUTE_PREFIX_BY_ROLE = {
 };
 
 export const MODEL_ROUTE_METADATA = {
+  [ROUTERLAB_GPT_ASTRA_MODEL]: {
+    desktopRouteId: 'claude-6.2-astra',
+    label: ROUTERLAB_GPT_ASTRA_MODEL,
+    codexModel: ROUTERLAB_GPT_ASTRA_MODEL,
+    codexDisplayName: 'GPT 6.2 Astra',
+  },
+  [ROUTERLAB_GPT_SOL_MODEL]: {
+    desktopRouteId: 'claude-6.2-sol',
+    label: ROUTERLAB_GPT_SOL_MODEL,
+    codexModel: ROUTERLAB_GPT_SOL_MODEL,
+    codexDisplayName: 'GPT 6.2 Sol',
+  },
   'gpt-6-astra': {
     desktopRouteId: 'claude-6-astra',
     label: 'gpt-6-astra',
@@ -121,9 +143,14 @@ export const MODEL_ROUTE_METADATA = {
     desktopRouteId: 'claude-opus-4-8',
     label: 'claude-opus-4-8',
   },
-  'aws-claude-haiku-5.5': {
-    desktopRouteId: 'aws-claude-haiku-5.5',
-    label: 'aws-claude-haiku-5.5',
+  [AWS_HAIKU_MODEL_ID]: {
+    desktopRouteId: AWS_HAIKU_MODEL_ID,
+    label: AWS_HAIKU_MODEL_ID,
+    supports1m: false,
+  },
+  [LEGACY_AWS_HAIKU_MODEL_ID]: {
+    desktopRouteId: LEGACY_AWS_HAIKU_MODEL_ID,
+    label: LEGACY_AWS_HAIKU_MODEL_ID,
     supports1m: false,
   },
   'aws-claude-haiku-4-5-20251001': {
@@ -312,6 +339,13 @@ export const MODEL_ROUTE_METADATA = {
     codexDisplayName: 'Kimi K3',
     supports1m: true,
   },
+  [KIMI_K31_PRO_MODEL]: {
+    desktopRouteId: 'claude-kim3.1-pro',
+    label: KIMI_K31_PRO_MODEL,
+    codexModel: KIMI_K31_PRO_MODEL,
+    codexDisplayName: 'Kimi K3.1 Pro',
+    supports1m: true,
+  },
   'deepseek-v4-pro-0813': {
     desktopRouteId: 'claude-deev4-pro-0813',
     label: 'deepseek-v4-pro-0813',
@@ -387,11 +421,13 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-sonnet-4-6',
   'aws-claude-opus-5-5',
   'aws-claude-sonnet-5-5',
-  'aws-claude-haiku-5.5',
+  AWS_HAIKU_MODEL_ID,
   'aws-claude-haiku-4-5',
   'aws-claude-opus-4-8',
   'aws-claude-sonnet-4-6',
+  'claude-6.2-astra',
   'claude-6-astra',
+  'claude-6.2-sol',
   'claude-6.1-sol',
   'claude-6.1-terra',
   'claude-6-luna',
@@ -408,6 +444,7 @@ export const DESKTOP_MODEL_ORDER = [
   'claude-gem3.7-flash',
   'claude-rok4.6',
   'claude-kim3',
+  'claude-kim3.1-pro',
   'claude-max-m3',
   'claude-deev4-pro-0813',
   'claude-deev4-flash-0731',
@@ -473,7 +510,7 @@ export function getStrategyModels(strategyValue, serviceValue) {
 }
 
 export function getServiceModelFamilies(serviceValue, { client = 'opencode' } = {}) {
-  return getServiceStrategies(serviceValue)
+  return getServiceStrategies(serviceValue, { client })
     .map((strategy) => {
       const seen = new Set();
       const models = [];

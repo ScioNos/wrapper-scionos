@@ -21,6 +21,7 @@ import {
   redactClaudeDesktopResult,
   restoreOfficialClaudeDesktop,
 } from '../src/apps/claude-desktop.js';
+import { startManagedClaudeDesktopProxy } from '../src/cli/commands/claude-desktop.js';
 
 const LOCAL_TOKEN = 'A'.repeat(43);
 
@@ -60,22 +61,22 @@ test('Claude Desktop helper supports claude-desktop-debian Linux config paths', 
 test('Claude Desktop proxy routes expose valid Anthropic route ids and map to RouterLab strategy models', () => {
   const routes = modelRoutesForProxyStrategy('claude-gpt', 'routerlab');
   assert.deepEqual(routes.map((route) => route.routeId), [
-    'claude-6-astra',
+    'claude-6.2-astra',
     'claude-6-luna',
     'claude-6.1-terra',
-    'claude-6.1-sol',
+    'claude-6.2-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.upstreamModel), [
-    'gpt-6-astra',
+    'gpt-6.2-astra',
     'gpt-6-luna',
     'gpt-6.1-terra',
-    'gpt-6.1-sol',
+    'gpt-6.2-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.labelOverride), [
-    'gpt-6-astra',
+    'gpt-6.2-astra',
     'gpt-6-luna',
     'gpt-6.1-terra',
-    'gpt-6.1-sol',
+    'gpt-6.2-sol',
   ]);
   assert.deepEqual(routes.map((route) => route.supports1m), [
     undefined,
@@ -92,7 +93,7 @@ test('Claude Desktop proxy routes expose valid Anthropic route ids and map to Ro
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-gpt-5.4'), 'claude-5.4');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-gpt-5.4-mini'), 'claude-5.4-mini');
   assert.equal(desktopRouteIdForStrategyModel('haiku', 'claude-haiku-4-5'), 'claude-haiku-4-5');
-  assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-5.5'), 'aws-claude-haiku-5.5');
+  assert.equal(desktopRouteIdForStrategyModel('haiku', 'aws-claude-haiku-5-5'), 'aws-claude-haiku-5-5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'aws-claude-sonnet-5-5'), 'aws-claude-sonnet-5-5');
   assert.equal(desktopRouteIdForStrategyModel('opus', 'aws-claude-opus-5-5'), 'aws-claude-opus-5-5');
   assert.equal(desktopRouteIdForStrategyModel('sonnet', 'claude-glm-5.1'), 'claude-lm5.1');
@@ -133,14 +134,14 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
     'claude-haiku-5-5',
     'aws-claude-opus-5-5',
     'aws-claude-sonnet-5-5',
-    'aws-claude-haiku-5.5',
-    'claude-6-astra',
-    'claude-6.1-sol',
+    'aws-claude-haiku-5-5',
+    'claude-6.2-astra',
+    'claude-6.2-sol',
     'claude-6.1-terra',
     'claude-6-luna',
     'claude-lm5.3',
     'claude-lm5.3-flash',
-    'claude-wen3.8-max',
+    'claude-kim3.1-pro',
     'claude-fable-5-open-source',
   ]);
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-opus-5-5' && route.labelOverride === 'claude-opus-5-5'), true);
@@ -149,11 +150,11 @@ test('Claude Desktop default local mapping exposes the selected RouterLab catalo
   assert.equal(routes.some((route) => route.strategyValue === 'default' && route.routeId === 'claude-haiku-5-5' && route.upstreamModel === 'claude-haiku-5-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-opus-5-5' && route.labelOverride === 'aws-claude-opus-5-5'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-sonnet-5-5' && route.labelOverride === 'aws-claude-sonnet-5-5'), true);
-  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-5.5' && route.labelOverride === 'aws-claude-haiku-5.5' && !Object.hasOwn(route, 'supports1m')), true);
-  assert.equal(routes.some((route) => route.routeId === 'claude-6.1-sol' && route.labelOverride === 'gpt-6.1-sol'), true);
+  assert.equal(routes.some((route) => route.strategyValue === 'aws' && route.routeId === 'aws-claude-haiku-5-5' && route.labelOverride === 'aws-claude-haiku-5-5' && !Object.hasOwn(route, 'supports1m')), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-6.2-sol' && route.labelOverride === 'gpt-6.2-sol'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'open-source' && route.routeId === 'claude-lm5.3' && route.upstreamModel === 'glm-5.3' && route.labelOverride === 'glm-5.3' && !Object.hasOwn(route, 'supports1m')), true);
   assert.equal(routes.some((route) => route.routeId === 'claude-lm5.3-flash' && route.upstreamModel === 'glm-5.3-flash' && route.labelOverride === 'glm-5.3-flash' && !Object.hasOwn(route, 'supports1m')), true);
-  assert.equal(routes.some((route) => route.routeId === 'claude-wen3.8-max' && route.upstreamModel === 'qwen3.8-max'), true);
+  assert.equal(routes.some((route) => route.routeId === 'claude-kim3.1-pro' && route.upstreamModel === 'kimi-k3.1-pro'), true);
   assert.equal(routes.some((route) => route.strategyValue === 'open-source' && route.routeId === 'claude-fable-5-open-source' && route.upstreamModel === 'deepseek-v4.1-flash'), true);
   assert.equal(new Set(routes.map((route) => route.routeId)).size, routes.length);
 
@@ -438,6 +439,63 @@ test('Claude Desktop status distinguishes healthy, unapplied, and corrupt profil
   assert.equal(corrupt.configured, true);
   assert.equal(corrupt.healthy, false);
   assert.deepEqual(corrupt.issues, ['profile_invalid', 'profile_not_applied']);
+});
+
+test('starting the Desktop proxy updates a managed profile with previous model routes', async (t) => {
+  const dir = fs.mkdtempSync(path.join(process.cwd(), '.test-desktop-model-upgrade-'));
+  t.after(() => removeTestDirectory(dir, process.cwd()));
+  const paths = {
+    normalConfigPath: path.join(dir, 'normal.json'),
+    threepConfigPath: path.join(dir, 'threep.json'),
+    configLibraryPath: dir,
+    profilePath: path.join(dir, 'profile.json'),
+    metaPath: path.join(dir, '_meta.json'),
+  };
+  const previousRoutes = [
+    { routeId: 'aws-claude-haiku-5.5', upstreamModel: 'aws-claude-haiku-5.5', labelOverride: 'aws-claude-haiku-5.5' },
+    { routeId: 'claude-6-astra', upstreamModel: 'gpt-6-astra', labelOverride: 'gpt-6-astra' },
+    { routeId: 'claude-6.1-sol', upstreamModel: 'gpt-6.1-sol', labelOverride: 'gpt-6.1-sol' },
+    { routeId: 'claude-wen3.8-max', upstreamModel: 'qwen3.8-max', labelOverride: 'qwen3.8-max' },
+  ];
+  const refreshedRoutes = [
+    { routeId: 'aws-claude-haiku-5-5', upstreamModel: 'aws-claude-haiku-5-5', labelOverride: 'aws-claude-haiku-5-5' },
+    { routeId: 'claude-6.2-astra', upstreamModel: 'gpt-6.2-astra', labelOverride: 'gpt-6.2-astra' },
+    { routeId: 'claude-6.2-sol', upstreamModel: 'gpt-6.2-sol', labelOverride: 'gpt-6.2-sol' },
+    { routeId: 'claude-kim3.1-pro', upstreamModel: 'kimi-k3.1-pro', labelOverride: 'kimi-k3.1-pro' },
+  ];
+  applyProxyClaudeDesktop({
+    serviceValue: 'routerlab',
+    strategyValues: ['aws', 'claude-gpt', 'open-source'],
+    routes: previousRoutes,
+    gatewayToken: LOCAL_TOKEN,
+    dryRun: false,
+    paths,
+  });
+  assert.equal(readClaudeDesktopStatus(paths).healthy, true);
+
+  const session = await startManagedClaudeDesktopProxy({}, {
+    paths,
+    logger: { log() {}, error() {} },
+    resolveToken: async () => 'test-routerlab-token-with-enough-length',
+    fetchModels: async () => ({
+      valid: true,
+      modelsVerified: true,
+      models: refreshedRoutes.map((route) => route.upstreamModel),
+    }),
+    startProxy: async ({ host, port, routes }) => ({
+      baseUrl: buildLoopbackUrl(host, port),
+      routes,
+      server: { listening: false },
+    }),
+  });
+
+  assert.deepEqual(session.routes.map(({ routeId, upstreamModel, labelOverride }) => ({
+    routeId, upstreamModel, labelOverride,
+  })), refreshedRoutes);
+  const updated = readClaudeDesktopProxyCredential(paths);
+  assert.equal(updated.token, LOCAL_TOKEN);
+  assert.deepEqual(updated.metadata.routes, refreshedRoutes);
+  assert.equal(readClaudeDesktopStatus(paths).healthy, true);
 });
 
 test('verified Desktop routes expose only authorized models and explicit metadata', () => {

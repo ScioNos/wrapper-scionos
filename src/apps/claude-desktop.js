@@ -3,7 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { requireServiceConfig } from '../routerlab/services.js';
-import { findStrategy } from '../routerlab/strategies.js';
+import {
+  AWS_HAIKU_MODEL_ID,
+  KIMI_K31_PRO_MODEL,
+  LEGACY_AWS_HAIKU_MODEL_ID,
+  ROUTERLAB_GPT_ASTRA_MODEL,
+  ROUTERLAB_GPT_SOL_MODEL,
+  findStrategy,
+} from '../routerlab/strategies.js';
 import {
   buildValidatedLoopbackUrl,
   parseLoopbackUrl,
@@ -29,6 +36,12 @@ const PRIVATE_FILE_MODE = 0o600;
 
 const CONFIG_FILE = 'claude_desktop_config.json';
 const CONFIG_LIBRARY_DIR = 'configLibrary';
+const PREVIOUS_ROUTERLAB_DESKTOP_MODELS = new Map([
+  [AWS_HAIKU_MODEL_ID, LEGACY_AWS_HAIKU_MODEL_ID],
+  [ROUTERLAB_GPT_ASTRA_MODEL, 'gpt-6-astra'],
+  [ROUTERLAB_GPT_SOL_MODEL, 'gpt-6.1-sol'],
+  [KIMI_K31_PRO_MODEL, 'qwen3.8-max'],
+]);
 
 export function isClaudeDesktopSupportedPlatform(platform = process.platform) {
   return platform === 'win32' || platform === 'darwin' || platform === 'linux';
@@ -622,10 +635,10 @@ function isValidWrapperMetadata(meta) {
   const strategyValues = Array.isArray(meta.strategies) ? meta.strategies : null;
   if (strategyValues) {
     if (strategyValues.length === 0
-      || !strategyValues.every((strategyValue) => Boolean(findStrategy(strategyValue, service.value)))) {
+      || !strategyValues.every((strategyValue) => findStrategy(strategyValue, service.value, { client: 'claude-desktop' }))) {
       return false;
     }
-  } else if (typeof meta.strategy !== 'string' || !findStrategy(meta.strategy, service.value)) {
+  } else if (typeof meta.strategy !== 'string' || !findStrategy(meta.strategy, service.value, { client: 'claude-desktop' })) {
     return false;
   }
 
@@ -636,6 +649,17 @@ function isValidWrapperMetadata(meta) {
     `${route.routeId}\0${route.upstreamModel}`,
     route,
   ]));
+  if (service.value === 'routerlab') {
+    // Read routes saved by older launches so startup can refresh the profile.
+    for (const route of configuredRoutes) {
+      const previousModel = PREVIOUS_ROUTERLAB_DESKTOP_MODELS.get(route.upstreamModel);
+      if (!previousModel) continue;
+      const previousRouteId = desktopRouteIdForStrategyModel(route.role, previousModel);
+      configured.set(`${previousRouteId}\0${previousModel}`, {
+        labelOverride: desktopLabelForStrategyModel(previousModel),
+      });
+    }
+  }
   return meta.routes.every((route) => {
     if (!hasOnlyRouteMetadataFields(route)) return false;
     const expected = configured.get(`${route.routeId}\0${route.upstreamModel}`);
@@ -663,9 +687,9 @@ function isLegacyProxyMetadata(meta) {
   }
   if (Array.isArray(meta.strategies)) {
     return meta.strategies.length > 0
-      && meta.strategies.every((strategyValue) => Boolean(findStrategy(strategyValue, service.value)));
+      && meta.strategies.every((strategyValue) => findStrategy(strategyValue, service.value, { client: 'claude-desktop' }));
   }
-  return typeof meta.strategy === 'string' && Boolean(findStrategy(meta.strategy, service.value));
+  return typeof meta.strategy === 'string' && Boolean(findStrategy(meta.strategy, service.value, { client: 'claude-desktop' }));
 }
 
 function validateMutableDesktopFiles(paths) {

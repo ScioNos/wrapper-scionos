@@ -54,7 +54,9 @@ Open a terminal on your computer and run:
 npx wrapper-scionos@8.0.0 --service routerlab --lang en
 ```
 
-Accept npm's package installation prompt if it appears. This runs version **8.0.0** without a global installation. Run the same command again when you want to reopen the console.
+Accept npm's package installation prompt if it appears. This runs the published **8.0.0** package without a global installation.
+
+To use **8.1.0** from this repository, run `npm ci` followed by `node index.js --lang en`. The **Special** strategy for Claude Code on standard RouterLab combines GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra, and DeepSeek V4.1 Flash. To launch it directly from the repository, run `node index.js claude --strategy special --lang en`. [8.1.0 reference](./docs/reference.md#model-routing).
 
 ### 2. Connect your RouterLab account
 

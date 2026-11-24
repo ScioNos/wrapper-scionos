@@ -26,6 +26,8 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
       'gemini-3.7-flash',
       'gpt-6-astra',
       'gpt-6.1-sol',
+      'gpt-6.2-astra',
+      'gpt-6.2-sol',
       'gpt-6.1-terra',
       'gpt-6-luna',
       'deepseek-v4.1-flash',
@@ -33,8 +35,9 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
       'minimax-m3',
       'kimi-k3',
       'qwen3.8-max',
+      'kimi-k3.1-pro',
     ]),
-    ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-luna', 'deepseek-v4.1-flash', 'kimi-k3', 'minimax-m3', 'qwen3.8-max'],
+    ['gpt-6.2-astra', 'gpt-6.2-sol', 'gpt-6.1-terra', 'gpt-6-luna', 'deepseek-v4.1-flash', 'kimi-k3.1-pro'],
   );
   assert.deepEqual(
     availableCodexModels('llm', [
@@ -59,10 +62,10 @@ test('Codex availability is the allowlist/discovery intersection in allowlist or
     ],
   );
   assert.deepEqual(availableCodexModelFamilies('routerlab', [
-    'gpt-6-astra', 'gpt-6.1-terra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max', 'kimi-k3',
+    'gpt-6.2-astra', 'gpt-6.1-terra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'qwen3.8-max', 'kimi-k3.1-pro',
   ]).map((family) => [family.value, family.models.map(({ model }) => model)]), [
-    ['claude-gpt', ['gpt-6-astra', 'gpt-6.1-terra']],
-    ['open-source', ['deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'kimi-k3', 'qwen3.8-max']],
+    ['claude-gpt', ['gpt-6.2-astra', 'gpt-6.1-terra']],
+    ['open-source', ['deepseek-v4.1-flash', 'glm-5.3', 'glm-5.3-flash', 'kimi-k3.1-pro']],
   ]);
 });
 
@@ -116,7 +119,7 @@ test('Codex exact requested model is preserved and never substituted', async () 
 test('Codex interactive selection starts with a discovered model family', async () => {
   const service = requireServiceConfig('routerlab');
   const families = availableCodexModelFamilies('routerlab', [
-    'gpt-6-astra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3',
+    'gpt-6.2-astra', 'gpt-5.6-sol', 'deepseek-v4.1-flash', 'glm-5.3',
   ]);
   let choicesSeen;
   const selected = await resolveCodexLaunchFamily({
@@ -134,15 +137,15 @@ test('Codex interactive selection starts with a discovered model family', async 
 test('Codex no-prompt requires the default model', async () => {
   const service = requireServiceConfig('routerlab');
   assert.equal(await resolveCodexLaunchModel({
-    availableModels: ['gpt-6.1-sol', 'glm-5.2'],
+    availableModels: ['gpt-6.2-sol', 'glm-5.2'],
     service,
     noPrompt: true,
-  }), 'gpt-6.1-sol');
+  }), 'gpt-6.2-sol');
   await assert.rejects(resolveCodexLaunchModel({
     availableModels: ['glm-5.2'],
     service,
     noPrompt: true,
-  }), /gpt-6\.1-sol.*not available/);
+  }), /gpt-6\.2-sol.*not available/);
 });
 
 test('Codex interactive selection auto-selects one model and prompts for several', async () => {

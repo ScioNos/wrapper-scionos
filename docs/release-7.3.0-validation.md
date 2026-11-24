@@ -1,6 +1,6 @@
 # Validation de wrapper-scioNos 7.3.0
 
-> Archive historique de la version 7.3.0. Les versions de Node, outils et résultats ci-dessous concernent cette release. Pour la branche 8.0.0, consulter les [prérequis actuels](../README.fr.md#prérequis) et le [bilan de validation 8.0.0](./release-8.0.0-validation.md).
+> Archive historique de la version 7.3.0. Les versions de Node, les outils et les résultats ci-dessous concernent cette version. Voir aussi les [prérequis actuels](../README.fr.md#prérequis) et le [bilan de validation de la 8.0.0](./release-8.0.0-validation.md).
 
 Validation du 13 octobre 2026, à partir de `7.2.0`, commit `c2d64c77be5092fdd74e9d3246ac4b631cac8e45`. Les validations techniques de la version 7.3.0 sont réussies : [exécution GitHub Actions 38377724549](https://github.com/ScioNos/wrapper-scionos/actions/runs/38377724549), **37 jobs réussis, zéro échec**, sur le commit de code `df40a014447007171cf6b235a5aae7ddb12fa955`. La branche de validation est `codex/release-7.3.0-validation` ; le code testé est conservé pour la release, avec des ajouts de documentation. Aucun article n’a été rédigé.
 

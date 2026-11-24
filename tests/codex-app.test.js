@@ -13,7 +13,7 @@ import { detectCodexApp, openCodexApp, requestCodexAppClose, isCodexAppRunning }
 import { readCodexAppCredential } from '../src/security/codex-app-credential.js';
 import { createCodexAppIntegration } from '../src/apps/codex-app.js';
 
-const CONFIG = { id: randomUUID(), providerId: 'scionos_routerlab', service: 'routerlab', model: 'gpt-6.1-sol',
+const CONFIG = { id: randomUUID(), providerId: 'scionos_routerlab', service: 'routerlab', model: 'gpt-6.2-sol',
   cataloguePath: 'C:\\test\\models.json', nodePath: process.execPath, helperPath: 'C:\\test\\credential.mjs', baseUrl: 'https://api.routerlab.ch/v1' };
 const ORIGINAL = '# mes réglages\n"model" = "old" # choix personnel\nmodel_reasoning_effort="high"\n[mcp_servers.test]\ncommand="node"\nargs=["server.js"]\n[features]\napps=true';
 function temporary() {
@@ -42,7 +42,7 @@ test('TOML patches preserve original bytes, comments, quoted keys, nested tables
   assert.throws(() => planAppConfig('model_providers={old={name="mine"}}', CONFIG), { code: 'config_invalid' });
   const plan = planAppConfig(ORIGINAL, CONFIG);
   assert.equal(restoreAppConfig(plan.text + '\n# new personal note\n', plan), ORIGINAL + '\n# new personal note\n');
-  assert.throws(() => restoreAppConfig(plan.text.replace('gpt-6.1-sol', 'personal-model'), plan), { code: 'restore_conflict' });
+  assert.throws(() => restoreAppConfig(plan.text.replace('gpt-6.2-sol', 'personal-model'), plan), { code: 'restore_conflict' });
   assert.throws(() => restoreAppConfig(plan.text.replace('wire_api = "responses"', 'wire_api = "chat"'), plan), { code: 'restore_conflict' });
   assert.throws(() => restoreAppConfig(plan.text + '\npersonal_auth_key="changed"\n', plan), { code: 'restore_conflict' });
 });
@@ -105,7 +105,7 @@ test('recovery handles prepared journals, absent files, personal conflicts and i
     recovery.restore({ recover: true });
     assert.equal(fs.existsSync(t.paths.configPath), false);
     manager.activate(CONFIG);
-    const modified = fs.readFileSync(t.paths.configPath, 'utf8').replace('gpt-6.1-sol', 'personal-model');
+    const modified = fs.readFileSync(t.paths.configPath, 'utf8').replace('gpt-6.2-sol', 'personal-model');
     fs.writeFileSync(t.paths.configPath, modified);
     assert.equal(manager.status().restoreConflict, true);
     assert.throws(() => manager.restore(), { code: 'restore_conflict' });
@@ -142,7 +142,7 @@ test('credential helper uses stored credentials only, validates them and stays i
   assert.throws(() => readCodexAppCredential('routerlab', { readToken: () => 'token-with-newline-123456\nsecret' }));
   const t = temporary();
   try {
-    const runtime = installCodexAppRuntime(t.paths, { models: ['gpt-6.1-sol'], tokenDirectory: path.join(t.directory, 'empty-secrets') });
+    const runtime = installCodexAppRuntime(t.paths, { models: ['gpt-6.2-sol'], tokenDirectory: path.join(t.directory, 'empty-secrets') });
     assert.ok(fs.existsSync(runtime.cataloguePath));
     if (process.platform !== 'win32') {
       // Never query a developer's real macOS/Linux keychain from an absence fixture.
@@ -188,7 +188,7 @@ test('App integration revalidates actual models, keeps runtime alive for an open
   const t = temporary();
   try {
     fs.writeFileSync(t.paths.configPath, ORIGINAL);
-    let models = ['gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna'];
+    let models = ['gpt-6.2-sol', 'gpt-6.2-astra', 'gpt-6-luna'];
     let opened = 0; let saved = 0; let running = false;
     const app = createCodexAppIntegration({ service: 'routerlab' }, { paths: t.paths,
       detect: () => ({ installed: true, supported: true, versionSupported: true, enginePath: 'test', engineVersion: '0.164.0', running }),
@@ -198,23 +198,23 @@ test('App integration revalidates actual models, keeps runtime alive for an open
     });
     const capability = await app.prepare();
     assert.doesNotMatch(JSON.stringify(capability), /stored-token-with-enough-length/);
-    const selection = { family: 'claude-gpt', model: 'gpt-6.1-sol' };
+    const selection = { family: 'claude-gpt', model: 'gpt-6.2-sol' };
     assert.equal((await app.preview(selection)).dryRun, true);
     assert.equal(fs.existsSync(t.paths.directory), false);
-    models = ['gpt-6-astra', 'gpt-6-luna'];
+    models = ['gpt-6.2-astra', 'gpt-6-luna'];
     await assert.rejects(capability.execute(selection), { code: 'model_unavailable' });
     assert.equal(opened, 0);
-    models.push('gpt-6.1-sol', 'kimi-k3');
+    models.push('gpt-6.2-sol', 'kimi-k3.1-pro');
     await capability.execute(selection, { onSpawn() { saved++; } });
     assert.equal(saved, 1); assert.equal(app.hasSession(), true);
     const catalogPath = parseAppConfig(fs.readFileSync(t.paths.configPath, 'utf8')).value.model_catalog_json;
-    assert.ok(!JSON.parse(fs.readFileSync(catalogPath)).models.some(item => item.slug === 'kimi-k3'));
+    assert.ok(!JSON.parse(fs.readFileSync(catalogPath)).models.some(item => item.slug === 'kimi-k3.1-pro'));
     assert.equal(app.shutdown().restored, true);
     assert.equal(fs.readFileSync(t.paths.configPath, 'utf8'), ORIGINAL);
     assert.ok(fs.readdirSync(t.paths.runtimePath).length > 0);
     app.close(); app.restore({ recover: true });
     assert.equal(fs.readdirSync(t.paths.runtimePath).length, 0);
-    const foreign = installCodexAppRuntime(t.paths, { models: ['gpt-6.1-sol'] });
+    const foreign = installCodexAppRuntime(t.paths, { models: ['gpt-6.2-sol'] });
     await app.launch(selection);
     app.restore();
     assert.equal(app.hasSession(), true, 'The open App still needs an exit choice after a manual restore.');

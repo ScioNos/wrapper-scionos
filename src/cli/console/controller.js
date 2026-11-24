@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import { requireServiceConfig } from '../../routerlab/services.js';
 import { findStrategy, getServiceStrategies } from '../../routerlab/strategies.js';
 import { consolePrompt } from './prompt.js';
@@ -10,6 +11,8 @@ import { buildConsoleView, canLaunch, CLIENT_LABELS, familyFor, familyLabel, sel
 import { uiText, appErrorText } from './i18n.js';
 import { createConsoleInput } from './input.js';
 import { LANGUAGE_LABELS, LANGUAGE_MENU_TITLE, SUPPORTED_LANGUAGES } from '../i18n.js';
+
+const { version } = createRequire(import.meta.url)('../../../package.json');
 
 export function createConsoleState(options, preferences, version) {
   const service = requireServiceConfig(options.service);
@@ -77,7 +80,7 @@ export async function runStructuredConsole(options, dependencies = {}) {
   const inspect = dependencies.startInspection ?? startInspection;
   const services = dependencies.services ?? createConsoleServices(options);
   const loaded = load();
-  const state = createConsoleState(options, loaded.value, dependencies.version ?? '8.0.0');
+  const state = createConsoleState(options, loaded.value, dependencies.version ?? version);
   state.warning = loaded.warning;
   const events = new EventEmitter();
   const prepared = new Map();
@@ -380,7 +383,8 @@ export async function runStructuredConsole(options, dependencies = {}) {
       picker('info', t('routes'), (state.inspection.desktop.routes ?? []).map((route) => ({ action: 'noop', label: `${route.routeId} → ${route.upstreamModel}` })), state.inspection.desktop.routes?.length ? [] : [t('noRoutes')]);
     } else if (action === 'journal') picker('info', t('log'), state.journal.map((message) => ({ action: 'noop', label: message })));
     else if (action === 'desktopFamilies') {
-      const selected = desktopConfiguration().strategyValues ?? getServiceStrategies(state.service).map((family) => family.value);
+      const selected = desktopConfiguration().strategyValues
+        ?? getServiceStrategies(state.service, { client: 'claude-desktop' }).map((family) => family.value);
       picker('families', t('families'), [], [t('selectFamilies')]);
       state.dialog.selected = [...selected];
       updateFamilyPicker();
@@ -410,7 +414,7 @@ export async function runStructuredConsole(options, dependencies = {}) {
 
   function updateFamilyPicker() {
     const selected = state.dialog.selected;
-    state.dialog.entries = getServiceStrategies(state.service).map((family) => ({ action: 'toggleFamily', value: family.value,
+    state.dialog.entries = getServiceStrategies(state.service, { client: 'claude-desktop' }).map((family) => ({ action: 'toggleFamily', value: family.value,
       label: `[${selected.includes(family.value) ? 'x' : ' '}] ${family.selectionName ?? family.name}` }));
     state.dialog.entries.push({ action: 'applyFamilies', label: t('apply'), disabled: selected.length === 0 }, { action: 'back', label: t('no') });
   }

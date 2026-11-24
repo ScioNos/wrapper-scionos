@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { canonicalizeAwsHaikuModelId } from '../../routerlab/strategies.js';
 
 export const CLIENTS = Object.freeze(['claude-code', 'codex', 'opencode', 'codex-app']);
 export const preferencesPath = () => path.join(os.homedir(), '.wrapper-scionos', 'ui-state.json');
@@ -10,7 +11,9 @@ const identifier = (value) => typeof value === 'string' && value.length <= 256 &
 export function sanitizeSelection(value) {
   if (!value || !identifier(value.family)) return null;
   const selection = { family: value.family };
-  for (const key of ['model', 'subagent']) if (identifier(value[key])) selection[key] = value[key];
+  for (const key of ['model', 'subagent']) {
+    if (identifier(value[key])) selection[key] = canonicalizeAwsHaikuModelId(value[key]);
+  }
   return selection;
 }
 

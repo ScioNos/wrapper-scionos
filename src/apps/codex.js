@@ -8,7 +8,7 @@ import { detectCodexCli, MINIMUM_CODEX_VERSION } from '../platform/detect.js';
 import { runInteractiveCli } from '../platform/process.js';
 import { removeTemporaryDirectorySync } from '../platform/temp-directory.js';
 import { codexModelDisplayName } from '../routerlab/strategy-models.js';
-import { OPENAI_GPT_MODELS, TRIAL_MODELS } from '../routerlab/strategies.js';
+import { OPENAI_GPT_MODELS, OPEN_SOURCE_MODELS, ROUTERLAB_GPT_SOL_MODEL, TRIAL_MODELS } from '../routerlab/strategies.js';
 
 export { codexModelDisplayName };
 
@@ -18,7 +18,7 @@ export const CODEX_ROUTERLAB_MODEL_GROUPS = [
     value: 'claude-gpt',
     name: 'OpenAI GPT-6',
     description: '',
-    defaultModel: 'gpt-6.1-sol',
+    defaultModel: ROUTERLAB_GPT_SOL_MODEL,
     models: [...OPENAI_GPT_MODELS],
   },
   {
@@ -26,15 +26,7 @@ export const CODEX_ROUTERLAB_MODEL_GROUPS = [
     name: 'Open Source',
     description: '',
     defaultModel: 'deepseek-v4.1-flash',
-    models: [
-      'deepseek-v4.1-flash',
-      'glm-5.3',
-      'glm-5.3-flash',
-      'hy4-preview',
-      'kimi-k3',
-      'minimax-m3',
-      'qwen3.8-max',
-    ],
+    models: [...OPEN_SOURCE_MODELS],
   },
   {
     value: 'trial',

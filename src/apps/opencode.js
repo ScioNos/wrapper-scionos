@@ -3,6 +3,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/l
 import { runInteractiveCli } from '../platform/process.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, SERVICES } from '../routerlab/services.js';
 import {
+  ROUTERLAB_GPT_SOL_MODEL,
   findStrategy,
 } from '../routerlab/strategies.js';
 import { codexModelDisplayName, getServiceModelFamilies } from '../routerlab/strategy-models.js';
@@ -12,7 +13,7 @@ export const OPENCODE_PROVIDER_ID = 'scionos';
 export const OPENCODE_CONFIG_CONTENT_ENV = 'OPENCODE_CONFIG_CONTENT';
 export const OPENCODE_GATEWAY_TOKEN_ENV = 'WRAPPER_SCIONOS_OPENCODE_GATEWAY_TOKEN';
 export const DEFAULT_OPENCODE_MODEL = Object.freeze({
-  routerlab: 'gpt-6.1-sol',
+  routerlab: ROUTERLAB_GPT_SOL_MODEL,
   llm: 'gpt-5.6-sol',
 });
 

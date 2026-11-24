@@ -5,7 +5,7 @@ import { startLongRunningLlmProxy, stopLongRunningLlmProxy } from '../platform/l
 import { runInteractiveCli } from '../platform/process.js';
 import { getStoredToken } from '../security/token-store.js';
 import { LEGACY_TOKEN_ENV_KEY, requireServiceConfig, resolveServiceBaseUrlWithSource, resolveServiceEnvToken, SERVICES, validateServiceBaseUrl } from '../routerlab/services.js';
-import { assessStrategy, assessStrategyLaunch, findStrategy, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
+import { assessStrategy, assessStrategyLaunch, canonicalizeAwsHaikuModelId, findStrategy, getAuthorizedClaudeCodeModels, getClaudeCodeStrategyEnvironment, getClaudeCodeSubagentModels, getFallbackStrategy, getServiceStrategies, getStrategyChoices, getStrategyDisplayName, hasVerifiedModelIds, isSupportedClaudeCodeSubagentModel } from '../routerlab/strategies.js';
 import { fetchModelsDirect, validateTokenFormat } from '../routerlab/models.js';
 import { applyMenuControl, askSelect, formatBanner } from '../cli/menu.js';
 import { translate } from '../cli/i18n.js';
@@ -18,7 +18,7 @@ export const CLAUDE_CODE_TEMPORARY_ENVIRONMENT = {
 
 export function buildClaudeCodeEnvironment(token, service, strategyValue, options = {}) {
   const { env: sourceEnv = process.env, subagentModel = null, ...strategyOptions } = options;
-  const requestedSubagentModel = subagentModel?.trim() || null;
+  const requestedSubagentModel = canonicalizeAwsHaikuModelId(subagentModel?.trim()) || null;
   const fixedSubagentModel = findStrategy(strategyValue, service.value)?.fixedSubagentModel ?? null;
   if (
     requestedSubagentModel
@@ -326,7 +326,7 @@ export async function chooseSubagentModel({
     ?? 'strategy default';
   const subagentModels = getClaudeCodeSubagentModels(serviceValue);
 
-  const requestedModel = preferredSubagentModel?.trim() || null;
+  const requestedModel = canonicalizeAwsHaikuModelId(preferredSubagentModel?.trim()) || null;
   const fixedSubagentModel = findStrategy(strategyValue, serviceValue)?.fixedSubagentModel ?? null;
   if (fixedSubagentModel) {
     if (requestedModel && requestedModel !== fixedSubagentModel) {
@@ -383,6 +383,7 @@ export async function chooseSubagentModel({
     language,
     helpMode: 'compact',
     choices: promptChoices,
+    ...(strategyValue === 'open-source' || strategyValue === 'special' ? { default: defaultModel } : {}),
     pageSize: promptChoices.length,
   }).then((selected) => applyMenuControl(selected, { allowBack }));
 }

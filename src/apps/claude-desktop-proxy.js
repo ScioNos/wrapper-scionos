@@ -1,4 +1,5 @@
 import { requireServiceConfig, validateServiceBaseUrl } from '../routerlab/services.js';
+import { AWS_HAIKU_MODEL_ID, LEGACY_AWS_HAIKU_MODEL_ID } from '../routerlab/strategies.js';
 import {
   createLongRunningLlmProxy,
   forwardLongRunningLlmRequest,
@@ -43,6 +44,9 @@ export function createClaudeDesktopProxy(options, dependencies = {}) {
   };
   const verifiedRoutes = validateRoutes(routes);
   const routeMap = new Map(verifiedRoutes.map((route) => [route.routeId, route.upstreamModel]));
+  if (routeMap.get(AWS_HAIKU_MODEL_ID) === AWS_HAIKU_MODEL_ID && !routeMap.has(LEGACY_AWS_HAIKU_MODEL_ID)) {
+    routeMap.set(LEGACY_AWS_HAIKU_MODEL_ID, AWS_HAIKU_MODEL_ID);
+  }
   const forwardRequest = dependencies.forwardRequest ?? forwardLongRunningLlmRequest;
   const timeouts = resolveProxyTimeouts(options);
 

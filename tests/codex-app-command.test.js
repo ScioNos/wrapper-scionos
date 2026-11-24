@@ -13,7 +13,7 @@ import { parseOptions } from '../src/cli/args.js';
 import { removeTestDirectory, waitForTestChild } from './support/lifecycle.mjs';
 import { terminateChildTree } from '../src/platform/process.js';
 
-const selection = { family: 'claude-gpt', model: 'gpt-6.1-sol' };
+const selection = { family: 'claude-gpt', model: 'gpt-6.2-sol' };
 const catalogue = { defaultModel: selection.model, families: [{ value: selection.family, name: 'GPT', defaultModel: selection.model, models: [{ model: selection.model }] }] };
 function fixture() {
   const calls = { launches: 0, restores: [], closes: 0, shutdowns: 0 };

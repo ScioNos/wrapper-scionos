@@ -44,7 +44,7 @@ test('Claude preparation exposes no credentials, starts no proxy, and revalidate
   assert.equal(result.exitCode, 130); assert.equal(starts, 1); assert.equal(stops, 1);
   assert.equal(spawns, 1); assert.equal(fetches, 2); assert.equal(resolutions, 2);
   dependencies.fetchModelsFn = async () => ({ valid: false, reason: 'auth_failed', status: 401 });
-  await assert.rejects(prepared.execute({ family: 'aws', subagent: 'aws-claude-haiku-5.5' }), /401/);
+  await assert.rejects(prepared.execute({ family: 'aws', subagent: 'aws-claude-haiku-5-5' }), /401/);
   assert.equal(starts, 1);
 });
 
@@ -69,7 +69,7 @@ for (const client of ['codex', 'opencode']) test(`${client} prepares without res
     assertCodexCliAvailable: () => ({ installed: true, cliPath: 'fixture' }),
     assertOpenCodeCliAvailable: () => ({ installed: true, cliPath: 'fixture', version: '1.18.30' }),
     resolveTokenWithSource: async () => ({ token: TOKEN + ++resolutions, source: 'secure-storage' }),
-    fetchModels: async () => ({ valid: true, models: valid ? ['gpt-6.1-sol', 'kimi-k3'] : ['gpt-6.1-sol'] }),
+    fetchModels: async () => ({ valid: true, models: valid ? ['gpt-6.2-sol', 'kimi-k3.1-pro'] : ['gpt-6.2-sol'] }),
     startLongRunningLlmProxy: async () => { starts++; return { baseUrl: 'http://127.0.0.1:12345', gatewayToken: 'local-credential' }; },
     stopLongRunningLlmProxy: async () => { stops++; },
     launchCodex: async (options) => { launches++; options.onSpawn(); return 0; },
@@ -79,10 +79,10 @@ for (const client of ['codex', 'opencode']) test(`${client} prepares without res
   const prepared = await launch({ service: 'routerlab', noPrompt: true, prepareOnly: true }, dependencies);
   assert.equal(starts, 0); assert.equal(launches, 0);
   assert.doesNotMatch(JSON.stringify(prepared), new RegExp(TOKEN));
-  assert.equal(await prepared.execute({ family: 'open-source', model: 'kimi-k3' }, { onSpawn: () => { spawns++; } }), 0);
+  assert.equal(await prepared.execute({ family: 'open-source', model: 'kimi-k3.1-pro' }, { onSpawn: () => { spawns++; } }), 0);
   assert.equal(spawns, 1); assert.equal(resolutions, 2);
   valid = false;
-  await assert.rejects(prepared.execute({ family: 'open-source', model: 'kimi-k3' }), /not available|unavailable/);
+  await assert.rejects(prepared.execute({ family: 'open-source', model: 'kimi-k3.1-pro' }), /not available|unavailable/);
   assert.equal(launches, 1);
   assert.equal(starts, client === 'opencode' ? 1 : 0);
   assert.equal(stops, starts);

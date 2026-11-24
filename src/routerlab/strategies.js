@@ -1,13 +1,17 @@
 import { DEFAULT_SERVICE, normalizeServiceValue, requireServiceConfig } from './services.js';
 
-export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = 'aws-claude-haiku-5.5';
+export const AWS_HAIKU_MODEL_ID = 'aws-claude-haiku-5-5';
+export const LEGACY_AWS_HAIKU_MODEL_ID = 'aws-claude-haiku-5.5';
+export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODEL = AWS_HAIKU_MODEL_ID;
 export const LLM_CLAUDE_CODE_SUBAGENT_MODEL = 'claude-haiku-4-5';
+export const KIMI_K31_PRO_MODEL = 'kimi-k3.1-pro';
+const DEEPSEEK_FLASH_MODEL = 'deepseek-v4.1-flash';
 const OPEN_SOURCE_MODEL_MAP = Object.freeze({
-  fable: 'deepseek-v4.1-flash',
+  fable: DEEPSEEK_FLASH_MODEL,
   haiku: 'glm-5.3-flash',
   sonnet: 'glm-5.3',
-  opus: 'qwen3.8-max',
-  subagent: 'kimi-k3',
+  opus: KIMI_K31_PRO_MODEL,
+  subagent: 'glm-5.3-flash',
 });
 const TRIAL_MODEL_MAP = Object.freeze({
   fable: 'deepseek-v4.1-flash-trial',
@@ -17,13 +21,10 @@ const TRIAL_MODEL_MAP = Object.freeze({
   subagent: 'deepseek-v4.1-flash-trial',
 });
 export const OPEN_SOURCE_MODELS = [
-  'deepseek-v4.1-flash',
-  'glm-5.3',
-  'glm-5.3-flash',
-  'hy4-preview',
-  'kimi-k3',
-  'minimax-m3',
-  'qwen3.8-max',
+  OPEN_SOURCE_MODEL_MAP.fable,
+  OPEN_SOURCE_MODEL_MAP.sonnet,
+  OPEN_SOURCE_MODEL_MAP.haiku,
+  OPEN_SOURCE_MODEL_MAP.opus,
 ];
 export const TRIAL_MODELS = [
   'deepseek-v4.1-flash-trial',
@@ -34,9 +35,10 @@ export const TRIAL_MODELS = [
 ];
 export const ROUTERLAB_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-5-5',
-  'aws-claude-haiku-5.5',
+  AWS_HAIKU_MODEL_ID,
   'gpt-6-luna',
-  'deepseek-v4.1-flash',
+  DEEPSEEK_FLASH_MODEL,
+  OPEN_SOURCE_MODEL_MAP.subagent,
 ];
 export const LLM_CLAUDE_CODE_SUBAGENT_MODELS = [
   'claude-haiku-4-5',
@@ -60,15 +62,18 @@ export const LLM_CLAUDE_MODELS = [
 ];
 
 export const AWS_CLAUDE_MODELS = [
-  'aws-claude-haiku-5.5',
+  AWS_HAIKU_MODEL_ID,
   'aws-claude-sonnet-5-5',
   'aws-claude-opus-5-5',
 ];
 
+export const ROUTERLAB_GPT_ASTRA_MODEL = 'gpt-6.2-astra';
+export const ROUTERLAB_GPT_SOL_MODEL = 'gpt-6.2-sol';
+const ROUTERLAB_GPT_TERRA_MODEL = 'gpt-6.1-terra';
 export const OPENAI_GPT_MODELS = [
-  'gpt-6-astra',
-  'gpt-6.1-sol',
-  'gpt-6.1-terra',
+  ROUTERLAB_GPT_ASTRA_MODEL,
+  ROUTERLAB_GPT_SOL_MODEL,
+  ROUTERLAB_GPT_TERRA_MODEL,
   'gpt-6-luna',
 ];
 
@@ -136,8 +141,8 @@ export const STRATEGIES = [
     environment: createModelEnvironment({
       opus: 'aws-claude-opus-5-5',
       sonnet: 'aws-claude-sonnet-5-5',
-      haiku: 'aws-claude-haiku-5.5',
-      subagent: 'aws-claude-haiku-5.5',
+      haiku: AWS_HAIKU_MODEL_ID,
+      subagent: AWS_HAIKU_MODEL_ID,
     }),
   },
   {
@@ -156,23 +161,23 @@ export const STRATEGIES = [
   {
     value: 'claude-gpt',
     name: 'OpenAI GPT',
-    description: 'Fable => GPT 6 Astra, Opus => GPT 6.1 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
-    selectionDescription: 'Fable => GPT 6 Astra, Opus => GPT 6.1 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
+    description: 'Fable => GPT 6.2 Astra, Opus => GPT 6.2 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
+    selectionDescription: 'Fable => GPT 6.2 Astra, Opus => GPT 6.2 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => GPT 6 Luna.',
     aliases: ['claude-gpt-5.4'],
     requiredModels: OPENAI_GPT_MODELS,
     environment: {
-      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: ROUTERLAB_GPT_ASTRA_MODEL,
       ...createModelEnvironment({
-        opus: 'gpt-6.1-sol',
-        sonnet: 'gpt-6.1-terra',
+        opus: ROUTERLAB_GPT_SOL_MODEL,
+        sonnet: ROUTERLAB_GPT_TERRA_MODEL,
         haiku: 'gpt-6-luna',
       }),
     },
     claudeCodeEnvironment: {
-      ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: ROUTERLAB_GPT_ASTRA_MODEL,
       ...createModelEnvironment({
-        opus: 'gpt-6.1-sol',
-        sonnet: 'gpt-6.1-terra',
+        opus: ROUTERLAB_GPT_SOL_MODEL,
+        sonnet: ROUTERLAB_GPT_TERRA_MODEL,
         haiku: 'gpt-6-luna',
         subagent: 'gpt-6-luna',
       }),
@@ -182,8 +187,8 @@ export const STRATEGIES = [
     value: 'open-source',
     name: 'Open Source',
     selectionName: 'Open Source',
-    description: 'Fable => DeepSeek V4.1 Flash, Haiku => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Qwen 3.8 Max, subagent => Kimi K3.',
-    selectionDescription: 'Fable => DeepSeek V4.1 Flash, Haiku => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Qwen 3.8 Max, subagent => Kimi K3.',
+    description: 'Fable => DeepSeek V4.1 Flash, Haiku and subagents => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Kimi K3.1 Pro.',
+    selectionDescription: 'Fable => DeepSeek V4.1 Flash, Haiku and subagents => GLM 5.3 Flash, Sonnet => GLM 5.3, Opus => Kimi K3.1 Pro.',
     requiredModels: OPEN_SOURCE_MODELS,
     claudeCodeEnvironment: {
       ANTHROPIC_DEFAULT_FABLE_MODEL: OPEN_SOURCE_MODEL_MAP.fable,
@@ -227,6 +232,27 @@ export const STRATEGIES = [
         sonnet: TRIAL_MODEL_MAP.sonnet,
         haiku: TRIAL_MODEL_MAP.haiku,
         subagent: TRIAL_MODEL_MAP.subagent,
+      }),
+    },
+  },
+  {
+    value: 'special',
+    name: 'Special',
+    description: 'Fable => GPT 6.2 Astra, Opus => GPT 6.2 Sol, Sonnet => GPT 6.1 Terra, Haiku and subagents => DeepSeek V4.1 Flash.',
+    claudeCodeOnly: true,
+    requiredModels: [
+      ROUTERLAB_GPT_ASTRA_MODEL,
+      ROUTERLAB_GPT_SOL_MODEL,
+      ROUTERLAB_GPT_TERRA_MODEL,
+      DEEPSEEK_FLASH_MODEL,
+    ],
+    claudeCodeEnvironment: {
+      ANTHROPIC_DEFAULT_FABLE_MODEL: ROUTERLAB_GPT_ASTRA_MODEL,
+      ...createModelEnvironment({
+        opus: ROUTERLAB_GPT_SOL_MODEL,
+        sonnet: ROUTERLAB_GPT_TERRA_MODEL,
+        haiku: DEEPSEEK_FLASH_MODEL,
+        subagent: DEEPSEEK_FLASH_MODEL,
       }),
     },
   },
@@ -318,7 +344,7 @@ export function normalizeStrategyValue(strategyValue) {
   return strategyValue;
 }
 
-export function getServiceStrategies(serviceValue = DEFAULT_SERVICE) {
+export function getServiceStrategies(serviceValue = DEFAULT_SERVICE, { client = 'claude-code' } = {}) {
   const service = requireServiceConfig(serviceValue);
   return service.strategyValues
     .map((value) => {
@@ -334,12 +360,12 @@ export function getServiceStrategies(serviceValue = DEFAULT_SERVICE) {
       }
       return strategy ? { ...strategy, allowSubagentOverride: false } : strategy;
     })
-    .filter(Boolean);
+    .filter((strategy) => strategy && (client === 'claude-code' || !strategy.claudeCodeOnly));
 }
 
-export function findStrategy(strategyValue, serviceValue = DEFAULT_SERVICE) {
+export function findStrategy(strategyValue, serviceValue = DEFAULT_SERVICE, options) {
   const normalized = normalizeStrategyValue(strategyValue);
-  return getServiceStrategies(serviceValue).find((strategy) => (
+  return getServiceStrategies(serviceValue, options).find((strategy) => (
     strategy.value === normalized || strategy.aliases?.includes(strategyValue)
   )) ?? null;
 }
@@ -418,8 +444,12 @@ export function getAuthorizedClaudeCodeModels(serviceValue = DEFAULT_SERVICE) {
   return [...models];
 }
 
+export function canonicalizeAwsHaikuModelId(model) {
+  return model === LEGACY_AWS_HAIKU_MODEL_ID ? AWS_HAIKU_MODEL_ID : model;
+}
+
 export function isSupportedClaudeCodeSubagentModel(model, serviceValue = DEFAULT_SERVICE, strategyValue = null) {
-  const normalized = String(model ?? '').trim();
+  const normalized = canonicalizeAwsHaikuModelId(String(model ?? '').trim());
   const fixedModel = strategyValue ? findStrategy(strategyValue, serviceValue)?.fixedSubagentModel : null;
   return getClaudeCodeSubagentModels(serviceValue).includes(normalized)
     || Boolean(normalized && fixedModel === normalized);

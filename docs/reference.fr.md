@@ -29,10 +29,10 @@ Le service est sélectionné une seule fois, avant l’ouverture du menu, puis r
 
 ## Autres méthodes d’installation
 
-Installez globalement le paquet publié en version 8.0.0, puis ouvrez sa console :
+Installez globalement le paquet publié en version 8.1.0, puis ouvrez sa console :
 
 ```bash
-npm install -g wrapper-scionos@8.0.0
+npm install -g wrapper-scionos@8.1.0
 wrapper-scionos --service routerlab --lang fr
 ```
 

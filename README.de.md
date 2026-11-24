@@ -51,12 +51,12 @@ Der Wrapper läuft unter Windows, macOS und Linux. Codex App benötigt Windows o
 Öffnen Sie ein Terminal auf Ihrem Computer und führen Sie aus:
 
 ```bash
-npx wrapper-scionos@8.0.0 --service routerlab --lang de
+npx wrapper-scionos@8.1.0 --service routerlab --lang de
 ```
 
-Bestätigen Sie die Paketinstallation, wenn npm danach fragt. Dieser Befehl startet das veröffentlichte Paket **8.0.0** ohne globale Installation.
+Bestätigen Sie die Paketinstallation, wenn npm danach fragt. Dieser Befehl startet das veröffentlichte Paket **8.1.0** ohne globale Installation.
 
-Für **8.1.0** aus diesem Repository führen Sie `npm ci` und anschließend `node index.js --lang de` aus. Die Strategie **Special** für Claude Code auf RouterLab Standard kombiniert GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra und DeepSeek V4.1 Flash. Der Direktstart aus dem Repository erfolgt mit `node index.js claude --strategy special --lang de`. [Referenz zu 8.1.0](./docs/reference.de.md#modellrouting).
+Die Strategie **Special** für Claude Code auf RouterLab Standard kombiniert GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra und DeepSeek V4.1 Flash. Starten Sie die Strategie direkt mit `npx wrapper-scionos@8.1.0 claude --strategy special --lang de`. [Referenz zu 8.1.0](./docs/reference.de.md#modellrouting).
 
 ### 2. RouterLab-Konto verbinden
 
@@ -104,7 +104,7 @@ RouterLab-Zugang und -Verbrauch sind von Ihren Abonnements bei den ursprünglich
 <details>
 <summary>Ich habe bereits Zugang zum Dienst <code>llm</code>. Welchen Befehl soll ich verwenden?</summary>
 
-Starten Sie `npx wrapper-scionos@8.0.0 --service llm --lang de` mit dem API-Schlüssel dieses Dienstes. `routerlab` und `llm` haben getrennte Schlüssel und Kataloge; wählen Sie den Dienst beim Start des Wrappers. [Dienstreferenz](./docs/reference.de.md#dienste-und-authentifizierung).
+Starten Sie `npx wrapper-scionos@8.1.0 --service llm --lang de` mit dem API-Schlüssel dieses Dienstes. `routerlab` und `llm` haben getrennte Schlüssel und Kataloge; wählen Sie den Dienst beim Start des Wrappers. [Dienstreferenz](./docs/reference.de.md#dienste-und-authentifizierung).
 
 </details>
 

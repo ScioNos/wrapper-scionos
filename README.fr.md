@@ -51,12 +51,12 @@ Le wrapper fonctionne sous Windows, macOS et Linux. Codex App nécessite Windows
 Ouvrez un terminal sur votre ordinateur et lancez :
 
 ```bash
-npx wrapper-scionos@8.0.0 --service routerlab --lang fr
+npx wrapper-scionos@8.1.0 --service routerlab --lang fr
 ```
 
-Acceptez l’installation du paquet si npm vous la propose. Cette commande lance la version publiée **8.0.0** sans installation globale.
+Acceptez l’installation du paquet si npm vous la propose. Cette commande lance la version publiée **8.1.0** sans installation globale.
 
-Pour utiliser la **8.1.0** depuis ce dépôt, exécutez `npm ci` puis `node index.js --lang fr`. La stratégie **Special** de Claude Code sur RouterLab standard combine GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra et DeepSeek V4.1 Flash. Pour la lancer directement depuis le dépôt, utilisez `node index.js claude --strategy special --lang fr`. [Référence 8.1.0](./docs/reference.fr.md#routage-des-modèles).
+La stratégie **Special** de Claude Code sur RouterLab standard combine GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra et DeepSeek V4.1 Flash. Pour la lancer directement, utilisez `npx wrapper-scionos@8.1.0 claude --strategy special --lang fr`. [Référence 8.1.0](./docs/reference.fr.md#routage-des-modèles).
 
 ### 2. Connectez votre compte RouterLab
 
@@ -104,7 +104,7 @@ L’accès et la consommation RouterLab sont distincts de vos abonnements auprè
 <details>
 <summary>J’ai déjà un accès au service <code>llm</code>. Quelle commande utiliser ?</summary>
 
-Lancez `npx wrapper-scionos@8.0.0 --service llm --lang fr` avec la clé API de ce service. `routerlab` et `llm` ont des clés et des catalogues distincts ; choisissez votre service au démarrage du wrapper. [Référence des services](./docs/reference.fr.md#services-et-authentification).
+Lancez `npx wrapper-scionos@8.1.0 --service llm --lang fr` avec la clé API de ce service. `routerlab` et `llm` ont des clés et des catalogues distincts ; choisissez votre service au démarrage du wrapper. [Référence des services](./docs/reference.fr.md#services-et-authentification).
 
 </details>
 

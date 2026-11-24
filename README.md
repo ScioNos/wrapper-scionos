@@ -51,12 +51,12 @@ The wrapper runs on Windows, macOS and Linux. Codex App requires Windows or macO
 Open a terminal on your computer and run:
 
 ```bash
-npx wrapper-scionos@8.0.0 --service routerlab --lang en
+npx wrapper-scionos@8.1.0 --service routerlab --lang en
 ```
 
-Accept npm's package installation prompt if it appears. This runs the published **8.0.0** package without a global installation.
+Accept npm's package installation prompt if it appears. This runs the published **8.1.0** package without a global installation.
 
-To use **8.1.0** from this repository, run `npm ci` followed by `node index.js --lang en`. The **Special** strategy for Claude Code on standard RouterLab combines GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra, and DeepSeek V4.1 Flash. To launch it directly from the repository, run `node index.js claude --strategy special --lang en`. [8.1.0 reference](./docs/reference.md#model-routing).
+The **Special** strategy for Claude Code on standard RouterLab combines GPT 6.2 Astra, GPT 6.2 Sol, GPT 6.1 Terra, and DeepSeek V4.1 Flash. To launch it directly, run `npx wrapper-scionos@8.1.0 claude --strategy special --lang en`. [8.1.0 reference](./docs/reference.md#model-routing).
 
 ### 2. Connect your RouterLab account
 
@@ -104,7 +104,7 @@ RouterLab access and consumption are separate from your subscriptions with the o
 <details>
 <summary>I already have access to the <code>llm</code> service. What should I run?</summary>
 
-Use `npx wrapper-scionos@8.0.0 --service llm --lang en` and that service's API key. `routerlab` and `llm` have separate keys and catalogues; select your service when starting the wrapper. [Service reference](./docs/reference.md#services-and-authentication).
+Use `npx wrapper-scionos@8.1.0 --service llm --lang en` and that service's API key. `routerlab` and `llm` have separate keys and catalogues; select your service when starting the wrapper. [Service reference](./docs/reference.md#services-and-authentication).
 
 </details>
 

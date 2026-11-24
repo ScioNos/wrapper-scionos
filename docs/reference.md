@@ -29,10 +29,10 @@ The service is selected once, before the menu opens, and remains fixed for the s
 
 ## Other installation methods
 
-Install the published 8.0.0 package globally, then open its console:
+Install the published 8.1.0 package globally, then open its console:
 
 ```bash
-npm install -g wrapper-scionos@8.0.0
+npm install -g wrapper-scionos@8.1.0
 wrapper-scionos --service routerlab --lang en
 ```
 

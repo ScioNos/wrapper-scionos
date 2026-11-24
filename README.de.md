@@ -126,7 +126,7 @@ Verwenden Sie **Desktop-Anwendungen** in der Konsole. Das Stoppen des Claude-Des
 
 - [Technische Referenz](./docs/reference.de.md): genaue Voraussetzungen, weitere Installationswege, Bedienung, Befehle, Authentifizierung, Routing und Sicherheit.
 - [RouterLab-Einrichtungsanleitung](https://routerlab.ch/de/scionos-wrapper): Erklärungen und Anleitungen je Werkzeug.
-- [Version 8.0.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0) · [Changelog](./CHANGELOG.md) · [Validierungsbericht](./docs/release-8.0.0-validation.md).
+- [Version 8.1.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.1.0) · [Changelog](./CHANGELOG.md) · [Validierungsbericht 8.0.0](./docs/release-8.0.0-validation.md).
 - [Architektur](./docs/architecture-notes.md) · [Problem melden](https://github.com/ScioNos/wrapper-scionos/issues).
 
 MIT © ScioNos

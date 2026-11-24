@@ -126,7 +126,7 @@ Use the console's **Desktop applications** screen. Stopping the Claude Desktop p
 
 - [Technical reference](./docs/reference.md): exact requirements, alternative installations, console controls, commands, authentication, routing and security.
 - [RouterLab setup guide](https://routerlab.ch/en/scionos-wrapper): explanations and tool guides.
-- [Version 8.0.0 release](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0) · [Changelog](./CHANGELOG.md) · [Release validation](./docs/release-8.0.0-validation.md).
+- [Version 8.1.0 release](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.1.0) · [Changelog](./CHANGELOG.md) · [8.0.0 release validation](./docs/release-8.0.0-validation.md).
 - [Architecture](./docs/architecture-notes.md) · [Report an issue](https://github.com/ScioNos/wrapper-scionos/issues).
 
 MIT © ScioNos

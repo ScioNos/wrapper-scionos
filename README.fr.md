@@ -126,7 +126,7 @@ Utilisez l’écran **Applications desktop** de la console. Arrêter le proxy Cl
 
 - [Référence technique](./docs/reference.fr.md) : prérequis exacts, autres installations, navigation, commandes, authentification, routage et sécurité.
 - [Guide de configuration RouterLab](https://routerlab.ch/fr/scionos-wrapper) : explications et guides par outil.
-- [Version 8.0.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.0.0) · [Journal des changements](./CHANGELOG.md) · [Bilan de validation](./docs/release-8.0.0-validation.md).
+- [Version 8.1.0](https://github.com/ScioNos/wrapper-scionos/releases/tag/v8.1.0) · [Journal des changements](./CHANGELOG.md) · [Bilan de la 8.0.0](./docs/release-8.0.0-validation.md).
 - [Architecture](./docs/architecture-notes.md) · [Signaler un problème](https://github.com/ScioNos/wrapper-scionos/issues).
 
 MIT © ScioNos

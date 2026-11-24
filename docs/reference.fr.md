@@ -36,10 +36,10 @@ npm install -g wrapper-scionos@8.0.0
 wrapper-scionos --service routerlab --lang fr
 ```
 
-Pour utiliser l’archive GitHub, téléchargez [wrapper-scionos-8.0.0.tgz](https://github.com/ScioNos/wrapper-scionos/releases/download/v8.0.0/wrapper-scionos-8.0.0.tgz), ouvrez un terminal dans son dossier et lancez :
+Pour utiliser l’archive GitHub, téléchargez [wrapper-scionos-8.1.0.tgz](https://github.com/ScioNos/wrapper-scionos/releases/download/v8.1.0/wrapper-scionos-8.1.0.tgz), ouvrez un terminal dans son dossier et lancez :
 
 ```bash
-npx --prefix . --yes --package ./wrapper-scionos-8.0.0.tgz wrapper-scionos --service routerlab --lang fr
+npx --prefix . --yes --package ./wrapper-scionos-8.1.0.tgz wrapper-scionos --service routerlab --lang fr
 ```
 
 Pour tester la 8.1.0 depuis les sources, lancez `npm ci` puis `npm start` à la racine du dépôt. Après installation, les commandes `wrapper-scionos` et `scionos` sont équivalentes.
